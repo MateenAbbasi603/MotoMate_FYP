@@ -1,0 +1,79 @@
+# Visual Studio user-specific files
+.vscode/
+*.vs
+*.vscode
+
+# Build output
+bin/
+obj/
+
+# ASP.NET temp files
+ClientBin/
+
+# IIS Express
+/.vs/config/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Logs
+*.log
+
+# NuGet
+*.nupkg
+# NuGet Packages Directory
+packages/
+
+# Resharper
+*_Resharper*/
+
+# JetBrains Rider
+.idea/
+
+# Entity Framework
+*.edmx.diagram
+
+# Web.config transformations
+*.Web.Debug.config
+*.Web.Release.config
+
+# Publish outputs
+*.publishsettings
+*.Publish.xml
+
+# SQL Server
+App_Data/*.mdf
+App_Data/*.ldf
+
+# Visual Studio 2019/2022 Code Coverage
+*.coverage
+*.coveragexml
+
+# NPM packages
+node_modules/
+
+# Yarn
+.yarn/
+.yarnrc.yml
+
+# Environment variables
+.env
+
+# Misc
+*.bak
+*.swp
+*.temp
+*.TMP
+
+# Rider
+.idea/
+
+# Rider Logs
+/.idea/
+/.idea_modules/
+*.iml
+
+# Optional: add more project-specific exclusions below

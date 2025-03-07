@@ -1,0 +1,223 @@
+﻿// Data/ApplicationDbContext.cs
+using fyp_motomate.Models;
+using fyp_motomate.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using System;
+using System.Collections.Generic;
+using System.Reflection.Emit;
+
+namespace fyp_motomate.Data
+{
+    public class ApplicationDbContext : DbContext
+    {
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+        : base(options)
+        {
+        }
+
+        public DbSet<User> Users { get; set; }
+        public DbSet<Vehicle> Vehicles { get; set; }
+        public DbSet<Service> Services { get; set; }
+        public DbSet<Appointment> Appointments { get; set; }
+        public DbSet<Order> Orders { get; set; }
+        public DbSet<Inventory> Inventory { get; set; }
+        public DbSet<Review> Reviews { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
+        public DbSet<ServiceHistory> ServiceHistories { get; set; }
+        public DbSet<MechanicsPerformance> MechanicsPerformances { get; set; }
+        public DbSet<Invoice> Invoices { get; set; }
+        public DbSet<Payment> Payments { get; set; }
+
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            optionsBuilder.ConfigureWarnings(warnings =>
+                warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+
+            base.OnConfiguring(optionsBuilder);
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            // Configure unique constraints
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Username)
+                .IsUnique();
+
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
+
+            modelBuilder.Entity<Vehicle>()
+                .HasIndex(v => v.LicensePlate)
+                .IsUnique();
+
+            // Configure enum-like constraints
+            modelBuilder.Entity<User>()
+                .Property(u => u.Role)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<Service>()
+                .Property(s => s.Category)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<Appointment>()
+                .Property(a => a.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<Order>()
+                .Property(o => o.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<Inventory>()
+                .Property(i => i.Condition)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<Notification>()
+                .Property(n => n.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<ServiceHistory>()
+                .Property(sh => sh.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<Payment>()
+                .Property(p => p.Method)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            // Configure relationships
+            modelBuilder.Entity<User>()
+                .HasMany(u => u.Vehicles)
+                .WithOne(v => v.User)
+                .HasForeignKey(v => v.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<User>()
+                .HasMany(u => u.CustomerAppointments)
+                .WithOne(a => a.Customer)
+                .HasForeignKey(a => a.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Appointment>()
+                .HasOne(a => a.Mechanic)
+                .WithMany(u => u.MechanicAppointments)
+                .HasForeignKey(a => a.MechanicId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<User>()
+                .HasMany(u => u.Orders)
+                .WithOne(o => o.User)
+                .HasForeignKey(o => o.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<User>()
+                .HasMany(u => u.Reviews)
+                .WithOne(r => r.User)
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<User>()
+                .HasMany(u => u.Notifications)
+                .WithOne(n => n.User)
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<User>()
+                .HasMany(u => u.ServiceHistories)
+                .WithOne(sh => sh.User)
+                .HasForeignKey(sh => sh.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.MechanicPerformance)
+                .WithOne(mp => mp.Mechanic)
+                .HasForeignKey<MechanicsPerformance>(mp => mp.MechanicId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Vehicle>()
+                .HasMany(v => v.Appointments)
+                .WithOne(a => a.Vehicle)
+                .HasForeignKey(a => a.VehicleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Vehicle>()
+                .HasMany(v => v.Orders)
+                .WithOne(o => o.Vehicle)
+                .HasForeignKey(o => o.VehicleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Vehicle>()
+                .HasMany(v => v.ServiceHistories)
+                .WithOne(sh => sh.Vehicle)
+                .HasForeignKey(sh => sh.VehicleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Service>()
+                .HasMany(s => s.Appointments)
+                .WithOne(a => a.Service)
+                .HasForeignKey(a => a.ServiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Service>()
+                .HasMany(s => s.Orders)
+                .WithOne(o => o.Service)
+                .HasForeignKey(o => o.ServiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Service>()
+                .HasMany(s => s.ServiceHistories)
+                .WithOne(sh => sh.Service)
+                .HasForeignKey(sh => sh.ServiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Appointment>()
+                .HasOne(a => a.Invoice)
+                .WithOne(i => i.Appointment)
+                .HasForeignKey<Invoice>(i => i.AppointmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Appointment>()
+                .HasMany(a => a.Reviews)
+                .WithOne(r => r.Appointment)
+                .HasForeignKey(r => r.AppointmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Invoice>()
+                .HasMany(i => i.Payments)
+                .WithOne(p => p.Invoice)
+                .HasForeignKey(p => p.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Seed super admin user
+            modelBuilder.Entity<User>().HasData(
+                new User
+                {
+                    UserId = 1,
+                    Username = "superadmin",
+                    Password = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
+                    Email = "superadmin@example.com",
+                    Role = "super_admin",
+                    Name = "Super Admin",
+                    Phone = "+1234567890",
+                    Address = "Admin Headquarters", // Add this line
+                    CreatedAt = new DateTime(2023, 1, 1), // Use fixed date
+                    UpdatedAt = new DateTime(2023, 1, 1)  // Use fixed date
+                }
+            );
+        }
+    }
+
+
+
+}
