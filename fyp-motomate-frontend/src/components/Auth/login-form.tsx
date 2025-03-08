@@ -20,10 +20,10 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useState } from "react";
 
-// Define login form validation schema
+// Define login form validation schema - updated to use username instead of email
 const loginFormSchema = z.object({
-  email: z.string().email({
-    message: "Please enter a valid email address.",
+  username: z.string().min(1, {
+    message: "Username is required.",
   }),
   password: z.string().min(1, {
     message: "Password is required.",
@@ -32,7 +32,7 @@ const loginFormSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginFormSchema>;
 
-export  function LoginForm() {
+export function LoginForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +41,7 @@ export  function LoginForm() {
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
     defaultValues: {
-      email: "",
+      username: "",
       password: "",
     },
   });
@@ -51,55 +51,85 @@ export  function LoginForm() {
     try {
       setIsSubmitting(true);
       setError(null);
-
+  
       // Get backend URL with fallback for testing
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       const apiUrl = `${backendUrl}/api/auth/login`;
-
+  
       console.log("Attempting to call API at:", apiUrl);
-
-      // Set up headers for the request
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        withCredentials: true,
-      };
-
-      // Submit the form using axios with explicit configuration
+      console.log("Login payload:", { username: values.username, password: values.password });
+  
+      // Submit the form using axios
       const response = await axios.post(
         apiUrl,
         {
-          email: values.email,
+          username: values.username,
           password: values.password,
         },
-        config
+        {
+          headers: {
+            "Content-Type": "application/json",
+          }
+        }
       );
-
+  
       console.log("API Response:", response.data);
-
-      // Store token or user data in localStorage/cookies as needed
-      if (response.data.token) {
+  
+      if (response.data.success) {
+        // Store token in localStorage
         localStorage.setItem("token", response.data.token);
+        
+        // Store user data if needed
+        if (response.data.user) {
+          localStorage.setItem("user", JSON.stringify(response.data.user));
+        }
+  
+        toast.success("Login successful!");
+  
+        // Redirect based on user role for more specific routing
+        if (response.data.user?.role) {
+          const role = response.data.user.role;
+          switch (role) {
+            case "customer":
+              router.push("/dashboard");
+              break;
+            case "super_admin":
+            case "admin":
+              router.push("/admin/dashboard");
+              break;
+            case "service_agent":
+              router.push("/admin/services"); // Service agents directly to services page
+              break;
+            case "mechanic":
+              router.push("/admin/mechanics"); // Mechanics directly to mechanic page
+              break;
+            case "finance_officer":
+              router.push("/admin/finance"); // Finance officers directly to finance page
+              break;
+            default:
+              router.push("/dashboard");
+              break;
+          }
+          console.log("Redirecting to:", `/admin/${role}`);
+        } else {
+          router.push("/dashboard");
+        }
+      } else {
+        setError(response.data.message || "Login failed");
+        toast.error(response.data.message || "Login failed");
       }
-
-      toast.success("Login successful!");
-
-      // Redirect to dashboard after successful login
-      router.push("/dashboard");
     } catch (error) {
       console.error("Login Error:", error);
-
+  
       // Handle error
       if (axios.isAxiosError(error)) {
         console.log("Response status:", error.response?.status);
         console.log("Response data:", error.response?.data);
-
+  
         if (error.response) {
           // Server returned an error response
-          setError(error.response.data.message || "Invalid email or password");
-          toast.error(error.response.data.message || "Invalid email or password");
+          setError(error.response.data.message || "Invalid username or password");
+          toast.error(error.response.data.message || "Invalid username or password");
         } else if (error.request) {
           // No response received
           setError("No response from server. Please try again later.");
@@ -125,7 +155,7 @@ export  function LoginForm() {
         <div className="mb-6 text-center">
           <h1 className="text-xl font-semibold">Welcome back</h1>
           <p className="text-sm text-muted-foreground">
-            Login with your Email & Password
+            Login with your Username & Password
           </p>
         </div>
 
@@ -139,14 +169,13 @@ export  function LoginForm() {
 
             <FormField
               control={form.control}
-              name="email"
+              name="username"
               render={({ field }) => (
                 <FormItem className="space-y-2">
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>Username</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="m@example.com"
-                      type="email"
+                      placeholder="yourusername"
                       {...field}
                     />
                   </FormControl>

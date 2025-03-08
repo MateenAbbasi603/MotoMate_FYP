@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 
-// Updated schema to match our API
+// Updated schema to match our .NET API requirements
 const formSchema = z.object({
   username: z
     .string()
@@ -35,11 +35,17 @@ const formSchema = z.object({
   password: z
     .string()
     .min(6, { message: "Password must be at least 6 characters." }),
+  confirmPassword: z
+    .string()
+    .min(1, { message: "Confirm password is required" }),
   name: z.string().min(1, {
     message: "Name is required.",
   }),
   phone: z.string().optional(),
   address: z.string().optional(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -56,6 +62,7 @@ export function SignupForm() {
       username: "",
       name: "",
       password: "",
+      confirmPassword: "",
       phone: "",
       address: "",
     },
@@ -71,26 +78,49 @@ export function SignupForm() {
         username: values.username,
         email: values.email,
         password: values.password,
+        confirmPassword: values.confirmPassword,
+        role: "customer", // Fixed role as customer for regular registration
         name: values.name,
         phone: values.phone || "",
         address: values.address || "",
       };
 
+      console.log("Submitting registration:", requestData);
+      console.log("API URL:", `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/register`);
+
       // Submit the form using axios
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/register`,
-        requestData
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
 
-      toast("Account created successfully!");
-      router.push("/login");
+      console.log("Registration successful:", response.data);
+      
+      if (response.data.success) {
+        // Save token if you want to automatically log in the user
+        // localStorage.setItem('token', response.data.token);
+        
+        toast.success("Account created successfully!");
+        router.push("/login");
+      } else {
+        setError(response.data.message || "Failed to create account");
+        toast.error(response.data.message || "Failed to create account");
+      }
     } catch (error) {
+      console.error("Registration error:", error);
+      
       if (axios.isAxiosError(error) && error.response) {
+        console.error("API response error:", error.response.data);
         setError(error.response.data.message || "Failed to create account");
-        toast(error.response.data.message || "Failed to create account");
+        toast.error(error.response.data.message || "Failed to create account");
       } else {
         setError("An unexpected error occurred");
-        toast("An unexpected error occurred");
+        toast.error("An unexpected error occurred");
       }
     } finally {
       setIsSubmitting(false);
@@ -102,7 +132,7 @@ export function SignupForm() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {error && (
           <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error} {process.env.NEXT_PUBLIC_BACKEND_URL}
+            {error}
           </div>
         )}
 
@@ -182,6 +212,20 @@ export function SignupForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Password</FormLabel>
+              <FormControl>
+                <Input type="password" placeholder="••••••••" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="confirmPassword"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Confirm Password</FormLabel>
               <FormControl>
                 <Input type="password" placeholder="••••••••" {...field} />
               </FormControl>
