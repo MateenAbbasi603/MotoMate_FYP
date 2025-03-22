@@ -99,6 +99,13 @@ namespace fyp_motomate.Data
                 .HasConversion<string>()
                 .HasMaxLength(20);
 
+// In your ApplicationDbContext.cs file, in the OnModelCreating method
+modelBuilder.Entity<Order>()
+    .HasOne(o => o.Inspection)
+    .WithOne(i => i.Order)
+    .HasForeignKey<Inspection>(i => i.OrderId)
+    .IsRequired(false)  // Make the relationship optional
+    .OnDelete(DeleteBehavior.SetNull);  // Set null instead of cascade delete
             // Configure relationships
             modelBuilder.Entity<User>()
                 .HasMany(u => u.Vehicles)
@@ -177,6 +184,70 @@ namespace fyp_motomate.Data
                 .WithOne(o => o.Service)
                 .HasForeignKey(o => o.ServiceId)
                 .OnDelete(DeleteBehavior.Restrict);
+                // Configure Inspection entity to fix the shadow property issue
+modelBuilder.Entity<Inspection>()
+    .HasOne(i => i.User)
+    .WithMany(u => u.Inspections)
+    .HasForeignKey(i => i.UserId)
+    .OnDelete(DeleteBehavior.Restrict);
+
+    // Add this to your ApplicationDbContext.cs in the OnModelCreating method
+
+// Configure Order entity
+modelBuilder.Entity<Order>(entity =>
+{
+    // Primary Key
+    entity.HasKey(e => e.OrderId);
+    
+    // Properties
+    entity.Property(e => e.Notes)
+        .HasColumnName("Notes")
+        .IsRequired(false);
+    
+    entity.Property(e => e.Status)
+        .IsRequired()
+        .HasMaxLength(20)
+        .HasDefaultValue("pending");
+    
+    entity.Property(e => e.OrderDate)
+        .IsRequired()
+        .HasDefaultValueSql("GETUTCDATE()");
+    
+    entity.Property(e => e.IncludesInspection)
+        .IsRequired()
+        .HasDefaultValue(true);
+    
+    entity.Property(e => e.TotalAmount)
+        .IsRequired()
+        .HasColumnType("decimal(10,2)");
+    
+    // Relationships
+    entity.HasOne(d => d.User)
+        .WithMany(p => p.Orders)
+        .HasForeignKey(d => d.UserId)
+        .OnDelete(DeleteBehavior.ClientSetNull)
+        .HasConstraintName("FK_Orders_Users_UserId");
+    
+    entity.HasOne(d => d.Vehicle)
+        .WithMany(p => p.Orders)
+        .HasForeignKey(d => d.VehicleId)
+        .OnDelete(DeleteBehavior.ClientSetNull)
+        .HasConstraintName("FK_Orders_Vehicles_VehicleId");
+    
+    entity.HasOne(d => d.Service)
+        .WithMany()
+        .HasForeignKey(d => d.ServiceId)
+        .OnDelete(DeleteBehavior.ClientSetNull)
+        .HasConstraintName("FK_Orders_Services_ServiceId");
+    
+    entity.HasOne(d => d.Inspection)
+        .WithOne(p => p.Order)
+        .HasForeignKey<Inspection>(d => d.OrderId)
+        .OnDelete(DeleteBehavior.ClientSetNull)
+        .HasConstraintName("FK_Inspections_Orders_OrderId");
+});
+
+// Add other relationship configurations...
 
             modelBuilder.Entity<Service>()
                 .HasMany(s => s.ServiceHistories)

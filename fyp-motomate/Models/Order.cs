@@ -1,4 +1,4 @@
-// Models/Order.cs
+// Updated Order Model
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -21,7 +21,7 @@ namespace fyp_motomate.Models
         // Service ID is optional because some orders might be inspection-only
         public int? ServiceId { get; set; }
         
-        // ADD THIS: Flag to indicate if this order includes an inspection
+        // Flag to indicate if this order includes an inspection
         [Required]
         public bool IncludesInspection { get; set; } = true;
         
@@ -36,6 +36,8 @@ namespace fyp_motomate.Models
         [Column(TypeName = "decimal(10,2)")]
         public decimal TotalAmount { get; set; }
         
+        // Make sure this property is annotated correctly to match the database column
+        [Column("Notes")]
         public string Notes { get; set; }
         
         // Foreign key relationships
@@ -51,7 +53,7 @@ namespace fyp_motomate.Models
         [JsonIgnore]
         public virtual Service Service { get; set; }
         
-        // ADD THIS: Navigation property to related inspection
+        // Navigation property to related inspection
         [JsonIgnore]
         public virtual Inspection Inspection { get; set; }
     }

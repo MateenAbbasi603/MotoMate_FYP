@@ -13,7 +13,8 @@ import {
   ClipboardCheck,
   Wrench,
   ArrowLeft,
-  Loader2 
+  Loader2,
+  Clock
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,8 @@ import { format, addDays } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import timeSlotService, { TimeSlotInfo } from "../../../services/timeSlotService";
 
 // Define interfaces for data types
 interface Vehicle {
@@ -64,6 +67,14 @@ interface Vehicle {
   licensePlate: string;
 }
 
+interface InspectionType {
+  serviceId: number;
+  serviceName: string;
+  category: string;
+  price: number;
+  description: string;
+}
+
 interface Service {
   serviceId: number;
   serviceName: string;
@@ -72,10 +83,22 @@ interface Service {
   description: string;
 }
 
+// All possible time slots
+const ALL_TIME_SLOTS = [
+  "09:00 AM - 11:00 AM",
+  "11:00 AM - 01:00 PM",
+  "01:00 PM - 03:00 PM",
+  "03:00 PM - 05:00 PM",
+  "05:00 PM - 07:00 PM"
+];
+
 // Form schema for order with mandatory inspection
 const orderFormSchema = z.object({
   vehicleId: z.string().min(1, {
     message: "Please select a vehicle",
+  }),
+  inspectionTypeId: z.string().min(1, {
+    message: "Please select an inspection type",
   }),
   inspectionDate: z.date({
     required_error: "Inspection date is required",
@@ -83,6 +106,9 @@ const orderFormSchema = z.object({
     (date) => date > new Date(), 
     { message: "Inspection date must be in the future" }
   ),
+  timeSlot: z.string().min(1, {
+    message: "Please select a time slot",
+  }),
   includeService: z.boolean().default(false),
   serviceId: z.string().optional(),
   notes: z.string().optional(),
@@ -102,11 +128,14 @@ type FormValues = z.infer<typeof orderFormSchema>;
 export default function OrderForm() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [inspectionFee, setInspectionFee] = useState(29.99);
+  const [selectedInspectionType, setSelectedInspectionType] = useState<InspectionType | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [timeSlotInfos, setTimeSlotInfos] = useState<TimeSlotInfo[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const router = useRouter();
   const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -118,9 +147,11 @@ export default function OrderForm() {
     },
   });
 
-  // Watch the includeService field to conditionally show service selection
+  // Watch relevant fields
   const includeService = form.watch("includeService");
   const serviceId = form.watch("serviceId");
+  const inspectionTypeId = form.watch("inspectionTypeId");
+  const inspectionDate = form.watch("inspectionDate");
 
   // Helper to get auth token from local storage
   const getAuthToken = (): string | null => {
@@ -130,7 +161,7 @@ export default function OrderForm() {
     return null;
   };
 
-  // Fetch vehicles and services when component mounts
+  // Fetch vehicles, services and inspection types when component mounts
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -147,11 +178,20 @@ export default function OrderForm() {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        // Fetch available services
+        // Fetch available services (excluding inspection category)
         const servicesResponse = await axios.get(`${API_URL}/api/services`);
+        const filteredServices = servicesResponse.data.filter(
+          (service: Service) => service.category.toLowerCase() !== 'inspection'
+        );
+        
+        // Get inspection types from services API (where category = inspection)
+        const inspectionTypes = servicesResponse.data.filter(
+          (service: Service) => service.category.toLowerCase() === 'inspection'
+        );
         
         setVehicles(vehiclesResponse.data);
-        setServices(servicesResponse.data);
+        setServices(filteredServices);
+        setInspectionTypes(inspectionTypes);
       } catch (error) {
         console.error("Error loading data:", error);
         toast.error("Failed to load necessary data");
@@ -178,6 +218,51 @@ export default function OrderForm() {
     }
   }, [serviceId, services]);
 
+  // Update selected inspection type when inspectionTypeId changes
+  useEffect(() => {
+    if (inspectionTypeId) {
+      const inspType = inspectionTypes.find(it => it.serviceId.toString() === inspectionTypeId);
+      setSelectedInspectionType(inspType || null);
+    } else {
+      setSelectedInspectionType(null);
+    }
+  }, [inspectionTypeId, inspectionTypes]);
+  
+  // Fetch available time slots when inspection date changes
+  useEffect(() => {
+    const fetchAvailableTimeSlots = async () => {
+      if (!inspectionDate) return;
+      
+      try {
+        // Instead of just getting available slots, get full info including counts
+        const slots = await timeSlotService.getTimeSlotsInfo(inspectionDate);
+        setTimeSlotInfos(slots);
+        
+        // If current selected time slot is no longer available, clear it
+        const currentTimeSlot = form.getValues("timeSlot");
+        const isCurrentSlotAvailable = slots.some(
+          slot => slot.timeSlot === currentTimeSlot && slot.availableSlots > 0
+        );
+        
+        if (currentTimeSlot && !isCurrentSlotAvailable) {
+          form.setValue("timeSlot", "");
+        }
+      } catch (error) {
+        console.error("Error fetching time slot info:", error);
+        toast.error("Could not load available time slots");
+      }
+    };
+
+    setSelectedDate(inspectionDate);
+    
+    if (inspectionDate) {
+      fetchAvailableTimeSlots();
+    } else {
+      setTimeSlotInfos([]);
+    }
+  }, [inspectionDate, form]);
+
+  // Updated onSubmit function with better error handling
   const onSubmit = async (values: FormValues) => {
     try {
       setSubmitting(true);
@@ -189,41 +274,97 @@ export default function OrderForm() {
         return;
       }
 
+      // Check if the time slot is still available
+      const isSlotAvailable = await timeSlotService.isTimeSlotAvailable(
+        values.inspectionDate,
+        values.timeSlot
+      );
+
+      if (!isSlotAvailable) {
+        setError("The selected time slot is no longer available. Please choose another time.");
+        toast.error("Time slot is no longer available");
+        // Refresh available time slots
+        const updatedSlots = await timeSlotService.getTimeSlotsInfo(values.inspectionDate);
+        setTimeSlotInfos(updatedSlots);
+        form.setValue("timeSlot", "");
+        return;
+      }
+
       // Prepare data for API request
       const orderData = {
         vehicleId: parseInt(values.vehicleId),
+        inspectionTypeId: parseInt(values.inspectionTypeId), // This is a serviceId of category 'inspection'
         serviceId: values.includeService && values.serviceId ? parseInt(values.serviceId) : null,
         inspectionDate: values.inspectionDate.toISOString(),
+        timeSlot: values.timeSlot,
         notes: values.notes || "",
       };
 
       console.log("Creating order with data:", orderData);
 
-      // Call API to create order with inspection
-      const response = await axios.post(
-        `${API_URL}/api/orders/CreateWithInspection`, 
-        orderData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      // Add additional logging to help diagnose the issue
+      console.log("Token present:", !!token);
+      console.log("API URL:", `${API_URL}/api/orders/CreateWithInspection`);
 
-      toast.success("Your order has been placed successfully!");
-      router.push("/dashboard");
-    } catch (error) {
-      console.error("Error creating order:", error);
-      
-      if (axios.isAxiosError(error) && error.response) {
-        const errorMessage = error.response.data.message || "Failed to create order";
-        setError(errorMessage);
-        toast.error(errorMessage);
-      } else {
-        setError("Failed to create order. Please try again.");
-        toast.error("Failed to create order");
+      try {
+        // Call API to create order with inspection
+        const response = await axios.post(
+          `${API_URL}/api/orders/CreateWithInspection`, 
+          orderData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        console.log("API Response:", response.data);
+        console.log("Order payload:", JSON.stringify(orderData, null, 2));
+
+        if (response.data.success) {
+          toast.success("Your order has been placed successfully!");
+          router.push("/dashboard");
+        } else {
+          setError(response.data.message || "Failed to create order");
+          toast.error(response.data.message || "Failed to create order");
+        }
+      } catch (apiError) {
+        console.error("API error details:", apiError);
+        
+        if (axios.isAxiosError(apiError)) {
+          if (apiError.response) {
+            // The server responded with a status code outside the 2xx range
+            console.error("API error response:", apiError.response.data);
+            
+            // Handle specific backend errors based on their structure
+            if (apiError.response.data.error && apiError.response.data.error.includes("entity changes")) {
+              // The error is related to entity framework saving changes
+              setError("There was a problem with the data format. Please check all fields and try again.");
+            } else {
+              setError(apiError.response.data.message || "Server error occurred");
+            }
+          } else if (apiError.request) {
+            // The request was made but no response was received
+            console.error("No response received:", apiError.request);
+            setError("No response from server. Please check your connection and try again.");
+          } else {
+            // Something happened in setting up the request
+            console.error("Request setup error:", apiError.message);
+            setError(`Error setting up the request: ${apiError.message}`);
+          }
+          
+          toast.error("Failed to create order. See details for more information.");
+        } else {
+          // Generic error handling for non-Axios errors
+          setError("An unexpected error occurred");
+          toast.error("Failed to create order");
+        }
       }
+    } catch (error) {
+      console.error("Form submission error:", error);
+      setError("Failed to process your order. Please try again.");
+      toast.error("Failed to create order");
     } finally {
       setSubmitting(false);
     }
@@ -231,11 +372,23 @@ export default function OrderForm() {
 
   // Calculate total based on inspection fee and selected service
   const calculateTotal = () => {
-    let total = inspectionFee;
+    let total = selectedInspectionType ? selectedInspectionType.price : 0;
     if (includeService && selectedService) {
       total += selectedService.price;
     }
     return total.toFixed(2);
+  };
+
+  // Get available time slots for selection
+  const getAvailableTimeSlots = () => {
+    return timeSlotInfos.filter(slot => slot.availableSlots > 0);
+  };
+
+  // Helper to get badge color based on availability
+  const getAvailabilityBadgeColor = (availableSlots: number, totalSlots: number) => {
+    if (availableSlots === 0) return "bg-red-500";
+    if (availableSlots === 1) return "bg-yellow-500";
+    return "bg-green-500";
   };
 
   if (loading) {
@@ -289,7 +442,7 @@ export default function OrderForm() {
           Create New Order
         </CardTitle>
         <CardDescription>
-          All orders require a vehicle inspection. You can also add services.
+          All orders require a vehicle inspection. You can also add additional services.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -339,47 +492,145 @@ export default function OrderForm() {
 
             <FormField
               control={form.control}
-              name="inspectionDate"
+              name="inspectionTypeId"
               render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Inspection Date</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
+                <FormItem>
+                  <FormLabel>Inspection Type</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select an inspection type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {inspectionTypes.map((type) => (
+                        <SelectItem 
+                          key={type.serviceId} 
+                          value={type.serviceId.toString()}
                         >
-                          {field.value ? (
-                            format(field.value, "PPP")
-                          ) : (
-                            <span>Pick a date</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) => date < addDays(new Date(), 1)}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                          {type.serviceName} - ${type.price.toFixed(2)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormDescription className="flex items-center">
-                    <Calendar className="mr-1 h-3 w-3" />
-                    Choose a date for your inspection
+                    <ClipboardCheck className="mr-1 h-3 w-3" />
+                    Select the type of inspection needed
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="inspectionDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Inspection Date</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) => date < addDays(new Date(), 1)}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormDescription className="flex items-center">
+                      <Calendar className="mr-1 h-3 w-3" />
+                      Choose a date
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="timeSlot"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Time Slot</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a time" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {timeSlotInfos.map((slot) => (
+                          <SelectItem 
+                            key={slot.timeSlot} 
+                            value={slot.timeSlot}
+                            disabled={slot.availableSlots <= 0}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span>{slot.timeSlot}</span>
+                              <Badge 
+                                className={cn(
+                                  "ml-2",
+                                  slot.availableSlots === 0 ? "bg-red-500" :
+                                  slot.availableSlots === 1 ? "bg-yellow-500" : 
+                                  "bg-green-500"
+                                )}
+                              >
+                                {slot.availableSlots}/{slot.totalSlots}
+                              </Badge>
+                            </div>
+                          </SelectItem>
+                        ))}
+                        {(!timeSlotInfos || timeSlotInfos.length === 0) && (
+                          <SelectItem 
+                            value="no-slots" 
+                            disabled
+                          >
+                            No available slots for this date
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="flex items-center">
+                      <Clock className="mr-1 h-3 w-3" />
+                      {selectedDate 
+                        ? getAvailableTimeSlots().length > 0 
+                          ? `${getAvailableTimeSlots().length} time slot(s) available` 
+                          : "No available slots for this date" 
+                        : "Select a date first"}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
@@ -463,10 +714,12 @@ export default function OrderForm() {
             <div className="rounded-md border p-4 mt-6">
               <h3 className="font-medium mb-3">Order Summary</h3>
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Inspection Fee:</span>
-                  <span>${inspectionFee.toFixed(2)}</span>
-                </div>
+                {selectedInspectionType && (
+                  <div className="flex justify-between text-sm">
+                    <span>{selectedInspectionType.serviceName}:</span>
+                    <span>${selectedInspectionType.price.toFixed(2)}</span>
+                  </div>
+                )}
                 
                 {includeService && selectedService && (
                   <div className="flex justify-between text-sm">

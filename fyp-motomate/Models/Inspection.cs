@@ -19,7 +19,14 @@ namespace fyp_motomate.Models
         public int VehicleId { get; set; }
         
         [Required]
+        public int ServiceId { get; set; }
+        
+        [Required]
         public DateTime ScheduledDate { get; set; }
+        
+        [Required]
+        [StringLength(50)]
+        public string TimeSlot { get; set; } = "09:00 AM - 11:00 AM";
         
         [Required]
         [StringLength(20)]
@@ -45,8 +52,8 @@ namespace fyp_motomate.Models
         
         public string TireCondition { get; set; }
         
-        // ADD THIS: Optional link to an order
-        public int? OrderId { get; set; }
+        // Link to the order
+        public int OrderId { get; set; }
         
         // Foreign key relationships
         [ForeignKey("UserId")]
@@ -57,7 +64,10 @@ namespace fyp_motomate.Models
         [JsonIgnore]
         public virtual Vehicle Vehicle { get; set; }
         
-        // ADD THIS: Navigation property for order
+        [ForeignKey("ServiceId")]
+        [JsonIgnore]
+        public virtual Service Service { get; set; }
+        
         [ForeignKey("OrderId")]
         [JsonIgnore]
         public virtual Order Order { get; set; }

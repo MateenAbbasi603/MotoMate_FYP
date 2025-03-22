@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using fyp_motomate.Data;
 
@@ -11,9 +12,11 @@ using fyp_motomate.Data;
 namespace fyp_motomate.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250322205714_AddTimeSlotAndServiceIdToInspection3")]
+    partial class AddTimeSlotAndServiceIdToInspection3
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -64,7 +67,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("Appointments", (string)null);
+                    b.ToTable("Appointments");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Inspection", b =>
@@ -146,7 +149,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("Inspections", (string)null);
+                    b.ToTable("Inspections");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Inventory", b =>
@@ -180,7 +183,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasKey("ToolId");
 
-                    b.ToTable("Inventory", (string)null);
+                    b.ToTable("Inventory");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Invoice", b =>
@@ -205,7 +208,7 @@ namespace fyp_motomate.Migrations
                     b.HasIndex("AppointmentId")
                         .IsUnique();
 
-                    b.ToTable("Invoices", (string)null);
+                    b.ToTable("Invoices");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.MechanicsPerformance", b =>
@@ -233,7 +236,7 @@ namespace fyp_motomate.Migrations
                     b.HasIndex("MechanicId")
                         .IsUnique();
 
-                    b.ToTable("MechanicsPerformances", (string)null);
+                    b.ToTable("MechanicsPerformances");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Notification", b =>
@@ -263,7 +266,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Notifications", (string)null);
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Order", b =>
@@ -311,7 +314,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("Orders", (string)null);
+                    b.ToTable("Orders");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Payment", b =>
@@ -340,7 +343,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("InvoiceId");
 
-                    b.ToTable("Payments", (string)null);
+                    b.ToTable("Payments");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Review", b =>
@@ -373,7 +376,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Reviews", (string)null);
+                    b.ToTable("Reviews");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Service", b =>
@@ -403,7 +406,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasKey("ServiceId");
 
-                    b.ToTable("Services", (string)null);
+                    b.ToTable("Services");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.ServiceHistory", b =>
@@ -439,7 +442,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("ServiceHistories", (string)null);
+                    b.ToTable("ServiceHistories");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.User", b =>
@@ -499,7 +502,7 @@ namespace fyp_motomate.Migrations
                     b.HasIndex("Username")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
 
                     b.HasData(
                         new
@@ -559,7 +562,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Vehicles", (string)null);
+                    b.ToTable("Vehicles");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Appointment", b =>

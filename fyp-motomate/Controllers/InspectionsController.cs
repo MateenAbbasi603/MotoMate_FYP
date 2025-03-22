@@ -287,10 +287,11 @@ namespace fyp_motomate.Controllers
             }
 
             // Check if already converted
-            if (inspection.OrderId.HasValue)
-            {
-                return BadRequest(new { message = "Inspection already converted to an order" });
-            }
+          if (inspection.OrderId > 0) // Assuming a valid order ID is greater than 0
+{
+    return BadRequest(new { message = "Inspection already converted to an order" });
+}
+
 
             // Check if inspection is completed
             if (inspection.Status != "completed")

@@ -14,7 +14,6 @@ export default function DashboardPage() {
 
 <LogoutButton/>     
 
-<InspectionRequestForm/>
 
 <OrderForm/>
     </div>

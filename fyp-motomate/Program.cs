@@ -47,6 +47,12 @@ builder.Services.AddAuthorization();
 // Register repositories and services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 
 // Add CORS
 builder.Services.AddCors(options =>
