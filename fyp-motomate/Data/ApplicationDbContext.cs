@@ -1,11 +1,8 @@
 ﻿// Data/ApplicationDbContext.cs
 using fyp_motomate.Models;
-using fyp_motomate.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System;
-using System.Collections.Generic;
-using System.Reflection.Emit;
 
 namespace fyp_motomate.Data
 {
@@ -28,7 +25,7 @@ namespace fyp_motomate.Data
         public DbSet<MechanicsPerformance> MechanicsPerformances { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<Payment> Payments { get; set; }
-
+        public DbSet<Inspection> Inspections { get; set; } // Add the new Inspection DbSet
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -93,6 +90,12 @@ namespace fyp_motomate.Data
 
             modelBuilder.Entity<Payment>()
                 .Property(p => p.Method)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            // Configure Inspection Status constraint
+            modelBuilder.Entity<Inspection>()
+                .Property(i => i.Status)
                 .HasConversion<string>()
                 .HasMaxLength(20);
 
@@ -199,6 +202,37 @@ namespace fyp_motomate.Data
                 .HasForeignKey(p => p.InvoiceId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Configure new Inspection relationships
+            modelBuilder.Entity<Inspection>()
+                .HasOne(i => i.User)
+                .WithMany()
+                .HasForeignKey(i => i.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inspection>()
+                .HasOne(i => i.Vehicle)
+                .WithMany()
+                .HasForeignKey(i => i.VehicleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Configure relationship between Inspection and Order
+            modelBuilder.Entity<Inspection>()
+                .HasOne(i => i.Order)
+                .WithOne(o => o.Inspection)
+                .HasForeignKey<Inspection>(i => i.OrderId)
+                .IsRequired(false) // OrderId is optional
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Make ServiceId nullable in Order
+            modelBuilder.Entity<Order>()
+                .Property(o => o.ServiceId)
+                .IsRequired(false);
+
+            // Add IncludesInspection field to Order
+            modelBuilder.Entity<Order>()
+                .Property(o => o.IncludesInspection)
+                .HasDefaultValue(true);
+
             // Seed super admin user
             modelBuilder.Entity<User>().HasData(
                 new User
@@ -210,14 +244,11 @@ namespace fyp_motomate.Data
                     Role = "super_admin",
                     Name = "Super Admin",
                     Phone = "+1234567890",
-                    Address = "Admin Headquarters", // Add this line
-                    CreatedAt = new DateTime(2023, 1, 1), // Use fixed date
-                    UpdatedAt = new DateTime(2023, 1, 1)  // Use fixed date
+                    Address = "Admin Headquarters",
+                    CreatedAt = new DateTime(2023, 1, 1),
+                    UpdatedAt = new DateTime(2023, 1, 1)
                 }
             );
         }
     }
-
-
-
 }

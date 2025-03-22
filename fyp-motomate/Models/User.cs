@@ -52,6 +52,8 @@ namespace fyp_motomate.Models
         public ICollection<Notification> Notifications { get; set; }
         public ICollection<ServiceHistory> ServiceHistories { get; set; }
         public MechanicsPerformance MechanicPerformance { get; set; }
+                public virtual ICollection<Inspection> Inspections { get; set; }
+
     }
 
     public class Vehicle
@@ -92,31 +94,31 @@ namespace fyp_motomate.Models
         public ICollection<ServiceHistory> ServiceHistories { get; set; }
     }
 
-    public class Service
-    {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int ServiceId { get; set; }
+    // public class Service
+    // {
+    //     [Key]
+    //     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    //     public int ServiceId { get; set; }
 
-        [Required]
-        [StringLength(100)]
-        public string ServiceName { get; set; }
+    //     [Required]
+    //     [StringLength(100)]
+    //     public string ServiceName { get; set; }
 
-        [Required]
-        [StringLength(20)]
-        public string Category { get; set; }
+    //     [Required]
+    //     [StringLength(20)]
+    //     public string Category { get; set; }
 
-        [Required]
-        [Column(TypeName = "decimal(10,2)")]
-        public decimal Price { get; set; }
+    //     [Required]
+    //     [Column(TypeName = "decimal(10,2)")]
+    //     public decimal Price { get; set; }
 
-        public string Description { get; set; }
+    //     public string Description { get; set; }
 
-        // Navigation properties
-        public ICollection<Appointment> Appointments { get; set; }
-        public ICollection<Order> Orders { get; set; }
-        public ICollection<ServiceHistory> ServiceHistories { get; set; }
-    }
+    //     // Navigation properties
+    //     public ICollection<Appointment> Appointments { get; set; }
+    //     public ICollection<Order> Orders { get; set; }
+    //     public ICollection<ServiceHistory> ServiceHistories { get; set; }
+    // }
 
     public class Appointment
     {
@@ -163,42 +165,42 @@ namespace fyp_motomate.Models
         public ICollection<Review> Reviews { get; set; }
     }
 
-    public class Order
-    {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int OrderId { get; set; }
+    // public class Order
+    // {
+    //     [Key]
+    //     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    //     public int OrderId { get; set; }
 
-        [Required]
-        public int UserId { get; set; }
+    //     [Required]
+    //     public int UserId { get; set; }
 
-        [Required]
-        public int VehicleId { get; set; }
+    //     [Required]
+    //     public int VehicleId { get; set; }
 
-        [Required]
-        public int ServiceId { get; set; }
+    //     [Required]
+    //     public int ServiceId { get; set; }
 
-        [Required]
-        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
+    //     [Required]
+    //     public DateTime OrderDate { get; set; } = DateTime.UtcNow;
 
-        [Required]
-        [StringLength(20)]
-        public string Status { get; set; }
+    //     [Required]
+    //     [StringLength(20)]
+    //     public string Status { get; set; }
 
-        [Required]
-        [Column(TypeName = "decimal(10,2)")]
-        public decimal TotalAmount { get; set; }
+    //     [Required]
+    //     [Column(TypeName = "decimal(10,2)")]
+    //     public decimal TotalAmount { get; set; }
 
-        // Foreign key relationships
-        [ForeignKey("UserId")]
-        public User User { get; set; }
+    //     // Foreign key relationships
+    //     [ForeignKey("UserId")]
+    //     public User User { get; set; }
 
-        [ForeignKey("VehicleId")]
-        public Vehicle Vehicle { get; set; }
+    //     [ForeignKey("VehicleId")]
+    //     public Vehicle Vehicle { get; set; }
 
-        [ForeignKey("ServiceId")]
-        public Service Service { get; set; }
-    }
+    //     [ForeignKey("ServiceId")]
+    //     public Service Service { get; set; }
+    // }
 
     public class Inventory
     {
