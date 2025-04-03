@@ -32,61 +32,98 @@ namespace fyp_motomate.Controllers
             _logger = logger;
         }
 
-        // GET: api/Orders
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
-        {
-            int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+// GET: api/Orders
+[HttpGet]
+[AllowAnonymous]
+public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
+{
+    // Check if user is authenticated
+    if (!User.Identity.IsAuthenticated)
+    {
+        // For unauthenticated users, return all orders
+        return await _context.Orders
+            .Include(o => o.User)
+            .Include(o => o.Vehicle)
+            .Include(o => o.Service)
+            .ToListAsync();
+    }
 
-            // If user is a customer, only return their orders
-            if (userRole == "customer")
+    // For authenticated users, safely get the user ID
+    var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+    if (userIdClaim == null || string.IsNullOrEmpty(userIdClaim.Value))
+    {
+        return BadRequest(new { message = "User ID not found in token" });
+    }
+
+    int userId;
+    if (!int.TryParse(userIdClaim.Value, out userId))
+    {
+        return BadRequest(new { message = "Invalid user ID format" });
+    }
+
+    string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+    // If user is a customer, only return their orders
+    if (userRole == "customer")
+    {
+        return await _context.Orders
+            .Where(o => o.UserId == userId)
+            .Include(o => o.Vehicle)
+            .Include(o => o.Service)
+            .ToListAsync();
+    }
+    // If user is staff, return all orders
+    else
+    {
+        return await _context.Orders
+            .Include(o => o.User)
+            .Include(o => o.Vehicle)
+            .Include(o => o.Service)
+            .ToListAsync();
+    }
+}
+
+// GET: api/Orders/5
+[HttpGet("{id}")]
+[AllowAnonymous]
+public async Task<ActionResult<Order>> GetOrder(int id)
+{
+    // Fetch the order with all related entities
+    var order = await _context.Orders
+        .Include(o => o.User)    // Include customer information
+        .Include(o => o.Vehicle) // Include vehicle information
+        .Include(o => o.Service) // Include service information
+        .Include(o => o.Inspection) // Include inspection if exists
+        .FirstOrDefaultAsync(o => o.OrderId == id);
+
+    if (order == null)
+    {
+        return NotFound(new { message = "Order not found" });
+    }
+
+    // Check authentication and permissions if needed
+    if (User.Identity.IsAuthenticated)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim != null && !string.IsNullOrEmpty(userIdClaim.Value))
+        {
+            if (int.TryParse(userIdClaim.Value, out int userId))
             {
-                return await _context.Orders
-                    .Where(o => o.UserId == userId)
-                    .Include(o => o.Vehicle)
-                    .Include(o => o.Service)
-                    .ToListAsync();
-            }
-            // If user is staff, return all orders
-            else
-            {
-                return await _context.Orders
-                    .Include(o => o.User)
-                    .Include(o => o.Vehicle)
-                    .Include(o => o.Service)
-                    .ToListAsync();
+                string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+                // If user is a customer, they can only view their own orders
+                if (userRole == "customer" && order.UserId != userId)
+                {
+                    return Forbid();
+                }
             }
         }
+    }
 
-        // GET: api/Orders/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Order>> GetOrder(int id)
-        {
-            int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-
-            var order = await _context.Orders
-                .Include(o => o.User)
-                .Include(o => o.Vehicle)
-                .Include(o => o.Service)
-                .Include(o => o.Inspection)
-                .FirstOrDefaultAsync(o => o.OrderId == id);
-
-            if (order == null)
-            {
-                return NotFound(new { message = "Order not found" });
-            }
-
-            // Check permissions
-            if (userRole == "customer" && order.UserId != userId)
-            {
-                return Forbid();
-            }
-
-            return order;
-        }
-
+    return order;
+}
+        
+        
         // POST: api/Orders
         [HttpPost]
         public async Task<ActionResult<Order>> CreateOrder([FromBody] OrderRequest request)
