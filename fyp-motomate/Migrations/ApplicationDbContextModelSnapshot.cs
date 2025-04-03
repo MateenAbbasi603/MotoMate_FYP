@@ -64,7 +64,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("Appointments", (string)null);
+                    b.ToTable("Appointments");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Inspection", b =>
@@ -101,7 +101,7 @@ namespace fyp_motomate.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("OrderId")
+                    b.Property<int>("OrderId")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("ScheduledDate")
@@ -131,22 +131,26 @@ namespace fyp_motomate.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("UserId1")
+                        .HasColumnType("int");
+
                     b.Property<int>("VehicleId")
                         .HasColumnType("int");
 
                     b.HasKey("InspectionId");
 
                     b.HasIndex("OrderId")
-                        .IsUnique()
-                        .HasFilter("[OrderId] IS NOT NULL");
+                        .IsUnique();
 
                     b.HasIndex("ServiceId");
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("UserId1");
+
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("Inspections", (string)null);
+                    b.ToTable("Inspections");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Inventory", b =>
@@ -180,7 +184,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasKey("ToolId");
 
-                    b.ToTable("Inventory", (string)null);
+                    b.ToTable("Inventory");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Invoice", b =>
@@ -205,7 +209,7 @@ namespace fyp_motomate.Migrations
                     b.HasIndex("AppointmentId")
                         .IsUnique();
 
-                    b.ToTable("Invoices", (string)null);
+                    b.ToTable("Invoices");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.MechanicsPerformance", b =>
@@ -233,7 +237,7 @@ namespace fyp_motomate.Migrations
                     b.HasIndex("MechanicId")
                         .IsUnique();
 
-                    b.ToTable("MechanicsPerformances", (string)null);
+                    b.ToTable("MechanicsPerformances");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Notification", b =>
@@ -263,7 +267,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Notifications", (string)null);
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Order", b =>
@@ -280,19 +284,26 @@ namespace fyp_motomate.Migrations
                         .HasDefaultValue(true);
 
                     b.Property<string>("Notes")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("Notes");
 
                     b.Property<DateTime>("OrderDate")
-                        .HasColumnType("datetime2");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
 
                     b.Property<int?>("ServiceId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ServiceId1")
+                        .HasColumnType("int");
+
                     b.Property<string>("Status")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("pending");
 
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("decimal(10,2)");
@@ -307,11 +318,13 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("ServiceId");
 
+                    b.HasIndex("ServiceId1");
+
                     b.HasIndex("UserId");
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("Orders", (string)null);
+                    b.ToTable("Orders");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Payment", b =>
@@ -340,7 +353,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("InvoiceId");
 
-                    b.ToTable("Payments", (string)null);
+                    b.ToTable("Payments");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Review", b =>
@@ -373,7 +386,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Reviews", (string)null);
+                    b.ToTable("Reviews");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Service", b =>
@@ -403,7 +416,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasKey("ServiceId");
 
-                    b.ToTable("Services", (string)null);
+                    b.ToTable("Services");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.ServiceHistory", b =>
@@ -439,7 +452,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("ServiceHistories", (string)null);
+                    b.ToTable("ServiceHistories");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.User", b =>
@@ -499,7 +512,7 @@ namespace fyp_motomate.Migrations
                     b.HasIndex("Username")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
 
                     b.HasData(
                         new
@@ -509,7 +522,7 @@ namespace fyp_motomate.Migrations
                             CreatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "superadmin@example.com",
                             Name = "Super Admin",
-                            Password = "$2a$11$C7GgSuIR9FaO8m5HZxtLgOg1aamH0cdOER4salCLxxFPJbwDGmCqK",
+                            Password = "$2a$11$1gTFna2O6RysS.NZiUcWEeT326CyhxFkJnRXe1Z.aOwcJ1BRITgpO",
                             Phone = "+1234567890",
                             Role = "super_admin",
                             UpdatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
@@ -559,7 +572,7 @@ namespace fyp_motomate.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Vehicles", (string)null);
+                    b.ToTable("Vehicles");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Appointment", b =>
@@ -602,19 +615,24 @@ namespace fyp_motomate.Migrations
                     b.HasOne("fyp_motomate.Models.Order", "Order")
                         .WithOne("Inspection")
                         .HasForeignKey("fyp_motomate.Models.Inspection", "OrderId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_Inspections_Orders_OrderId");
 
                     b.HasOne("fyp_motomate.Models.Service", "Service")
                         .WithMany()
                         .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("fyp_motomate.Models.User", "User")
-                        .WithMany("Inspections")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("fyp_motomate.Models.User", null)
+                        .WithMany("Inspections")
+                        .HasForeignKey("UserId1");
 
                     b.HasOne("fyp_motomate.Models.Vehicle", "Vehicle")
                         .WithMany()
@@ -667,21 +685,25 @@ namespace fyp_motomate.Migrations
             modelBuilder.Entity("fyp_motomate.Models.Order", b =>
                 {
                     b.HasOne("fyp_motomate.Models.Service", "Service")
-                        .WithMany("Orders")
+                        .WithMany()
                         .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .HasConstraintName("FK_Orders_Services_ServiceId");
+
+                    b.HasOne("fyp_motomate.Models.Service", null)
+                        .WithMany("Orders")
+                        .HasForeignKey("ServiceId1");
 
                     b.HasOne("fyp_motomate.Models.User", "User")
                         .WithMany("Orders")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("FK_Orders_Users_UserId");
 
                     b.HasOne("fyp_motomate.Models.Vehicle", "Vehicle")
                         .WithMany("Orders")
                         .HasForeignKey("VehicleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("FK_Orders_Vehicles_VehicleId");
 
                     b.Navigation("Service");
 
