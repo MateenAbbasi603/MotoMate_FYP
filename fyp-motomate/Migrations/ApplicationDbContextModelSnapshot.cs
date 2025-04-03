@@ -131,9 +131,6 @@ namespace fyp_motomate.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("UserId1")
-                        .HasColumnType("int");
-
                     b.Property<int>("VehicleId")
                         .HasColumnType("int");
 
@@ -145,8 +142,6 @@ namespace fyp_motomate.Migrations
                     b.HasIndex("ServiceId");
 
                     b.HasIndex("UserId");
-
-                    b.HasIndex("UserId1");
 
                     b.HasIndex("VehicleId");
 
@@ -295,9 +290,6 @@ namespace fyp_motomate.Migrations
                     b.Property<int?>("ServiceId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("ServiceId1")
-                        .HasColumnType("int");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -317,8 +309,6 @@ namespace fyp_motomate.Migrations
                     b.HasKey("OrderId");
 
                     b.HasIndex("ServiceId");
-
-                    b.HasIndex("ServiceId1");
 
                     b.HasIndex("UserId");
 
@@ -522,7 +512,7 @@ namespace fyp_motomate.Migrations
                             CreatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "superadmin@example.com",
                             Name = "Super Admin",
-                            Password = "$2a$11$1gTFna2O6RysS.NZiUcWEeT326CyhxFkJnRXe1Z.aOwcJ1BRITgpO",
+                            Password = "$2a$11$Qpw5seu2sCPYOMj8GdViAOCFdXozRQaWHyYEqF/NuyfwmBb8bfhUq",
                             Phone = "+1234567890",
                             Role = "super_admin",
                             UpdatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
@@ -621,24 +611,23 @@ namespace fyp_motomate.Migrations
                     b.HasOne("fyp_motomate.Models.Service", "Service")
                         .WithMany()
                         .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_Inspections_Services_ServiceId");
 
                     b.HasOne("fyp_motomate.Models.User", "User")
-                        .WithMany()
+                        .WithMany("Inspections")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("fyp_motomate.Models.User", null)
-                        .WithMany("Inspections")
-                        .HasForeignKey("UserId1");
+                        .IsRequired()
+                        .HasConstraintName("FK_Inspections_Users_UserId");
 
                     b.HasOne("fyp_motomate.Models.Vehicle", "Vehicle")
                         .WithMany()
                         .HasForeignKey("VehicleId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("FK_Inspections_Vehicles_VehicleId");
 
                     b.Navigation("Order");
 
@@ -685,13 +674,9 @@ namespace fyp_motomate.Migrations
             modelBuilder.Entity("fyp_motomate.Models.Order", b =>
                 {
                     b.HasOne("fyp_motomate.Models.Service", "Service")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .HasConstraintName("FK_Orders_Services_ServiceId");
-
-                    b.HasOne("fyp_motomate.Models.Service", null)
                         .WithMany("Orders")
-                        .HasForeignKey("ServiceId1");
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("fyp_motomate.Models.User", "User")
                         .WithMany("Orders")

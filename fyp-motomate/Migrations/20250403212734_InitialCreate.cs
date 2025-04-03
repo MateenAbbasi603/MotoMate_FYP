@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace fyp_motomate.Migrations
 {
     /// <inheritdoc />
-    public partial class MakeAddressNullable : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -185,10 +185,12 @@ namespace fyp_motomate.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<int>(type: "int", nullable: false),
                     VehicleId = table.Column<int>(type: "int", nullable: false),
-                    ServiceId = table.Column<int>(type: "int", nullable: false),
-                    OrderDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    TotalAmount = table.Column<decimal>(type: "decimal(10,2)", nullable: false)
+                    ServiceId = table.Column<int>(type: "int", nullable: true),
+                    IncludesInspection = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
+                    OrderDate = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETUTCDATE()"),
+                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false, defaultValue: "pending"),
+                    TotalAmount = table.Column<decimal>(type: "decimal(10,2)", nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -203,14 +205,12 @@ namespace fyp_motomate.Migrations
                         name: "FK_Orders_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
-                        principalColumn: "UserId",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "UserId");
                     table.ForeignKey(
                         name: "FK_Orders_Vehicles_VehicleId",
                         column: x => x.VehicleId,
                         principalTable: "Vehicles",
-                        principalColumn: "VehicleId",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "VehicleId");
                 });
 
             migrationBuilder.CreateTable(
@@ -299,6 +299,58 @@ namespace fyp_motomate.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Inspections",
+                columns: table => new
+                {
+                    InspectionId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    VehicleId = table.Column<int>(type: "int", nullable: false),
+                    ServiceId = table.Column<int>(type: "int", nullable: false),
+                    ScheduledDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    TimeSlot = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    EngineCondition = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TransmissionCondition = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BrakeCondition = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ElectricalCondition = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BodyCondition = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TireCondition = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    OrderId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Inspections", x => x.InspectionId);
+                    table.ForeignKey(
+                        name: "FK_Inspections_Orders_OrderId",
+                        column: x => x.OrderId,
+                        principalTable: "Orders",
+                        principalColumn: "OrderId",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Inspections_Services_ServiceId",
+                        column: x => x.ServiceId,
+                        principalTable: "Services",
+                        principalColumn: "ServiceId",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Inspections_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Inspections_Vehicles_VehicleId",
+                        column: x => x.VehicleId,
+                        principalTable: "Vehicles",
+                        principalColumn: "VehicleId",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Payments",
                 columns: table => new
                 {
@@ -323,7 +375,7 @@ namespace fyp_motomate.Migrations
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "UserId", "Address", "CreatedAt", "Email", "Name", "Password", "Phone", "Role", "UpdatedAt", "Username" },
-                values: new object[] { 1, "Admin Headquarters", new DateTime(2025, 3, 7, 20, 1, 4, 985, DateTimeKind.Utc).AddTicks(1450), "superadmin@example.com", "Super Admin", "$2a$11$dDnT5ZPhg7rc5wWpfMhElubTAxQ78Ue.Gow5ueiIX8TdzMpGl8d8y", "+1234567890", "super_admin", new DateTime(2025, 3, 7, 20, 1, 4, 985, DateTimeKind.Utc).AddTicks(1617), "superadmin" });
+                values: new object[] { 1, "Admin Headquarters", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin@example.com", "Super Admin", "$2a$11$Qpw5seu2sCPYOMj8GdViAOCFdXozRQaWHyYEqF/NuyfwmBb8bfhUq", "+1234567890", "super_admin", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Appointments_MechanicId",
@@ -343,6 +395,27 @@ namespace fyp_motomate.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_Appointments_VehicleId",
                 table: "Appointments",
+                column: "VehicleId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Inspections_OrderId",
+                table: "Inspections",
+                column: "OrderId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Inspections_ServiceId",
+                table: "Inspections",
+                column: "ServiceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Inspections_UserId",
+                table: "Inspections",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Inspections_VehicleId",
+                table: "Inspections",
                 column: "VehicleId");
 
             migrationBuilder.CreateIndex(
@@ -435,6 +508,9 @@ namespace fyp_motomate.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "Inspections");
+
+            migrationBuilder.DropTable(
                 name: "Inventory");
 
             migrationBuilder.DropTable(
@@ -444,9 +520,6 @@ namespace fyp_motomate.Migrations
                 name: "Notifications");
 
             migrationBuilder.DropTable(
-                name: "Orders");
-
-            migrationBuilder.DropTable(
                 name: "Payments");
 
             migrationBuilder.DropTable(
@@ -454,6 +527,9 @@ namespace fyp_motomate.Migrations
 
             migrationBuilder.DropTable(
                 name: "ServiceHistories");
+
+            migrationBuilder.DropTable(
+                name: "Orders");
 
             migrationBuilder.DropTable(
                 name: "Invoices");

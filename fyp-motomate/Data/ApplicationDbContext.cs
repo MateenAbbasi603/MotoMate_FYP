@@ -25,7 +25,7 @@ namespace fyp_motomate.Data
         public DbSet<MechanicsPerformance> MechanicsPerformances { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<Payment> Payments { get; set; }
-        public DbSet<Inspection> Inspections { get; set; } // Add the new Inspection DbSet
+        public DbSet<Inspection> Inspections { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -99,14 +99,7 @@ namespace fyp_motomate.Data
                 .HasConversion<string>()
                 .HasMaxLength(20);
 
-// In your ApplicationDbContext.cs file, in the OnModelCreating method
-modelBuilder.Entity<Order>()
-    .HasOne(o => o.Inspection)
-    .WithOne(i => i.Order)
-    .HasForeignKey<Inspection>(i => i.OrderId)
-    .IsRequired(false)  // Make the relationship optional
-    .OnDelete(DeleteBehavior.SetNull);  // Set null instead of cascade delete
-            // Configure relationships
+            // Configure user relationships
             modelBuilder.Entity<User>()
                 .HasMany(u => u.Vehicles)
                 .WithOne(v => v.User)
@@ -155,6 +148,7 @@ modelBuilder.Entity<Order>()
                 .HasForeignKey<MechanicsPerformance>(mp => mp.MechanicId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Configure vehicle relationships
             modelBuilder.Entity<Vehicle>()
                 .HasMany(v => v.Appointments)
                 .WithOne(a => a.Vehicle)
@@ -173,6 +167,7 @@ modelBuilder.Entity<Order>()
                 .HasForeignKey(sh => sh.VehicleId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Configure service relationships
             modelBuilder.Entity<Service>()
                 .HasMany(s => s.Appointments)
                 .WithOne(a => a.Service)
@@ -184,70 +179,6 @@ modelBuilder.Entity<Order>()
                 .WithOne(o => o.Service)
                 .HasForeignKey(o => o.ServiceId)
                 .OnDelete(DeleteBehavior.Restrict);
-                // Configure Inspection entity to fix the shadow property issue
-modelBuilder.Entity<Inspection>()
-    .HasOne(i => i.User)
-    .WithMany(u => u.Inspections)
-    .HasForeignKey(i => i.UserId)
-    .OnDelete(DeleteBehavior.Restrict);
-
-    // Add this to your ApplicationDbContext.cs in the OnModelCreating method
-
-// Configure Order entity
-modelBuilder.Entity<Order>(entity =>
-{
-    // Primary Key
-    entity.HasKey(e => e.OrderId);
-    
-    // Properties
-    entity.Property(e => e.Notes)
-        .HasColumnName("Notes")
-        .IsRequired(false);
-    
-    entity.Property(e => e.Status)
-        .IsRequired()
-        .HasMaxLength(20)
-        .HasDefaultValue("pending");
-    
-    entity.Property(e => e.OrderDate)
-        .IsRequired()
-        .HasDefaultValueSql("GETUTCDATE()");
-    
-    entity.Property(e => e.IncludesInspection)
-        .IsRequired()
-        .HasDefaultValue(true);
-    
-    entity.Property(e => e.TotalAmount)
-        .IsRequired()
-        .HasColumnType("decimal(10,2)");
-    
-    // Relationships
-    entity.HasOne(d => d.User)
-        .WithMany(p => p.Orders)
-        .HasForeignKey(d => d.UserId)
-        .OnDelete(DeleteBehavior.ClientSetNull)
-        .HasConstraintName("FK_Orders_Users_UserId");
-    
-    entity.HasOne(d => d.Vehicle)
-        .WithMany(p => p.Orders)
-        .HasForeignKey(d => d.VehicleId)
-        .OnDelete(DeleteBehavior.ClientSetNull)
-        .HasConstraintName("FK_Orders_Vehicles_VehicleId");
-    
-    entity.HasOne(d => d.Service)
-        .WithMany()
-        .HasForeignKey(d => d.ServiceId)
-        .OnDelete(DeleteBehavior.ClientSetNull)
-        .HasConstraintName("FK_Orders_Services_ServiceId");
-    
-    entity.HasOne(d => d.Inspection)
-        .WithOne(p => p.Order)
-        .HasForeignKey<Inspection>(d => d.OrderId)
-        .OnDelete(DeleteBehavior.ClientSetNull)
-        .HasConstraintName("FK_Inspections_Orders_OrderId");
-});
-
-// Add other relationship configurations...
 
             modelBuilder.Entity<Service>()
                 .HasMany(s => s.ServiceHistories)
@@ -255,6 +186,7 @@ modelBuilder.Entity<Order>(entity =>
                 .HasForeignKey(sh => sh.ServiceId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Configure appointment relationships
             modelBuilder.Entity<Appointment>()
                 .HasOne(a => a.Invoice)
                 .WithOne(i => i.Appointment)
@@ -273,36 +205,88 @@ modelBuilder.Entity<Order>(entity =>
                 .HasForeignKey(p => p.InvoiceId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Configure new Inspection relationships
-            modelBuilder.Entity<Inspection>()
-                .HasOne(i => i.User)
-                .WithMany()
-                .HasForeignKey(i => i.UserId)
-                .OnDelete(DeleteBehavior.Restrict);
+            // Configure Order entity
+            modelBuilder.Entity<Order>(entity =>
+            {
+                // Primary Key
+                entity.HasKey(e => e.OrderId);
+                
+                // Properties
+                entity.Property(e => e.Notes)
+                    .HasColumnName("Notes")
+                    .IsRequired(false);
+                
+                entity.Property(e => e.Status)
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasDefaultValue("pending");
+                
+                entity.Property(e => e.OrderDate)
+                    .IsRequired()
+                    .HasDefaultValueSql("GETUTCDATE()");
+                
+                entity.Property(e => e.IncludesInspection)
+                    .IsRequired()
+                    .HasDefaultValue(true);
+                
+                entity.Property(e => e.TotalAmount)
+                    .IsRequired()
+                    .HasColumnType("decimal(10,2)");
+                
+                // Make ServiceId nullable in Order
+                entity.Property(o => o.ServiceId)
+                    .IsRequired(false);
+                
+                // Relationships - only define the user and vehicle relationships here,
+                // since Service is already defined above and we want to avoid duplication
+                entity.HasOne(d => d.User)
+                    .WithMany(p => p.Orders)
+                    .HasForeignKey(d => d.UserId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_Orders_Users_UserId");
+                
+                entity.HasOne(d => d.Vehicle)
+                    .WithMany(p => p.Orders)
+                    .HasForeignKey(d => d.VehicleId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_Orders_Vehicles_VehicleId");
+            });
 
-            modelBuilder.Entity<Inspection>()
-                .HasOne(i => i.Vehicle)
-                .WithMany()
-                .HasForeignKey(i => i.VehicleId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Configure relationship between Inspection and Order
-            modelBuilder.Entity<Inspection>()
-                .HasOne(i => i.Order)
-                .WithOne(o => o.Inspection)
-                .HasForeignKey<Inspection>(i => i.OrderId)
-                .IsRequired(false) // OrderId is optional
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Make ServiceId nullable in Order
-            modelBuilder.Entity<Order>()
-                .Property(o => o.ServiceId)
-                .IsRequired(false);
-
-            // Add IncludesInspection field to Order
-            modelBuilder.Entity<Order>()
-                .Property(o => o.IncludesInspection)
-                .HasDefaultValue(true);
+            // Configure Inspection entity
+            modelBuilder.Entity<Inspection>(entity =>
+            {
+                // Primary Key
+                entity.HasKey(e => e.InspectionId);
+                
+                // Configure User relationship (to prevent UserId1 shadow property)
+                entity.HasOne(i => i.User)
+                    .WithMany(u => u.Inspections)
+                    .HasForeignKey(i => i.UserId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("FK_Inspections_Users_UserId");
+                
+                // Configure Vehicle relationship
+                entity.HasOne(i => i.Vehicle)
+                    .WithMany()
+                    .HasForeignKey(i => i.VehicleId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("FK_Inspections_Vehicles_VehicleId");
+                
+                // Configure Service relationship if your Inspection has one
+                entity.HasOne(i => i.Service)
+                    .WithMany()
+                    .HasForeignKey(i => i.ServiceId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("FK_Inspections_Services_ServiceId");
+                
+                // Configure Order relationship - ONE relationship definition
+                entity.HasOne(i => i.Order)
+                    .WithOne(o => o.Inspection)
+                    .HasForeignKey<Inspection>(i => i.OrderId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("FK_Inspections_Orders_OrderId");
+            });
 
             // Seed super admin user
             modelBuilder.Entity<User>().HasData(

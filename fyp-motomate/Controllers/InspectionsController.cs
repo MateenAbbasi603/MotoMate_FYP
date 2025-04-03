@@ -203,23 +203,23 @@ namespace fyp_motomate.Controllers
                 }
 
                 // Update inspection report details if provided
-                if (!string.IsNullOrEmpty(request.EngineCondition))
-                    inspection.EngineCondition = request.EngineCondition;
+                // if (!string.IsNullOrEmpty(request.EngineCondition))
+                //     inspection.EngineCondition = request.EngineCondition;
 
-                if (!string.IsNullOrEmpty(request.TransmissionCondition))
-                    inspection.TransmissionCondition = request.TransmissionCondition;
+                // if (!string.IsNullOrEmpty(request.TransmissionCondition))
+                //     inspection.TransmissionCondition = request.TransmissionCondition;
 
-                if (!string.IsNullOrEmpty(request.BrakeCondition))
-                    inspection.BrakeCondition = request.BrakeCondition;
+                // if (!string.IsNullOrEmpty(request.BrakeCondition))
+                //     inspection.BrakeCondition = request.BrakeCondition;
 
-                if (!string.IsNullOrEmpty(request.ElectricalCondition))
-                    inspection.ElectricalCondition = request.ElectricalCondition;
+                // if (!string.IsNullOrEmpty(request.ElectricalCondition))
+                //     inspection.ElectricalCondition = request.ElectricalCondition;
 
-                if (!string.IsNullOrEmpty(request.BodyCondition))
-                    inspection.BodyCondition = request.BodyCondition;
+                // if (!string.IsNullOrEmpty(request.BodyCondition))
+                //     inspection.BodyCondition = request.BodyCondition;
 
-                if (!string.IsNullOrEmpty(request.TireCondition))
-                    inspection.TireCondition = request.TireCondition;
+                // if (!string.IsNullOrEmpty(request.TireCondition))
+                //     inspection.TireCondition = request.TireCondition;
             }
 
             try
