@@ -54,6 +54,7 @@ import { toast } from 'sonner';
 
 // Define TypeScript interfaces for our data
 interface Vehicle {
+  vehicleId: number;
   make: string;
   model: string;
   year: number;
@@ -89,6 +90,12 @@ interface Order {
   service?: Service;
 }
 
+interface CombinedInfo {
+  user?: User;
+  vehicle?: Vehicle;
+  service?: Service;
+}
+
 // Status badge component
 const StatusBadge = ({ status }: { status: string }) => {
   const getStatusStyles = (status: string) => {
@@ -117,6 +124,8 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [combinedInfoMap, setCombinedInfoMap] = useState<{[key: string]: CombinedInfo}>({});
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -125,14 +134,50 @@ export default function OrdersPage() {
   const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
   const router = useRouter();
 
-  // Fetch orders
+  // Fetch orders and combined details
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
         setError(null);
         const response = await axios.get(`${API_URL}/api/Orders`);
+        console.log('Fetched orders:', response.data);
+        
         setOrders(response.data);
+
+        // Fetch combined details for each unique user, vehicle, and service
+        const uniqueDetails = new Set<string>();
+        response.data.forEach((order: Order) => {
+          if (order.userId && order.vehicleId && order.serviceId) {
+            uniqueDetails.add(`userId=${order.userId}&vehicleId=${order.vehicleId}&serviceId=${order.serviceId}`);
+          }
+        });
+
+        // Fetch combined details for unique combinations
+        const combinedDetailsPromises = Array.from(uniqueDetails).map(async (detailQuery) => {
+          try {
+            const combinedResponse = await axios.get(`${API_URL}/api/Detail/combined-details?${detailQuery}`);
+            return { 
+              query: detailQuery, 
+              data: combinedResponse.data 
+            };
+          } catch (err) {
+            console.error(`Failed to fetch combined details for ${detailQuery}:`, err);
+            return null;
+          }
+        });
+
+        const combinedDetailsResults = await Promise.all(combinedDetailsPromises);
+        
+        // Create a map of combined details
+        const infoMap: {[key: string]: CombinedInfo} = {};
+        combinedDetailsResults.forEach(result => {
+          if (result) {
+            infoMap[result.query] = result.data;
+          }
+        });
+
+        setCombinedInfoMap(infoMap);
       } catch (err) {
         console.error('Failed to fetch orders:', err);
         setError('Failed to load orders. Please try again.');
@@ -154,11 +199,14 @@ export default function OrdersPage() {
     // Search filter - check various fields
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
+      const combinedInfoQuery = `userId=${order.userId}&vehicleId=${order.vehicleId}&serviceId=${order.serviceId}`;
+      const combinedInfo = combinedInfoMap[combinedInfoQuery] || {};
+      
       return (
         order.orderId.toString().includes(search) ||
-        order.user?.name?.toLowerCase().includes(search) ||
-        `${order.vehicle?.make} ${order.vehicle?.model}`.toLowerCase().includes(search) ||
-        order.service?.serviceName?.toLowerCase().includes(search)
+        (order.user?.name || combinedInfo?.user?.name || 'Unknown').toLowerCase().includes(search) ||
+        `${order.vehicle?.make || combinedInfo?.vehicle?.make || ''} ${order.vehicle?.model || combinedInfo?.vehicle?.model || ''}`.toLowerCase().includes(search) ||
+        (order.service?.serviceName || combinedInfo?.service?.serviceName || 'Custom Service').toLowerCase().includes(search)
       );
     }
     
@@ -177,6 +225,21 @@ export default function OrdersPage() {
       setError('Failed to refresh orders. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Helper function to get user, vehicle, or service details
+  const getDetails = (order: Order, type: 'user' | 'vehicle' | 'service') => {
+    const combinedInfoQuery = `userId=${order.userId}&vehicleId=${order.vehicleId}&serviceId=${order.serviceId}`;
+    const combinedInfo = combinedInfoMap[combinedInfoQuery] || {};
+
+    switch (type) {
+      case 'user':
+        return order.user || combinedInfo.user || { name: 'Unknown', userId: order.userId };
+      case 'vehicle':
+        return order.vehicle || combinedInfo.vehicle || { make: 'Unknown', model: 'Vehicle', vehicleId: order.vehicleId };
+      case 'service':
+        return order.service || combinedInfo.service || { serviceName: 'Custom Service', serviceId: order.serviceId };
     }
   };
 
@@ -268,49 +331,55 @@ export default function OrdersPage() {
               </TableHeader>
               <TableBody>
                 {filteredOrders.length > 0 ? (
-                  filteredOrders.map((order) => (
-                    <TableRow key={order.orderId}>
-                      <TableCell className="font-medium">#{order.orderId}</TableCell>
-                      <TableCell>{order.user?.name || 'Unknown'}</TableCell>
-                      <TableCell>
-                        {order.vehicle ? `${order.vehicle.make} ${order.vehicle.model}` : 'Unknown'}
-                      </TableCell>
-                      <TableCell>{order.service?.serviceName || 'Custom Service'}</TableCell>
-                      <TableCell>
-                        {order.orderDate ? format(new Date(order.orderDate), 'MMM dd, yyyy') : 'N/A'}
-                      </TableCell>
-                      <TableCell>${order.totalAmount?.toFixed(2) || '0.00'}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={order.status} />
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Actions</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => router.push(`/admin/orders/${order.orderId}`)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/admin/orders/${order.orderId}/edit`)}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Edit Order
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <CreditCard className="mr-2 h-4 w-4" />
-                              Process Payment
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredOrders.map((order) => {
+                    const user :any= getDetails(order, 'user');
+                    const vehicle :any= getDetails(order, 'vehicle');
+                    const service :any= getDetails(order, 'service');
+
+                    return (
+                      <TableRow key={order.orderId}>
+                        <TableCell className="font-medium">#{order.orderId}</TableCell>
+                        <TableCell>{user.name}</TableCell>
+                        <TableCell>
+                          {`${vehicle.make} ${vehicle.model}`}
+                        </TableCell>
+                        <TableCell>{service.serviceName}</TableCell>
+                        <TableCell>
+                          {order.orderDate ? format(new Date(order.orderDate), 'MMM dd, yyyy') : 'N/A'}
+                        </TableCell>
+                        <TableCell>${order.totalAmount?.toFixed(2) || '0.00'}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={order.status} />
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Actions</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => router.push(`/admin/orders/${order.orderId}`)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => router.push(`/admin/orders/${order.orderId}/edit`)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Edit Order
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <CreditCard className="mr-2 h-4 w-4" />
+                                Process Payment
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 ) : (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
