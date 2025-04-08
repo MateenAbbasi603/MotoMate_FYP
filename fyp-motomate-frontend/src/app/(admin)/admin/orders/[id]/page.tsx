@@ -169,57 +169,70 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
 
         // Fetch order details
         const orderData = await orderService.getOrderById(id);
-        setOrder(orderData);
+        
+        if (!orderData) {
+          setError('Order not found');
+          setLoading(false);
+          return;
+        }
+        
+        console.log('Initial order data:', orderData);
+        
+        // Initialize order with the data we have
+        let enhancedOrder = { ...orderData };
         
         // If we have the necessary IDs, fetch combined details
-        if (orderData && orderData.userId && orderData.vehicleId && orderData.serviceId) {
+        if (orderData.userId && orderData.vehicleId) {
           try {
             const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
             const combinedResponse = await axios.get(
-              `${API_URL}/api/Detail/combined-details?userId=${orderData.userId}&vehicleId=${orderData.vehicleId}&serviceId=${orderData.serviceId}`
+              `${API_URL}/api/Detail/combined-details?userId=${orderData.userId}&vehicleId=${orderData.vehicleId}${orderData.serviceId ? `&serviceId=${orderData.serviceId}` : ''}`
             );
             
+            console.log('Combined details:', combinedResponse.data);
+            
             // Update order with combined details
-            setOrder(prevOrder => {
-              if (!prevOrder) return prevOrder;
-              return {
-                ...prevOrder,
-                user: combinedResponse.data.user || prevOrder.user,
-                vehicle: combinedResponse.data.vehicle || prevOrder.vehicle,
-                service: combinedResponse.data.service || prevOrder.service,
-                inspection: combinedResponse.data.inspection || prevOrder.inspection
-              };
-            });
+            enhancedOrder = {
+              ...enhancedOrder,
+              user: combinedResponse.data.user || enhancedOrder.user,
+              vehicle: combinedResponse.data.vehicle || enhancedOrder.vehicle,
+              service: combinedResponse.data.service || enhancedOrder.service
+            };
           } catch (combinedErr) {
             console.error('Failed to fetch combined details:', combinedErr);
-            // Continue with the order data we already have
           }
         }
 
         // If the order includes an inspection, fetch the inspection service details
-        if (orderData && orderData.includesInspection && orderData.inspection) {
+        if (orderData.includesInspection && orderData.inspection) {
           try {
             const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
             const inspectionServiceResponse = await axios.get(
               `${API_URL}/api/Services/${orderData.inspection.serviceId}`
             );
             
+            console.log('Inspection service details:', inspectionServiceResponse.data);
+            
             // Update the inspection with the service price
-            setOrder(prevOrder => {
-              if (!prevOrder || !prevOrder.inspection) return prevOrder;
-              return {
-                ...prevOrder,
-                inspection: {
-                  ...prevOrder.inspection,
-                  price: inspectionServiceResponse.data.price
-                }
-              };
-            });
+            enhancedOrder = {
+              ...enhancedOrder,
+              inspection: {
+                ...enhancedOrder.inspection,
+                price: inspectionServiceResponse.data.price
+              }
+            };
           } catch (serviceErr) {
             console.error('Failed to fetch inspection service details:', serviceErr);
-            // Continue with the order data we already have
           }
         }
+        
+        // Make sure additionalServices is initialized
+        if (!enhancedOrder.additionalServices) {
+          enhancedOrder.additionalServices = [];
+        }
+        
+        console.log('Enhanced order to set:', enhancedOrder);
+        setOrder(enhancedOrder);
       } catch (err) {
         console.error(`Failed to fetch order ${id}:`, err);
         setError('Failed to load order details. Please try again.');
@@ -319,21 +332,32 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         }
       );
 
-      // Update the order with the new service
+      // Log response to see what we get
+      console.log('Add service response:', response.data);
+
+      // Update the order with the new service from the response
       const updatedOrder = response.data.order;
       
-      // If this is the first additional service, initialize the array
+      // Make sure additionalServices is initialized
       if (!updatedOrder.additionalServices) {
         updatedOrder.additionalServices = [];
       }
       
-      // Add the new service to the additionalServices array
-      const selectedService = services.find(s => s.serviceId.toString() === selectedServiceId);
-      if (selectedService) {
-        updatedOrder.additionalServices.push(selectedService);
-      }
-      
-      setOrder(updatedOrder);
+      // Make sure we have the order service information
+      setOrder(prevOrder => {
+        if (!prevOrder) return updatedOrder;
+        
+        return {
+          ...prevOrder,
+          ...updatedOrder,
+          // Keep service information if it's not in the response
+          service: updatedOrder.service || prevOrder.service,
+          // Make sure we have all the properties
+          totalAmount: updatedOrder.totalAmount || prevOrder.totalAmount,
+          // Ensure additionalServices is properly set
+          additionalServices: updatedOrder.additionalServices || []
+        };
+      });
       
       // Reset form
       setSelectedServiceId('');
@@ -345,8 +369,6 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       console.error('Failed to add service to order:', err);
       if (err.response?.status === 401) {
         toast.error('You are not authorized to perform this action. Please log in again.');
-        // Optionally redirect to login page
-        // router.push('/login');
       } else {
         toast.error(err.response?.data?.message || 'Failed to add service to order');
       }

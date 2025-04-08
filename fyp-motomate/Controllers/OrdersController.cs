@@ -88,41 +88,137 @@ public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
 // GET: api/Orders/5
 [HttpGet("{id}")]
 [AllowAnonymous]
-public async Task<ActionResult<Order>> GetOrder(int id)
+public async Task<ActionResult<object>> GetOrder(int id)
 {
-    // Fetch the order with all related entities
-    var order = await _context.Orders
-        .Include(o => o.User)    // Include customer information
-        .Include(o => o.Vehicle) // Include vehicle information
-        .Include(o => o.Service) // Include service information
-        .Include(o => o.Inspection) // Include inspection if exists
-        .FirstOrDefaultAsync(o => o.OrderId == id);
-
-    if (order == null)
+    try
     {
-        return NotFound(new { message = "Order not found" });
-    }
+        // Fetch the order with all related entities
+        var order = await _context.Orders
+            .Include(o => o.User)    // Include customer information
+            .Include(o => o.Vehicle) // Include vehicle information
+            .Include(o => o.Service) // Include service information
+            .Include(o => o.Inspection) // Include inspection if exists
+            .Include(o => o.OrderServices) // Include additional services
+                .ThenInclude(os => os.Service)
+            .FirstOrDefaultAsync(o => o.OrderId == id);
 
-    // Check authentication and permissions if needed
-    if (User.Identity.IsAuthenticated)
-    {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-        if (userIdClaim != null && !string.IsNullOrEmpty(userIdClaim.Value))
+        if (order == null)
         {
-            if (int.TryParse(userIdClaim.Value, out int userId))
-            {
-                string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            return NotFound(new { message = "Order not found" });
+        }
 
-                // If user is a customer, they can only view their own orders
-                if (userRole == "customer" && order.UserId != userId)
+        // Check authentication and permissions if needed
+        if (User.Identity.IsAuthenticated)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim != null && !string.IsNullOrEmpty(userIdClaim.Value))
+            {
+                if (int.TryParse(userIdClaim.Value, out int userId))
                 {
-                    return Forbid();
+                    string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+                    // If user is a customer, they can only view their own orders
+                    if (userRole == "customer" && order.UserId != userId)
+                    {
+                        return Forbid();
+                    }
                 }
             }
         }
-    }
 
-    return order;
+        // Map to DTO to prevent circular references
+        var orderDto = new OrderResponseDto
+        {
+            OrderId = order.OrderId,
+            UserId = order.UserId,
+            VehicleId = order.VehicleId,
+            ServiceId = order.ServiceId,
+            IncludesInspection = order.IncludesInspection,
+            OrderDate = order.OrderDate,
+            Status = order.Status,
+            TotalAmount = order.TotalAmount,
+            Notes = order.Notes
+        };
+
+        // Add user info if available
+        if (order.User != null)
+        {
+            orderDto.User = new UserDetailsDto
+            {
+                UserId = order.User.UserId,
+                Name = order.User.Name,
+                Email = order.User.Email,
+                Phone = order.User.Phone,
+                Address = order.User.Address
+            };
+        }
+
+        // Add vehicle info if available
+        if (order.Vehicle != null)
+        {
+            orderDto.Vehicle = new VehicleDetailsDto
+            {
+                VehicleId = order.Vehicle.VehicleId,
+                Make = order.Vehicle.Make,
+                Model = order.Vehicle.Model,
+                Year = order.Vehicle.Year,
+                LicensePlate = order.Vehicle.LicensePlate
+            };
+        }
+
+        // Add service info if available
+        if (order.Service != null)
+        {
+            orderDto.Service = new ServiceDto
+            {
+                ServiceId = order.Service.ServiceId,
+                ServiceName = order.Service.ServiceName,
+                Category = order.Service.Category,
+                Price = order.Service.Price,
+                Description = order.Service.Description
+            };
+        }
+
+        // Add inspection info if available
+        if (order.Inspection != null)
+        {
+            orderDto.Inspection = new InspectionDetailsDto
+            {
+                InspectionId = order.Inspection.InspectionId,
+                ScheduledDate = order.Inspection.ScheduledDate,
+                Status = order.Inspection.Status,
+                TimeSlot = order.Inspection.TimeSlot,
+                BodyCondition = order.Inspection.BodyCondition,
+                EngineCondition = order.Inspection.EngineCondition,
+                ElectricalCondition = order.Inspection.ElectricalCondition,
+                TireCondition = order.Inspection.TireCondition,
+                BrakeCondition = order.Inspection.BrakeCondition,
+                TransmissionCondition = order.Inspection.TransmissionCondition,
+                Notes = order.Inspection.Notes
+            };
+        }
+
+        // Add additional services if available
+        if (order.OrderServices != null && order.OrderServices.Any())
+        {
+            orderDto.AdditionalServices = order.OrderServices
+                .Select(os => new ServiceDto
+                {
+                    ServiceId = os.Service.ServiceId,
+                    ServiceName = os.Service.ServiceName,
+                    Category = os.Service.Category,
+                    Price = os.Service.Price,
+                    Description = os.Service.Description
+                })
+                .ToList();
+        }
+
+        return Ok(orderDto);
+    }
+    catch (Exception ex)
+    {
+        return StatusCode(500, new { message = "An error occurred while fetching the order", error = ex.Message });
+    }
 }
         
         
@@ -804,10 +900,48 @@ public async Task<ActionResult<Order>> GetOrder(int id)
                     .ThenInclude(os => os.Service)
                 .FirstOrDefaultAsync(o => o.OrderId == id);
 
+            // Create a DTO instead of returning the entity directly
+            var orderDto = new OrderResponseDto
+            {
+                OrderId = updatedOrder.OrderId,
+                UserId = updatedOrder.UserId,
+                VehicleId = updatedOrder.VehicleId,
+                ServiceId = updatedOrder.ServiceId,
+                IncludesInspection = updatedOrder.IncludesInspection,
+                OrderDate = updatedOrder.OrderDate,
+                Status = updatedOrder.Status,
+                TotalAmount = updatedOrder.TotalAmount,
+                Notes = updatedOrder.Notes,
+                Service = updatedOrder.Service != null ? new ServiceDto 
+                {
+                    ServiceId = updatedOrder.Service.ServiceId,
+                    ServiceName = updatedOrder.Service.ServiceName,
+                    Category = updatedOrder.Service.Category,
+                    Price = updatedOrder.Service.Price,
+                    Description = updatedOrder.Service.Description
+                } : null,
+                AdditionalServices = updatedOrder.OrderServices
+                    .Select(os => new ServiceDto
+                    {
+                        ServiceId = os.Service.ServiceId,
+                        ServiceName = os.Service.ServiceName,
+                        Category = os.Service.Category,
+                        Price = os.Service.Price,
+                        Description = os.Service.Description
+                    }).ToList()
+            };
+
             return Ok(new { 
                 message = "Service added to order successfully", 
-                order = updatedOrder,
-                addedService = service
+                order = orderDto,
+                addedService = new ServiceDto
+                {
+                    ServiceId = service.ServiceId,
+                    ServiceName = service.ServiceName,
+                    Category = service.Category,
+                    Price = service.Price,
+                    Description = service.Description
+                }
             });
         }
 

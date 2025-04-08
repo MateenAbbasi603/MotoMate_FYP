@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace fyp_motomate.Models
 {
@@ -20,8 +21,9 @@ namespace fyp_motomate.Models
         
         public string Notes { get; set; }
         
-        // Navigation properties
+        // Navigation properties with JsonIgnore to prevent circular references
         [ForeignKey("OrderId")]
+        [JsonIgnore]
         public Order Order { get; set; }
         
         [ForeignKey("ServiceId")]

@@ -1,4 +1,3 @@
-
 using fyp_motomate.Data;
 using fyp_motomate.Models;
 using fyp_motomate.Repositories;
@@ -12,7 +11,11 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
+    options.JsonSerializerOptions.MaxDepth = 64; // Increase default depth limit
+});
 
 // Add DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>

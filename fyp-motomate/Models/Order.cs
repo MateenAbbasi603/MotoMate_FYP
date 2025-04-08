@@ -59,6 +59,7 @@ namespace fyp_motomate.Models
         public virtual Inspection Inspection { get; set; }
         
         // Collection of additional services
+        [JsonIgnore]
         public ICollection<OrderService> OrderServices { get; set; } = new List<OrderService>();
     }
 }
