@@ -26,6 +26,7 @@ namespace fyp_motomate.Data
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<Payment> Payments { get; set; }
         public DbSet<Inspection> Inspections { get; set; }
+        public DbSet<OrderService> OrderServices { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -304,6 +305,19 @@ namespace fyp_motomate.Data
                     UpdatedAt = new DateTime(2023, 1, 1)
                 }
             );
+
+            // Configure OrderService relationship
+            modelBuilder.Entity<OrderService>()
+                .HasOne(os => os.Order)
+                .WithMany(o => o.OrderServices)
+                .HasForeignKey(os => os.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+                
+            modelBuilder.Entity<OrderService>()
+                .HasOne(os => os.Service)
+                .WithMany()
+                .HasForeignKey(os => os.ServiceId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

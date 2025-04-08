@@ -3,6 +3,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
+using System.Collections.Generic;
 
 namespace fyp_motomate.Models
 {
@@ -56,5 +57,8 @@ namespace fyp_motomate.Models
         // Navigation property to related inspection
         [JsonIgnore]
         public virtual Inspection Inspection { get; set; }
+        
+        // Collection of additional services
+        public ICollection<OrderService> OrderServices { get; set; } = new List<OrderService>();
     }
 }

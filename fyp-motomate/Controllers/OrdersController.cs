@@ -307,14 +307,14 @@ public async Task<ActionResult<Order>> GetOrder(int id)
                 decimal totalAmount = inspectionService.Price;
                 _logger.LogInformation("Base inspection price: {Price}", totalAmount);
 
-                // Validate additional service if provided
+                // Validate primary service if provided
                 if (request.ServiceId.HasValue)
                 {
                     var service = await _context.Services.FindAsync(request.ServiceId.Value);
                     if (service == null)
                     {
-                        _logger.LogWarning("Additional service not found: {ServiceId}", request.ServiceId.Value);
-                        return BadRequest(new { success = false, message = "Additional service not found" });
+                        _logger.LogWarning("Primary service not found: {ServiceId}", request.ServiceId.Value);
+                        return BadRequest(new { success = false, message = "Primary service not found" });
                     }
 
                     // Make sure we don't add another inspection service
@@ -326,7 +326,34 @@ public async Task<ActionResult<Order>> GetOrder(int id)
 
                     // Add service price to total
                     totalAmount += service.Price;
-                    _logger.LogInformation("Added service price: {Price}, New total: {Total}", service.Price, totalAmount);
+                    _logger.LogInformation("Added primary service price: {Price}, New total: {Total}", service.Price, totalAmount);
+                }
+                
+                // Validate additional services if provided
+                List<Service> additionalServices = new List<Service>();
+                if (request.AdditionalServiceIds != null && request.AdditionalServiceIds.Any())
+                {
+                    foreach (var serviceId in request.AdditionalServiceIds)
+                    {
+                        var service = await _context.Services.FindAsync(serviceId);
+                        if (service == null)
+                        {
+                            _logger.LogWarning("Additional service not found: {ServiceId}", serviceId);
+                            return BadRequest(new { success = false, message = $"Additional service with ID {serviceId} not found" });
+                        }
+
+                        // Make sure we don't add another inspection service
+                        if (service.Category.ToLower() == "inspection")
+                        {
+                            _logger.LogWarning("Cannot add multiple inspection services");
+                            return BadRequest(new { success = false, message = "Cannot add multiple inspection services" });
+                        }
+
+                        // Add service price to total
+                        totalAmount += service.Price;
+                        additionalServices.Add(service);
+                        _logger.LogInformation("Added additional service price: {Price}, New total: {Total}", service.Price, totalAmount);
+                    }
                 }
 
                 // Check if the time slot is available
@@ -365,6 +392,24 @@ public async Task<ActionResult<Order>> GetOrder(int id)
                     
                     int orderId = order.OrderId;
                     _logger.LogInformation("Order created with ID: {OrderId}", orderId);
+                    
+                    // Add additional services as OrderService entries
+                    if (additionalServices.Any())
+                    {
+                        foreach (var service in additionalServices)
+                        {
+                            var orderService = new OrderService
+                            {
+                                OrderId = orderId,
+                                ServiceId = service.ServiceId,
+                                AddedAt = DateTime.UtcNow,
+                                Notes = "Added during order creation"
+                            };
+                            _context.OrderServices.Add(orderService);
+                        }
+                        await _context.SaveChangesAsync();
+                        _logger.LogInformation("Added {Count} additional services to order", additionalServices.Count);
+                    }
                     
                     // If order was created successfully, create the inspection
                     var inspection = new Inspection
@@ -670,6 +715,102 @@ public async Task<ActionResult<Order>> GetOrder(int id)
             return Ok(new { message = "Order deleted successfully" });
         }
 
+        // POST: api/Orders/5/add-service
+        [HttpPost("{id}/add-service")]
+        [Authorize(Roles = "super_admin,admin,service_agent")]
+        public async Task<IActionResult> AddServiceToOrder(int id, [FromBody] AddServiceRequest request)
+        {
+            var order = await _context.Orders
+                .Include(o => o.Service)
+                .FirstOrDefaultAsync(o => o.OrderId == id);
+
+            if (order == null)
+            {
+                return NotFound(new { message = "Order not found" });
+            }
+
+            // Validate service
+            var service = await _context.Services.FindAsync(request.ServiceId);
+            if (service == null)
+            {
+                return BadRequest(new { message = "Service not found" });
+            }
+
+            // Check if the service is an inspection type
+            if (service.Category.ToLower() == "inspection")
+            {
+                return BadRequest(new { message = "Cannot add another inspection service to this order" });
+            }
+
+            // Create a new OrderService entry to track additional services
+            var orderService = new OrderService
+            {
+                OrderId = order.OrderId,
+                ServiceId = request.ServiceId,
+                AddedAt = DateTime.UtcNow,
+                Notes = request.Notes
+            };
+            
+            _context.OrderServices.Add(orderService);
+            
+            // Update the total amount by adding the new service price
+            order.TotalAmount += service.Price;
+            
+            // Add notes about the service addition
+            if (!string.IsNullOrEmpty(request.Notes))
+            {
+                order.Notes = string.IsNullOrEmpty(order.Notes) 
+                    ? $"Additional service added: {service.ServiceName}. {request.Notes}" 
+                    : $"{order.Notes}\nAdditional service added: {service.ServiceName}. {request.Notes}";
+            }
+            else
+            {
+                order.Notes = string.IsNullOrEmpty(order.Notes) 
+                    ? $"Additional service added: {service.ServiceName}" 
+                    : $"{order.Notes}\nAdditional service added: {service.ServiceName}";
+            }
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!OrderExists(id))
+                {
+                    return NotFound(new { message = "Order not found" });
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            // Create notification about the service addition
+            var notification = new Notification
+            {
+                UserId = order.UserId,
+                Message = $"Additional service '{service.ServiceName}' has been added to your order",
+                Status = "unread",
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Notifications.Add(notification);
+            await _context.SaveChangesAsync();
+
+            // Fetch the updated order with all services
+            var updatedOrder = await _context.Orders
+                .Include(o => o.Service)
+                .Include(o => o.OrderServices)
+                    .ThenInclude(os => os.Service)
+                .FirstOrDefaultAsync(o => o.OrderId == id);
+
+            return Ok(new { 
+                message = "Service added to order successfully", 
+                order = updatedOrder,
+                addedService = service
+            });
+        }
+
         private bool OrderExists(int id)
         {
             return _context.Orders.Any(e => e.OrderId == id);
@@ -686,6 +827,8 @@ public async Task<ActionResult<Order>> GetOrder(int id)
         public int InspectionTypeId { get; set; }
 
         public int? ServiceId { get; set; }
+        
+        public List<int> AdditionalServiceIds { get; set; } = new List<int>();
 
         [Required]
         public DateTime InspectionDate { get; set; }
@@ -720,6 +863,14 @@ public async Task<ActionResult<Order>> GetOrder(int id)
         
         [Required]
         public decimal TotalAmount { get; set; }
+        
+        public string Notes { get; set; }
+    }
+
+    public class AddServiceRequest
+    {
+        [Required]
+        public int ServiceId { get; set; }
         
         public string Notes { get; set; }
     }

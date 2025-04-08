@@ -14,7 +14,9 @@ import {
   Wrench,
   ArrowLeft,
   Loader2,
-  Clock
+  Clock,
+  PlusCircle,
+  MinusCircle
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -111,6 +113,7 @@ const orderFormSchema = z.object({
   }),
   includeService: z.boolean().default(false),
   serviceId: z.string().optional(),
+  additionalServiceIds: z.array(z.string()).default([]),
   notes: z.string().optional(),
 }).refine(
   (data) => {
@@ -134,6 +137,7 @@ export default function OrderForm() {
   const [error, setError] = useState<string | null>(null);
   const [selectedInspectionType, setSelectedInspectionType] = useState<InspectionType | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedAdditionalServices, setSelectedAdditionalServices] = useState<Service[]>([]);
   const [timeSlotInfos, setTimeSlotInfos] = useState<TimeSlotInfo[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const router = useRouter();
@@ -143,6 +147,7 @@ export default function OrderForm() {
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
       includeService: false,
+      additionalServiceIds: [],
       notes: "",
     },
   });
@@ -150,6 +155,7 @@ export default function OrderForm() {
   // Watch relevant fields
   const includeService = form.watch("includeService");
   const serviceId = form.watch("serviceId");
+  const additionalServiceIds = form.watch("additionalServiceIds");
   const inspectionTypeId = form.watch("inspectionTypeId");
   const inspectionDate = form.watch("inspectionDate");
 
@@ -217,6 +223,18 @@ export default function OrderForm() {
       setSelectedService(null);
     }
   }, [serviceId, services]);
+
+  // Update selected additional services when additionalServiceIds changes
+  useEffect(() => {
+    if (additionalServiceIds && additionalServiceIds.length > 0) {
+      const selectedServices = additionalServiceIds.map(id => 
+        services.find(s => s.serviceId.toString() === id)
+      ).filter(Boolean) as Service[];
+      setSelectedAdditionalServices(selectedServices);
+    } else {
+      setSelectedAdditionalServices([]);
+    }
+  }, [additionalServiceIds, services]);
 
   // Update selected inspection type when inspectionTypeId changes
   useEffect(() => {
@@ -295,6 +313,7 @@ export default function OrderForm() {
         vehicleId: parseInt(values.vehicleId),
         inspectionTypeId: parseInt(values.inspectionTypeId), // This is a serviceId of category 'inspection'
         serviceId: values.includeService && values.serviceId ? parseInt(values.serviceId) : null,
+        additionalServiceIds: values.additionalServiceIds.map(id => parseInt(id)),
         inspectionDate: values.inspectionDate.toISOString(),
         timeSlot: values.timeSlot,
         notes: values.notes || "",
@@ -370,12 +389,46 @@ export default function OrderForm() {
     }
   };
 
+  // Add a service to the additional services list
+  const addAdditionalService = (serviceId: string) => {
+    const currentIds = form.getValues("additionalServiceIds");
+    
+    // Check if service is already in the list
+    if (currentIds.includes(serviceId)) {
+      toast.error("This service is already added");
+      return;
+    }
+    
+    // Check if it's the same as the main service
+    if (form.getValues("serviceId") === serviceId) {
+      toast.error("This service is already selected as your main service");
+      return;
+    }
+    
+    form.setValue("additionalServiceIds", [...currentIds, serviceId]);
+  };
+
+  // Remove a service from the additional services list
+  const removeAdditionalService = (index: number) => {
+    const currentIds = form.getValues("additionalServiceIds");
+    const newIds = [...currentIds];
+    newIds.splice(index, 1);
+    form.setValue("additionalServiceIds", newIds);
+  };
+
   // Calculate total based on inspection fee and selected service
   const calculateTotal = () => {
     let total = selectedInspectionType ? selectedInspectionType.price : 0;
+    
     if (includeService && selectedService) {
       total += selectedService.price;
     }
+    
+    // Add prices of all additional services
+    if (selectedAdditionalServices.length > 0) {
+      total += selectedAdditionalServices.reduce((sum, service) => sum + service.price, 0);
+    }
+    
     return total.toFixed(2);
   };
 
@@ -684,12 +737,80 @@ export default function OrderForm() {
                     </Select>
                     <FormDescription className="flex items-center">
                       <Wrench className="mr-1 h-3 w-3" />
-                      Select additional service (optional)
+                      Select main service
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            )}
+
+            {/* Additional Services Section */}
+            {includeService && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <FormLabel>Additional Services</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        className="h-8 px-2"
+                      >
+                        <PlusCircle className="h-4 w-4 mr-1" />
+                        Add Service
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-0" align="end">
+                      <div className="p-2">
+                        <p className="text-sm font-medium mb-2">Select a service</p>
+                        <div className="max-h-64 overflow-y-auto space-y-1">
+                          {services.map((service) => (
+                            <Button
+                              key={service.serviceId}
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-between"
+                              onClick={() => addAdditionalService(service.serviceId.toString())}
+                            >
+                              <span>{service.serviceName}</span>
+                              <span>${service.price.toFixed(2)}</span>
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {selectedAdditionalServices.length > 0 ? (
+                  <div className="space-y-2 border rounded-md p-3">
+                    {selectedAdditionalServices.map((service, index) => (
+                      <div 
+                        key={service.serviceId} 
+                        className="flex justify-between items-center p-2 rounded-md bg-muted/50"
+                      >
+                        <div>
+                          <p className="font-medium text-sm">{service.serviceName}</p>
+                          <p className="text-xs text-muted-foreground">${service.price.toFixed(2)}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeAdditionalService(index)}
+                        >
+                          <MinusCircle className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No additional services selected</p>
+                )}
+              </div>
             )}
 
             <FormField
@@ -726,6 +847,21 @@ export default function OrderForm() {
                     <span>{selectedService.serviceName}:</span>
                     <span>${selectedService.price.toFixed(2)}</span>
                   </div>
+                )}
+                
+                {selectedAdditionalServices.length > 0 && (
+                  <>
+                    <div className="flex justify-between text-sm font-medium">
+                      <span>Additional Services:</span>
+                      <span></span>
+                    </div>
+                    {selectedAdditionalServices.map(service => (
+                      <div key={service.serviceId} className="flex justify-between text-sm pl-2">
+                        <span>- {service.serviceName}</span>
+                        <span>${service.price.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </>
                 )}
                 
                 <div className="flex justify-between font-medium pt-2 border-t mt-2">

@@ -41,6 +41,26 @@ import {
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import orderService from '../../../../../../services/orderService';
+import axios from 'axios';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 interface InspectionData {
   inspectionId: number;
@@ -54,6 +74,7 @@ interface InspectionData {
   brakeCondition: string;
   transmissionCondition?: string;
   notes?: string;
+  price?: number;
 }
 
 interface VehicleData {
@@ -64,9 +85,11 @@ interface VehicleData {
 }
 
 interface ServiceData {
+  serviceId: number;
   serviceName: string;
   price: number;
   description: string;
+  category: string;
 }
 
 interface UserData {
@@ -89,6 +112,7 @@ interface OrderData {
   vehicle: VehicleData;
   service?: ServiceData;
   inspection?: InspectionData;
+  additionalServices?: ServiceData[];
 }
 
 interface OrderDetailPageProps {
@@ -127,6 +151,11 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [services, setServices] = useState<ServiceData[]>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
+  const [serviceNotes, setServiceNotes] = useState<string>('');
+  const [isAddingService, setIsAddingService] = useState<boolean>(false);
+  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   
   const router = useRouter();
   const { id } = params;
@@ -137,58 +166,86 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       try {
         setLoading(true);
         setError(null);
-        const data = await orderService.getOrderById(id);
-        setOrder(data);
+
+        // Fetch order details
+        const orderData = await orderService.getOrderById(id);
+        setOrder(orderData);
+        
+        // If we have the necessary IDs, fetch combined details
+        if (orderData && orderData.userId && orderData.vehicleId && orderData.serviceId) {
+          try {
+            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+            const combinedResponse = await axios.get(
+              `${API_URL}/api/Detail/combined-details?userId=${orderData.userId}&vehicleId=${orderData.vehicleId}&serviceId=${orderData.serviceId}`
+            );
+            
+            // Update order with combined details
+            setOrder(prevOrder => {
+              if (!prevOrder) return prevOrder;
+              return {
+                ...prevOrder,
+                user: combinedResponse.data.user || prevOrder.user,
+                vehicle: combinedResponse.data.vehicle || prevOrder.vehicle,
+                service: combinedResponse.data.service || prevOrder.service,
+                inspection: combinedResponse.data.inspection || prevOrder.inspection
+              };
+            });
+          } catch (combinedErr) {
+            console.error('Failed to fetch combined details:', combinedErr);
+            // Continue with the order data we already have
+          }
+        }
+
+        // If the order includes an inspection, fetch the inspection service details
+        if (orderData && orderData.includesInspection && orderData.inspection) {
+          try {
+            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+            const inspectionServiceResponse = await axios.get(
+              `${API_URL}/api/Services/${orderData.inspection.serviceId}`
+            );
+            
+            // Update the inspection with the service price
+            setOrder(prevOrder => {
+              if (!prevOrder || !prevOrder.inspection) return prevOrder;
+              return {
+                ...prevOrder,
+                inspection: {
+                  ...prevOrder.inspection,
+                  price: inspectionServiceResponse.data.price
+                }
+              };
+            });
+          } catch (serviceErr) {
+            console.error('Failed to fetch inspection service details:', serviceErr);
+            // Continue with the order data we already have
+          }
+        }
       } catch (err) {
         console.error(`Failed to fetch order ${id}:`, err);
         setError('Failed to load order details. Please try again.');
-        
-        // Set sample data for development if API fails
-        setOrder({
-          orderId: parseInt(id),
-          userId: 1,
-          status: 'pending',
-          orderDate: new Date().toISOString(),
-          totalAmount: 199.99,
-          notes: 'Customer requested special attention to the brakes',
-          includesInspection: true,
-          user: { 
-            userId: 1,
-            name: 'John Doe', 
-            email: 'john@example.com', 
-            phone: '555-123-4567',
-            address: '123 Main St, Anytown, CA 90210'
-          },
-          vehicle: { 
-            make: 'Toyota', 
-            model: 'Camry',
-            year: 2020,
-            licensePlate: 'ABC123' 
-          },
-          service: { 
-            serviceName: 'Oil Change',
-            price: 69.99,
-            description: 'Full synthetic oil change with filter replacement'
-          },
-          inspection: {
-            inspectionId: 1,
-            scheduledDate: new Date().toISOString(),
-            status: 'pending',
-            timeSlot: '10:00 AM - 12:00 PM',
-            bodyCondition: 'Good',
-            engineCondition: 'Fair',
-            electricalCondition: 'Good',
-            tireCondition: 'Good',
-            brakeCondition: 'Needs attention'
-          }
-        });
+        setOrder(null);
       } finally {
         setLoading(false);
       }
     };
 
+    const fetchServices = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+        const response = await axios.get(`${API_URL}/api/Services`);
+        // Filter out inspection services
+        const nonInspectionServices = response.data.filter(
+          (service: ServiceData) => service.category.toLowerCase() !== 'inspection'
+        );
+        setServices(nonInspectionServices);
+      } catch (err) {
+        console.error('Failed to fetch services:', err);
+      }
+    };
+
     if (id) {
       fetchOrder();
+      fetchServices();
     }
   }, [id]);
 
@@ -221,6 +278,80 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       toast.success(`Order status updated to ${newStatus}`);
     } catch (err) {
       toast.error('Failed to update order status');
+    }
+  };
+
+  // Calculate total amount including inspection fee
+  const calculateTotalAmount = () => {
+    const servicePrice = order?.service?.price || 0;
+    const inspectionPrice = order?.includesInspection ? order.inspection?.price || 0 : 0;
+    return servicePrice + inspectionPrice;
+  };
+
+  // Handle adding a service to the order
+  const handleAddService = async () => {
+    if (!selectedServiceId) {
+      toast.error('Please select a service');
+      return;
+    }
+
+    try {
+      setIsAddingService(true);
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+      
+      // Get the authentication token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication token not found. Please log in again.');
+        return;
+      }
+      
+      const response = await axios.post(
+        `${API_URL}/api/Orders/${id}/add-service`,
+        {
+          serviceId: parseInt(selectedServiceId),
+          notes: serviceNotes
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      // Update the order with the new service
+      const updatedOrder = response.data.order;
+      
+      // If this is the first additional service, initialize the array
+      if (!updatedOrder.additionalServices) {
+        updatedOrder.additionalServices = [];
+      }
+      
+      // Add the new service to the additionalServices array
+      const selectedService = services.find(s => s.serviceId.toString() === selectedServiceId);
+      if (selectedService) {
+        updatedOrder.additionalServices.push(selectedService);
+      }
+      
+      setOrder(updatedOrder);
+      
+      // Reset form
+      setSelectedServiceId('');
+      setServiceNotes('');
+      setIsDialogOpen(false);
+      
+      toast.success('Service added to order successfully');
+    } catch (err: any) {
+      console.error('Failed to add service to order:', err);
+      if (err.response?.status === 401) {
+        toast.error('You are not authorized to perform this action. Please log in again.');
+        // Optionally redirect to login page
+        // router.push('/login');
+      } else {
+        toast.error(err.response?.data?.message || 'Failed to add service to order');
+      }
+    } finally {
+      setIsAddingService(false);
     }
   };
 
@@ -260,7 +391,71 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       Placed on {formatDate(order.orderDate)}
                     </CardDescription>
                   </div>
-                  <StatusBadge status={order.status} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={order.status} />
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Service
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add Service to Order</DialogTitle>
+                          <DialogDescription>
+                            Select a service to add to this order for upselling purposes.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="service">Service</Label>
+                            <Select 
+                              value={selectedServiceId} 
+                              onValueChange={setSelectedServiceId}
+                            >
+                              <SelectTrigger id="service">
+                                <SelectValue placeholder="Select a service" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {services.map((service) => (
+                                  <SelectItem 
+                                    key={service.serviceId} 
+                                    value={service.serviceId.toString()}
+                                  >
+                                    {service.serviceName} - ${service.price.toFixed(2)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="notes">Notes (Optional)</Label>
+                            <Textarea
+                              id="notes"
+                              placeholder="Add any notes about this service addition"
+                              value={serviceNotes}
+                              onChange={(e) => setServiceNotes(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setIsDialogOpen(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            onClick={handleAddService} 
+                            disabled={isAddingService || !selectedServiceId}
+                          >
+                            {isAddingService ? 'Adding...' : 'Add Service'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
               </CardHeader>
               
@@ -302,6 +497,27 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                           </div>
                         )}
                       </div>
+                      
+                      {/* Additional Services */}
+                      {order.additionalServices && order.additionalServices.length > 0 && (
+                        <div className="mt-4">
+                          <h4 className="font-medium mb-2">Additional Services</h4>
+                          {order.additionalServices.map((service, index) => (
+                            <div key={index} className="bg-muted/50 p-4 rounded-md mb-2">
+                              <h4 className="font-medium text-primary">
+                                {service.serviceName}
+                              </h4>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {service.description || 'No description available'}
+                              </p>
+                              <div className="flex justify-between items-center mt-3">
+                                <span className="text-sm">Service Price</span>
+                                <span className="font-medium">${service.price.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     
                     {/* Vehicle info */}
@@ -342,7 +558,13 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                         {order.includesInspection && (
                           <div className="flex justify-between items-center py-2 border-b">
                             <span>Inspection Fee</span>
-                            <span>$29.99</span>
+                            <span>${order.inspection?.price?.toFixed(2) || '0.00'}</span>
+                          </div>
+                        )}
+                        {order.additionalServices && order.additionalServices.length > 0 && (
+                          <div className="flex justify-between items-center py-2 border-b">
+                            <span>Additional Services</span>
+                            <span>${order.additionalServices.reduce((sum, service) => sum + service.price, 0).toFixed(2)}</span>
                           </div>
                         )}
                         <div className="flex justify-between items-center pt-2 font-medium">
@@ -491,7 +713,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   )}
                 </div>
                 
-<hr/>                
+                <hr/>                
                 {/* Quick actions */}
                 <div>
                   <h3 className="text-sm font-medium mb-3">Quick Actions</h3>
