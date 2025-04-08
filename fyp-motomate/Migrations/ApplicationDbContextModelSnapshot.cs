@@ -97,6 +97,11 @@ namespace fyp_motomate.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("InteriorCondition")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("Notes")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -115,14 +120,24 @@ namespace fyp_motomate.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("SuspensionCondition")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("TimeSlot")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("TireCondition")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TiresCondition")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("TransmissionCondition")
                         .IsRequired()
@@ -512,7 +527,7 @@ namespace fyp_motomate.Migrations
                             CreatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "superadmin@example.com",
                             Name = "Super Admin",
-                            Password = "$2a$11$Qpw5seu2sCPYOMj8GdViAOCFdXozRQaWHyYEqF/NuyfwmBb8bfhUq",
+                            Password = "$2a$11$SVEuvE8ghC7tJ7o/lMTkUulDT/hyaSwFQ2Uavbkrd9UxLVo8Hus2C",
                             Phone = "+1234567890",
                             Role = "super_admin",
                             UpdatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),

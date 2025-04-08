@@ -307,8 +307,9 @@ namespace fyp_motomate.Migrations
                     UserId = table.Column<int>(type: "int", nullable: false),
                     VehicleId = table.Column<int>(type: "int", nullable: false),
                     ServiceId = table.Column<int>(type: "int", nullable: false),
+                    OrderId = table.Column<int>(type: "int", nullable: false),
                     ScheduledDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    TimeSlot = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    TimeSlot = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     Notes = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -319,7 +320,9 @@ namespace fyp_motomate.Migrations
                     ElectricalCondition = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     BodyCondition = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     TireCondition = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    OrderId = table.Column<int>(type: "int", nullable: false)
+                    InteriorCondition = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    SuspensionCondition = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    TiresCondition = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -375,7 +378,7 @@ namespace fyp_motomate.Migrations
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "UserId", "Address", "CreatedAt", "Email", "Name", "Password", "Phone", "Role", "UpdatedAt", "Username" },
-                values: new object[] { 1, "Admin Headquarters", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin@example.com", "Super Admin", "$2a$11$Qpw5seu2sCPYOMj8GdViAOCFdXozRQaWHyYEqF/NuyfwmBb8bfhUq", "+1234567890", "super_admin", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin" });
+                values: new object[] { 1, "Admin Headquarters", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin@example.com", "Super Admin", "$2a$11$SVEuvE8ghC7tJ7o/lMTkUulDT/hyaSwFQ2Uavbkrd9UxLVo8Hus2C", "+1234567890", "super_admin", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Appointments_MechanicId",
