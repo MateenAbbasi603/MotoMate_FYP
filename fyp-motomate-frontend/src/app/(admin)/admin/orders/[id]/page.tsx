@@ -161,106 +161,107 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const { id } = params;
 
   // Fetch order
-  useEffect(() => {
-    const fetchOrder = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+ // Fetch order
+useEffect(() => {
+  const fetchOrder = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        // Fetch order details
-        const orderData = await orderService.getOrderById(id);
-        
-        if (!orderData) {
-          setError('Order not found');
-          setLoading(false);
-          return;
-        }
-        
-        console.log('Initial order data:', orderData);
-        
-        // Initialize order with the data we have
-        let enhancedOrder = { ...orderData };
-        
-        // If we have the necessary IDs, fetch combined details
-        if (orderData.userId && orderData.vehicleId) {
-          try {
-            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-            const combinedResponse = await axios.get(
-              `${API_URL}/api/Detail/combined-details?userId=${orderData.userId}&vehicleId=${orderData.vehicleId}${orderData.serviceId ? `&serviceId=${orderData.serviceId}` : ''}`
-            );
-            
-            console.log('Combined details:', combinedResponse.data);
-            
-            // Update order with combined details
-            enhancedOrder = {
-              ...enhancedOrder,
-              user: combinedResponse.data.user || enhancedOrder.user,
-              vehicle: combinedResponse.data.vehicle || enhancedOrder.vehicle,
-              service: combinedResponse.data.service || enhancedOrder.service
-            };
-          } catch (combinedErr) {
-            console.error('Failed to fetch combined details:', combinedErr);
-          }
-        }
-
-        // If the order includes an inspection, fetch the inspection service details
-        if (orderData.includesInspection && orderData.inspection) {
-          try {
-            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-            const inspectionServiceResponse = await axios.get(
-              `${API_URL}/api/Services/${orderData.inspection.serviceId}`
-            );
-            
-            console.log('Inspection service details:', inspectionServiceResponse.data);
-            
-            // Update the inspection with the service price
-            enhancedOrder = {
-              ...enhancedOrder,
-              inspection: {
-                ...enhancedOrder.inspection,
-                price: inspectionServiceResponse.data.price
-              }
-            };
-          } catch (serviceErr) {
-            console.error('Failed to fetch inspection service details:', serviceErr);
-          }
-        }
-        
-        // Make sure additionalServices is initialized
-        if (!enhancedOrder.additionalServices) {
-          enhancedOrder.additionalServices = [];
-        }
-        
-        console.log('Enhanced order to set:', enhancedOrder);
-        setOrder(enhancedOrder);
-      } catch (err) {
-        console.error(`Failed to fetch order ${id}:`, err);
-        setError('Failed to load order details. Please try again.');
-        setOrder(null);
-      } finally {
+      // Fetch order details
+      const orderData = await orderService.getOrderById(id);
+      
+      if (!orderData) {
+        setError('Order not found');
         setLoading(false);
+        return;
       }
-    };
-
-    const fetchServices = async () => {
-      try {
-        const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-        const response = await axios.get(`${API_URL}/api/Services`);
-        // Filter out inspection services
-        const nonInspectionServices = response.data.filter(
-          (service: ServiceData) => service.category.toLowerCase() !== 'inspection'
-        );
-        setServices(nonInspectionServices);
-      } catch (err) {
-        console.error('Failed to fetch services:', err);
+      
+      console.log('Initial order data:', orderData);
+      
+      // Initialize order with the data we have
+      let enhancedOrder = { ...orderData };
+      
+      // If the order details don't include user or vehicle data, fetch it separately
+      if ((!enhancedOrder.user || !enhancedOrder.vehicle) && orderData.userId && orderData.vehicleId) {
+        try {
+          const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+          const combinedResponse = await axios.get(
+            `${API_URL}/api/Detail/combined-details?userId=${orderData.userId}&vehicleId=${orderData.vehicleId}${orderData.serviceId ? `&serviceId=${orderData.serviceId}` : ''}`
+          );
+          
+          console.log('Combined details:', combinedResponse.data);
+          
+          // Update order with combined details
+          enhancedOrder = {
+            ...enhancedOrder,
+            user: combinedResponse.data.user || enhancedOrder.user,
+            vehicle: combinedResponse.data.vehicle || enhancedOrder.vehicle,
+            service: combinedResponse.data.service || enhancedOrder.service
+          };
+        } catch (combinedErr) {
+          console.error('Failed to fetch combined details:', combinedErr);
+        }
       }
-    };
 
-    if (id) {
-      fetchOrder();
-      fetchServices();
+      // If the order includes an inspection but doesn't have price info, fetch the inspection service details
+      if (enhancedOrder.includesInspection && enhancedOrder.inspection && !enhancedOrder.inspection.price) {
+        try {
+          const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+          const inspectionServiceResponse = await axios.get(
+            `${API_URL}/api/Services/${enhancedOrder.inspection.serviceId || orderData.inspection.serviceId}`
+          );
+          
+          console.log('Inspection service details:', inspectionServiceResponse.data);
+          
+          // Update the inspection with the service price
+          enhancedOrder = {
+            ...enhancedOrder,
+            inspection: {
+              ...enhancedOrder.inspection,
+              price: inspectionServiceResponse.data.price
+            }
+          };
+        } catch (serviceErr) {
+          console.error('Failed to fetch inspection service details:', serviceErr);
+        }
+      }
+      
+      // Make sure additionalServices is initialized as an array
+      if (!enhancedOrder.additionalServices) {
+        enhancedOrder.additionalServices = [];
+      }
+      
+      console.log('Enhanced order to set:', enhancedOrder);
+      setOrder(enhancedOrder);
+    } catch (err) {
+      console.error(`Failed to fetch order ${id}:`, err);
+      setError('Failed to load order details. Please try again.');
+      setOrder(null);
+    } finally {
+      setLoading(false);
     }
-  }, [id]);
+  };
+
+  const fetchServices = async () => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+      const response = await axios.get(`${API_URL}/api/Services`);
+      // Filter out inspection services
+      const nonInspectionServices = response.data.filter(
+        (service: ServiceData) => service.category.toLowerCase() !== 'inspection'
+      );
+      setServices(nonInspectionServices);
+    } catch (err) {
+      console.error('Failed to fetch services:', err);
+    }
+  };
+
+  if (id) {
+    fetchOrder();
+    fetchServices();
+  }
+}, [id]);
 
   // Format dates
   const formatDate = (dateString: string | undefined): string => {
@@ -302,80 +303,110 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   };
 
   // Handle adding a service to the order
-  const handleAddService = async () => {
-    if (!selectedServiceId) {
-      toast.error('Please select a service');
+// Handle adding a service to the order
+const handleAddService = async () => {
+  if (!selectedServiceId) {
+    toast.error('Please select a service');
+    return;
+  }
+
+  try {
+    setIsAddingService(true);
+    const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+    
+    // Get the authentication token from localStorage
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error('Authentication token not found. Please log in again.');
       return;
     }
-
-    try {
-      setIsAddingService(true);
-      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-      
-      // Get the authentication token from localStorage
-      const token = localStorage.getItem('token');
-      if (!token) {
-        toast.error('Authentication token not found. Please log in again.');
-        return;
-      }
-      
-      const response = await axios.post(
-        `${API_URL}/api/Orders/${id}/add-service`,
-        {
-          serviceId: parseInt(selectedServiceId),
-          notes: serviceNotes
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+    
+    const response = await axios.post(
+      `${API_URL}/api/Orders/${id}/add-service`,
+      {
+        serviceId: parseInt(selectedServiceId),
+        notes: serviceNotes
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      );
-
-      // Log response to see what we get
-      console.log('Add service response:', response.data);
-
-      // Update the order with the new service from the response
-      const updatedOrder = response.data.order;
-      
-      // Make sure additionalServices is initialized
-      if (!updatedOrder.additionalServices) {
-        updatedOrder.additionalServices = [];
       }
-      
-      // Make sure we have the order service information
-      setOrder(prevOrder => {
-        if (!prevOrder) return updatedOrder;
-        
-        return {
-          ...prevOrder,
-          ...updatedOrder,
-          // Keep service information if it's not in the response
-          service: updatedOrder.service || prevOrder.service,
-          // Make sure we have all the properties
-          totalAmount: updatedOrder.totalAmount || prevOrder.totalAmount,
-          // Ensure additionalServices is properly set
-          additionalServices: updatedOrder.additionalServices || []
-        };
-      });
-      
-      // Reset form
-      setSelectedServiceId('');
-      setServiceNotes('');
-      setIsDialogOpen(false);
-      
-      toast.success('Service added to order successfully');
-    } catch (err: any) {
-      console.error('Failed to add service to order:', err);
-      if (err.response?.status === 401) {
-        toast.error('You are not authorized to perform this action. Please log in again.');
-      } else {
-        toast.error(err.response?.data?.message || 'Failed to add service to order');
-      }
-    } finally {
-      setIsAddingService(false);
+    );
+
+    // Log response to see what we get
+    console.log('Add service response:', response.data);
+
+    // Fetch the full order details after adding the service to ensure we have all data
+    const updatedOrderData = await orderService.getOrderById(id);
+    
+    if (!updatedOrderData) {
+      toast.error('Failed to retrieve updated order information');
+      return;
     }
-  };
+    
+    // Make sure we have the complete user, vehicle, and services data
+    let enhancedOrder = { ...updatedOrderData };
+    
+    if (updatedOrderData.userId && updatedOrderData.vehicleId) {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+        const combinedResponse = await axios.get(
+          `${API_URL}/api/Detail/combined-details?userId=${updatedOrderData.userId}&vehicleId=${updatedOrderData.vehicleId}${updatedOrderData.serviceId ? `&serviceId=${updatedOrderData.serviceId}` : ''}`
+        );
+        
+        console.log('Combined details after service add:', combinedResponse.data);
+        
+        // Update order with combined details
+        enhancedOrder = {
+          ...enhancedOrder,
+          user: combinedResponse.data.user || enhancedOrder.user,
+          vehicle: combinedResponse.data.vehicle || enhancedOrder.vehicle,
+          service: combinedResponse.data.service || enhancedOrder.service
+        };
+      } catch (combinedErr) {
+        console.error('Failed to fetch combined details:', combinedErr);
+      }
+    }
+    
+    // Ensure additionalServices is initialized correctly
+    if (!enhancedOrder.additionalServices) {
+      enhancedOrder.additionalServices = [];
+    }
+    
+    // If there's a newly added service from the response, make sure it's in the additionalServices
+    if (response.data.addedService) {
+      // Check if this service already exists in the additionalServices array
+      const existingIndex = enhancedOrder.additionalServices.findIndex(
+        (s: ServiceData) => s.serviceId === response.data.addedService.serviceId
+      );
+      
+      if (existingIndex === -1) {
+        // Add it if it doesn't already exist
+        enhancedOrder.additionalServices.push(response.data.addedService);
+      }
+    }
+    
+    console.log('Enhanced order after service add:', enhancedOrder);
+    setOrder(enhancedOrder);
+    
+    // Reset form
+    setSelectedServiceId('');
+    setServiceNotes('');
+    setIsDialogOpen(false);
+    
+    toast.success('Service added to order successfully');
+  } catch (err:any) {
+    console.error('Failed to add service to order:', err);
+    if (err.response?.status === 401) {
+      toast.error('You are not authorized to perform this action. Please log in again.');
+    } else {
+      toast.error(err.response?.data?.message || 'Failed to add service to order');
+    }
+  } finally {
+    setIsAddingService(false);
+  }
+};
 
   return (
     <div className="container mx-auto py-6">
@@ -492,55 +523,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   </TabsList>
                   
                   <TabsContent value="details" className="space-y-6">
-                    {/* Service info */}
-                    <div>
-                      <h3 className="text-lg font-medium flex items-center mb-3">
-                        <PenTool className="mr-2 h-5 w-5 text-primary" />
-                        Service Information
-                      </h3>
-                      <div className="bg-muted/50 p-4 rounded-md">
-                        <h4 className="font-medium text-primary">
-                          {order.service?.serviceName || 'Custom Service'}
-                        </h4>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {order.service?.description || 'No description available'}
-                        </p>
-                        <div className="flex justify-between items-center mt-3">
-                          <span className="text-sm">Service Price</span>
-                          <span className="font-medium">${order.service?.price?.toFixed(2) || '0.00'}</span>
-                        </div>
-                        
-                        {order.includesInspection && (
-                          <div className="flex justify-between items-center mt-2">
-                            <span className="text-sm">Includes Inspection</span>
-                            <Badge variant="outline" className="bg-blue-50 text-blue-800">
-                              Yes
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Additional Services */}
-                      {order.additionalServices && order.additionalServices.length > 0 && (
-                        <div className="mt-4">
-                          <h4 className="font-medium mb-2">Additional Services</h4>
-                          {order.additionalServices.map((service, index) => (
-                            <div key={index} className="bg-muted/50 p-4 rounded-md mb-2">
-                              <h4 className="font-medium text-primary">
-                                {service.serviceName}
-                              </h4>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {service.description || 'No description available'}
-                              </p>
-                              <div className="flex justify-between items-center mt-3">
-                                <span className="text-sm">Service Price</span>
-                                <span className="font-medium">${service.price.toFixed(2)}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                  
                     
                     {/* Vehicle info */}
                     <div>
@@ -565,36 +548,89 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                         </div>
                       </div>
                     </div>
-                    
-                    {/* Payment info */}
-                    <div>
-                      <h3 className="text-lg font-medium flex items-center mb-3">
-                        <CreditCard className="mr-2 h-5 w-5 text-primary" />
-                        Payment Information
-                      </h3>
-                      <div className="bg-muted/50 p-4 rounded-md">
-                        <div className="flex justify-between items-center pb-2 border-b">
-                          <span>Service Fee</span>
-                          <span>${order.service?.price?.toFixed(2) || '0.00'}</span>
-                        </div>
-                        {order.includesInspection && (
-                          <div className="flex justify-between items-center py-2 border-b">
-                            <span>Inspection Fee</span>
-                            <span>${order.inspection?.price?.toFixed(2) || '0.00'}</span>
-                          </div>
-                        )}
-                        {order.additionalServices && order.additionalServices.length > 0 && (
-                          <div className="flex justify-between items-center py-2 border-b">
-                            <span>Additional Services</span>
-                            <span>${order.additionalServices.reduce((sum, service) => sum + service.price, 0).toFixed(2)}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between items-center pt-2 font-medium">
-                          <span>Total Amount</span>
-                          <span>${order.totalAmount?.toFixed(2) || '0.00'}</span>
-                        </div>
-                      </div>
-                    </div>
+                    {/* Service info */}
+<div>
+  <h3 className="text-lg font-medium flex items-center mb-3">
+    <PenTool className="mr-2 h-5 w-5 text-primary" />
+    Service Information
+  </h3>
+  <div className="bg-muted/50 p-4 rounded-md">
+    <h4 className="font-medium text-primary">
+      {order.service?.serviceName || 'Custom Service'}
+    </h4>
+    <p className="text-sm text-muted-foreground mt-1">
+      {order.service?.description || 'No description available'}
+    </p>
+    <div className="flex justify-between items-center mt-3">
+      <span className="text-sm">Service Price</span>
+      <span className="font-medium">${order.service?.price?.toFixed(2) || '0.00'}</span>
+    </div>
+    
+    {order.includesInspection && (
+      <div className="flex justify-between items-center mt-2">
+        <span className="text-sm">Includes Inspection</span>
+        <Badge variant="outline" className="bg-blue-50 text-blue-800">
+          Yes
+        </Badge>
+      </div>
+    )}
+  </div>
+  
+  {/* Additional Services */}
+  {order.additionalServices && order.additionalServices.length > 0 && (
+    <div className="mt-4">
+      <h4 className="font-medium mb-2">Additional Services</h4>
+      {order.additionalServices.map((service, index) => (
+        <div key={index} className="bg-muted/50 p-4 rounded-md mb-2">
+          <h4 className="font-medium text-primary">
+            {service.serviceName}
+          </h4>
+          <p className="text-sm text-muted-foreground mt-1">
+            {service.description || 'No description available'}
+          </p>
+          <div className="flex justify-between items-center mt-3">
+            <span className="text-sm">Service Price</span>
+            <span className="font-medium">${service.price?.toFixed(2) || '0.00'}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
+{/* Payment info */}
+<div>
+  <h3 className="text-lg font-medium flex items-center mb-3">
+    <CreditCard className="mr-2 h-5 w-5 text-primary" />
+    Payment Information
+  </h3>
+  <div className="bg-muted/50 p-4 rounded-md">
+    <div className="flex justify-between items-center pb-2 border-b">
+      <span>Main Service Fee</span>
+      <span>${order.service?.price?.toFixed(2) || '0.00'}</span>
+    </div>
+    
+    {order.includesInspection && order.inspection && (
+      <div className="flex justify-between items-center py-2 border-b">
+        <span>Inspection Fee</span>
+        <span>${order.inspection.price?.toFixed(2) || '0.00'}</span>
+      </div>
+    )}
+    
+    {order.additionalServices && order.additionalServices.length > 0 && (
+      <div className="flex justify-between items-center py-2 border-b">
+        <span>Additional Services</span>
+        <span>${order.additionalServices.reduce((sum, service) => sum + (service.price || 0), 0).toFixed(2)}</span>
+      </div>
+    )}
+    
+    <div className="flex justify-between items-center pt-2 font-medium">
+      <span>Total Amount</span>
+      <span>${order.totalAmount?.toFixed(2) || '0.00'}</span>
+    </div>
+  </div>
+</div>
+                 
                   </TabsContent>
                   
                   {order.includesInspection && order.inspection && (

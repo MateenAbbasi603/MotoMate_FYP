@@ -98,6 +98,7 @@ public async Task<ActionResult<object>> GetOrder(int id)
             .Include(o => o.Vehicle) // Include vehicle information
             .Include(o => o.Service) // Include service information
             .Include(o => o.Inspection) // Include inspection if exists
+                .ThenInclude(i => i.Service) // Include the inspection service for price
             .Include(o => o.OrderServices) // Include additional services
                 .ThenInclude(os => os.Service)
             .FirstOrDefaultAsync(o => o.OrderId == id);
@@ -182,9 +183,16 @@ public async Task<ActionResult<object>> GetOrder(int id)
         // Add inspection info if available
         if (order.Inspection != null)
         {
+            decimal inspectionPrice = 0;
+            if (order.Inspection.Service != null)
+            {
+                inspectionPrice = order.Inspection.Service.Price;
+            }
+            
             orderDto.Inspection = new InspectionDetailsDto
             {
                 InspectionId = order.Inspection.InspectionId,
+                ServiceId = order.Inspection.ServiceId,
                 ScheduledDate = order.Inspection.ScheduledDate,
                 Status = order.Inspection.Status,
                 TimeSlot = order.Inspection.TimeSlot,
@@ -194,7 +202,8 @@ public async Task<ActionResult<object>> GetOrder(int id)
                 TireCondition = order.Inspection.TireCondition,
                 BrakeCondition = order.Inspection.BrakeCondition,
                 TransmissionCondition = order.Inspection.TransmissionCondition,
-                Notes = order.Inspection.Notes
+                Notes = order.Inspection.Notes,
+                Price = inspectionPrice
             };
         }
 
@@ -211,6 +220,10 @@ public async Task<ActionResult<object>> GetOrder(int id)
                     Description = os.Service.Description
                 })
                 .ToList();
+        }
+        else
+        {
+            orderDto.AdditionalServices = new List<ServiceDto>();
         }
 
         return Ok(orderDto);
@@ -811,139 +824,196 @@ public async Task<ActionResult<object>> GetOrder(int id)
             return Ok(new { message = "Order deleted successfully" });
         }
 
-        // POST: api/Orders/5/add-service
-        [HttpPost("{id}/add-service")]
-        [Authorize(Roles = "super_admin,admin,service_agent")]
-        public async Task<IActionResult> AddServiceToOrder(int id, [FromBody] AddServiceRequest request)
+ // POST: api/Orders/5/add-service
+[HttpPost("{id}/add-service")]
+[Authorize(Roles = "super_admin,admin,service_agent")]
+public async Task<IActionResult> AddServiceToOrder(int id, [FromBody] AddServiceRequest request)
+{
+    // First, fetch the order with all related entities
+    var order = await _context.Orders
+        .Include(o => o.User)
+        .Include(o => o.Vehicle)
+        .Include(o => o.Service)
+        .Include(o => o.Inspection)
+        .Include(o => o.OrderServices)
+            .ThenInclude(os => os.Service)
+        .FirstOrDefaultAsync(o => o.OrderId == id);
+
+    if (order == null)
+    {
+        return NotFound(new { message = "Order not found" });
+    }
+
+    // Validate service
+    var service = await _context.Services.FindAsync(request.ServiceId);
+    if (service == null)
+    {
+        return BadRequest(new { message = "Service not found" });
+    }
+
+    // Check if the service is an inspection type
+    if (service.Category.ToLower() == "inspection")
+    {
+        return BadRequest(new { message = "Cannot add another inspection service to this order" });
+    }
+
+    // Check if the service is already added to the order
+    bool serviceAlreadyExists = order.OrderServices.Any(os => os.ServiceId == request.ServiceId);
+    if (serviceAlreadyExists)
+    {
+        return BadRequest(new { message = "This service is already added to the order" });
+    }
+
+    // Create a new OrderService entry to track additional services
+    var orderService = new OrderService
+    {
+        OrderId = order.OrderId,
+        ServiceId = request.ServiceId,
+        AddedAt = DateTime.UtcNow,
+        Notes = request.Notes
+    };
+    
+    _context.OrderServices.Add(orderService);
+    
+    // Update the total amount by adding the new service price
+    order.TotalAmount += service.Price;
+    
+    // Add notes about the service addition
+    if (!string.IsNullOrEmpty(request.Notes))
+    {
+        order.Notes = string.IsNullOrEmpty(order.Notes) 
+            ? $"Additional service added: {service.ServiceName}. {request.Notes}" 
+            : $"{order.Notes}\nAdditional service added: {service.ServiceName}. {request.Notes}";
+    }
+    else
+    {
+        order.Notes = string.IsNullOrEmpty(order.Notes) 
+            ? $"Additional service added: {service.ServiceName}" 
+            : $"{order.Notes}\nAdditional service added: {service.ServiceName}";
+    }
+
+    try
+    {
+        await _context.SaveChangesAsync();
+    }
+    catch (DbUpdateConcurrencyException)
+    {
+        if (!OrderExists(id))
         {
-            var order = await _context.Orders
-                .Include(o => o.Service)
-                .FirstOrDefaultAsync(o => o.OrderId == id);
-
-            if (order == null)
-            {
-                return NotFound(new { message = "Order not found" });
-            }
-
-            // Validate service
-            var service = await _context.Services.FindAsync(request.ServiceId);
-            if (service == null)
-            {
-                return BadRequest(new { message = "Service not found" });
-            }
-
-            // Check if the service is an inspection type
-            if (service.Category.ToLower() == "inspection")
-            {
-                return BadRequest(new { message = "Cannot add another inspection service to this order" });
-            }
-
-            // Create a new OrderService entry to track additional services
-            var orderService = new OrderService
-            {
-                OrderId = order.OrderId,
-                ServiceId = request.ServiceId,
-                AddedAt = DateTime.UtcNow,
-                Notes = request.Notes
-            };
-            
-            _context.OrderServices.Add(orderService);
-            
-            // Update the total amount by adding the new service price
-            order.TotalAmount += service.Price;
-            
-            // Add notes about the service addition
-            if (!string.IsNullOrEmpty(request.Notes))
-            {
-                order.Notes = string.IsNullOrEmpty(order.Notes) 
-                    ? $"Additional service added: {service.ServiceName}. {request.Notes}" 
-                    : $"{order.Notes}\nAdditional service added: {service.ServiceName}. {request.Notes}";
-            }
-            else
-            {
-                order.Notes = string.IsNullOrEmpty(order.Notes) 
-                    ? $"Additional service added: {service.ServiceName}" 
-                    : $"{order.Notes}\nAdditional service added: {service.ServiceName}";
-            }
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!OrderExists(id))
-                {
-                    return NotFound(new { message = "Order not found" });
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            // Create notification about the service addition
-            var notification = new Notification
-            {
-                UserId = order.UserId,
-                Message = $"Additional service '{service.ServiceName}' has been added to your order",
-                Status = "unread",
-                CreatedAt = DateTime.UtcNow
-            };
-            _context.Notifications.Add(notification);
-            await _context.SaveChangesAsync();
-
-            // Fetch the updated order with all services
-            var updatedOrder = await _context.Orders
-                .Include(o => o.Service)
-                .Include(o => o.OrderServices)
-                    .ThenInclude(os => os.Service)
-                .FirstOrDefaultAsync(o => o.OrderId == id);
-
-            // Create a DTO instead of returning the entity directly
-            var orderDto = new OrderResponseDto
-            {
-                OrderId = updatedOrder.OrderId,
-                UserId = updatedOrder.UserId,
-                VehicleId = updatedOrder.VehicleId,
-                ServiceId = updatedOrder.ServiceId,
-                IncludesInspection = updatedOrder.IncludesInspection,
-                OrderDate = updatedOrder.OrderDate,
-                Status = updatedOrder.Status,
-                TotalAmount = updatedOrder.TotalAmount,
-                Notes = updatedOrder.Notes,
-                Service = updatedOrder.Service != null ? new ServiceDto 
-                {
-                    ServiceId = updatedOrder.Service.ServiceId,
-                    ServiceName = updatedOrder.Service.ServiceName,
-                    Category = updatedOrder.Service.Category,
-                    Price = updatedOrder.Service.Price,
-                    Description = updatedOrder.Service.Description
-                } : null,
-                AdditionalServices = updatedOrder.OrderServices
-                    .Select(os => new ServiceDto
-                    {
-                        ServiceId = os.Service.ServiceId,
-                        ServiceName = os.Service.ServiceName,
-                        Category = os.Service.Category,
-                        Price = os.Service.Price,
-                        Description = os.Service.Description
-                    }).ToList()
-            };
-
-            return Ok(new { 
-                message = "Service added to order successfully", 
-                order = orderDto,
-                addedService = new ServiceDto
-                {
-                    ServiceId = service.ServiceId,
-                    ServiceName = service.ServiceName,
-                    Category = service.Category,
-                    Price = service.Price,
-                    Description = service.Description
-                }
-            });
+            return NotFound(new { message = "Order not found" });
         }
+        else
+        {
+            throw;
+        }
+    }
+
+    // Create notification about the service addition
+    var notification = new Notification
+    {
+        UserId = order.UserId,
+        Message = $"Additional service '{service.ServiceName}' has been added to your order",
+        Status = "unread",
+        CreatedAt = DateTime.UtcNow
+    };
+    _context.Notifications.Add(notification);
+    await _context.SaveChangesAsync();
+
+    // Fetch the updated order with all services
+    var updatedOrder = await _context.Orders
+        .Include(o => o.User)
+        .Include(o => o.Vehicle)
+        .Include(o => o.Service)
+        .Include(o => o.Inspection)
+        .Include(o => o.OrderServices)
+            .ThenInclude(os => os.Service)
+        .FirstOrDefaultAsync(o => o.OrderId == id);
+
+    // Create comprehensive DTO with all required information
+    var orderDto = new OrderResponseDto
+    {
+        OrderId = updatedOrder.OrderId,
+        UserId = updatedOrder.UserId,
+        VehicleId = updatedOrder.VehicleId,
+        ServiceId = updatedOrder.ServiceId,
+        IncludesInspection = updatedOrder.IncludesInspection,
+        OrderDate = updatedOrder.OrderDate,
+        Status = updatedOrder.Status,
+        TotalAmount = updatedOrder.TotalAmount,
+        Notes = updatedOrder.Notes,
+        
+        // User details
+        User = updatedOrder.User != null ? new UserDetailsDto
+        {
+            UserId = updatedOrder.User.UserId,
+            Name = updatedOrder.User.Name,
+            Email = updatedOrder.User.Email,
+            Phone = updatedOrder.User.Phone,
+            Address = updatedOrder.User.Address
+        } : null,
+        
+        // Vehicle details
+        Vehicle = updatedOrder.Vehicle != null ? new VehicleDetailsDto
+        {
+            VehicleId = updatedOrder.Vehicle.VehicleId,
+            Make = updatedOrder.Vehicle.Make,
+            Model = updatedOrder.Vehicle.Model,
+            Year = updatedOrder.Vehicle.Year,
+            LicensePlate = updatedOrder.Vehicle.LicensePlate
+        } : null,
+        
+        // Main service details
+        Service = updatedOrder.Service != null ? new ServiceDto 
+        {
+            ServiceId = updatedOrder.Service.ServiceId,
+            ServiceName = updatedOrder.Service.ServiceName,
+            Category = updatedOrder.Service.Category,
+            Price = updatedOrder.Service.Price,
+            Description = updatedOrder.Service.Description
+        } : null,
+        
+        // Inspection details if applicable
+        Inspection = updatedOrder.Inspection != null ? new InspectionDetailsDto
+        {
+            InspectionId = updatedOrder.Inspection.InspectionId,
+            ScheduledDate = updatedOrder.Inspection.ScheduledDate,
+            Status = updatedOrder.Inspection.Status,
+            TimeSlot = updatedOrder.Inspection.TimeSlot,
+            BodyCondition = updatedOrder.Inspection.BodyCondition,
+            EngineCondition = updatedOrder.Inspection.EngineCondition,
+            ElectricalCondition = updatedOrder.Inspection.ElectricalCondition,
+            TireCondition = updatedOrder.Inspection.TireCondition,
+            BrakeCondition = updatedOrder.Inspection.BrakeCondition,
+            TransmissionCondition = updatedOrder.Inspection.TransmissionCondition,
+            Notes = updatedOrder.Inspection.Notes,
+            Price = updatedOrder.Service?.Price ?? 0
+        } : null,
+        
+        // Additional services list
+        AdditionalServices = updatedOrder.OrderServices
+            .Select(os => new ServiceDto
+            {
+                ServiceId = os.Service.ServiceId,
+                ServiceName = os.Service.ServiceName,
+                Category = os.Service.Category,
+                Price = os.Service.Price,
+                Description = os.Service.Description
+            }).ToList()
+    };
+
+    return Ok(new { 
+        message = "Service added to order successfully", 
+        order = orderDto,
+        addedService = new ServiceDto
+        {
+            ServiceId = service.ServiceId,
+            ServiceName = service.ServiceName,
+            Category = service.Category,
+            Price = service.Price,
+            Description = service.Description
+        }
+    });
+}
 
         private bool OrderExists(int id)
         {
