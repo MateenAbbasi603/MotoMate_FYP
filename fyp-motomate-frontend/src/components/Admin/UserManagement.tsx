@@ -209,13 +209,18 @@ export default function UserManagement() {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        // Using the actual API endpoint now
         const response = await axios.get(`${API_URL}/api/Users`);
-        setUsers(response.data);
-        setLoading(false);
+        console.log('Raw API response:', response.data);
+        
+        // Extract users from the $values array in the response
+        const usersData = response.data.$values || [];
+        console.log('Processed users data:', usersData);
+        
+        setUsers(usersData);
       } catch (error) {
         console.error("Failed to fetch users:", error);
         toast.error("Failed to fetch users");
+      } finally {
         setLoading(false);
       }
     };
@@ -373,7 +378,6 @@ export default function UserManagement() {
         </>
       )}
       
-      {/* Create user dialog would go here */}
     </div>
   );
 }

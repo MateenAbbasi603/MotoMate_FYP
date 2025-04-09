@@ -1,5 +1,5 @@
 // services/authService.ts
-import axios from 'axios';
+import apiClient from './apiClient';
 
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -16,8 +16,8 @@ export interface User {
 
 // Profile update type
 export interface UpdateProfileData {
-  email?: string;
   name?: string;
+  email?: string;
   phone?: string;
   address?: string;
 }
@@ -47,85 +47,65 @@ const authHeader = (): Record<string, string> => {
 };
 
 const authService = {
+  // Login user
+  login: async (username: string, password: string) => {
+    const response = await apiClient.post('/api/auth/login', {
+      username,
+      password
+    });
+    if (response.data.token) {
+      localStorage.setItem('token', response.data.token);
+    }
+    return response.data;
+  },
+
+  // Register user
+  register: async (userData: any) => {
+    const response = await apiClient.post('/api/auth/register', userData);
+    return response.data;
+  },
+
+  // Logout user
+  logout: () => {
+    localStorage.removeItem('token');
+  },
+
   // Check if user is authenticated
   isAuthenticated: (): boolean => {
-    return !!getAuthToken();
+    return !!localStorage.getItem('token');
   },
 
   // Get current user profile
   getCurrentUser: async (): Promise<User> => {
-    try {
-      const response = await axios.get(`${API_URL}/api/auth/me`, {
-        headers: authHeader(),
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      throw error;
-    }
+    const response = await apiClient.get('/api/auth/me');
+    return response.data;
   },
 
   // Update user profile
-  updateProfile: async (userData: UpdateProfileData): Promise<any> => {
-    try {
-      const response = await axios.put(`${API_URL}/api/auth/update`, userData, {
-        headers: {
-          ...authHeader(),
-          'Content-Type': 'application/json',
-        },
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      throw error;
-    }
+  updateProfile: async (userData: UpdateProfileData) => {
+    const response = await apiClient.put('/api/auth/update', userData);
+    return response.data;
   },
 
   // Change password
-  changePassword: async (passwordData: ChangePasswordData): Promise<any> => {
-    try {
-      const response = await axios.post(
-        `${API_URL}/api/auth/change-password`,
-        passwordData,
-        {
-          headers: {
-            ...authHeader(),
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error changing password:', error);
-      throw error;
-    }
+  changePassword: async (passwordData: ChangePasswordData) => {
+    const response = await apiClient.post('/api/auth/change-password', passwordData);
+    return response.data;
   },
 
   // Request password reset
-  requestPasswordReset: async (email: string): Promise<any> => {
-    try {
-      const response = await axios.post(
-        `${API_URL}/api/auth/reset-password`,
-        { email },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error requesting password reset:', error);
-      throw error;
-    }
+  requestPasswordReset: async (email: string) => {
+    const response = await apiClient.post('/api/auth/reset-password', { email });
+    return response.data;
   },
 
-  // Log out user
-  logout: (): void => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    }
+  // Reset password with token
+  resetPassword: async (token: string, newPassword: string) => {
+    const response = await apiClient.post('/api/auth/reset-password/confirm', {
+      token,
+      newPassword
+    });
+    return response.data;
   }
 };
 

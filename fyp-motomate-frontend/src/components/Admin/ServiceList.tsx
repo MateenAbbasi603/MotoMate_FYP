@@ -71,6 +71,8 @@ export default function ServiceList() {
     try {
       setLoading(true);
       const data = await serviceApi.getAllServices();
+      console.log(data);
+      
       setServices(data);
     } catch (error) {
       console.error("Failed to fetch services:", error);

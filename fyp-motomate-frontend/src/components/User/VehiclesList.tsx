@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import axios from "axios";
 import { 
   Car, 
   Pencil, 
@@ -34,6 +33,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import apiClient from '../../../services/apiClient';
 
 interface Vehicle {
   vehicleId: number;
@@ -51,45 +51,33 @@ export default function VehiclesList() {
   const [isDeleting, setIsDeleting] = useState(false);
   
   const router = useRouter();
-  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   // Fetch user's vehicles
   useEffect(() => {
     const fetchVehicles = async () => {
       try {
         setLoading(true);
-        
-        const token = localStorage.getItem('token');
-        if (!token) {
-          router.push("/login");
-          return;
-        }
+        setError(null);
 
-        const response = await axios.get(`${API_URL}/api/vehicles`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await apiClient.get('/api/vehicles');
+        console.log('Fetched vehicles:', response.data);
         
-        setVehicles(response.data);
+        if (Array.isArray(response.data)) {
+          setVehicles(response.data);
+        } else {
+          console.error('Unexpected data format:', response.data);
+          setError('Received invalid data format from server');
+        }
       } catch (error) {
         console.error("Error fetching vehicles:", error);
-        
-        if (axios.isAxiosError(error) && error.response) {
-          setError(error.response.data.message || "Failed to load vehicles");
-        } else {
-          setError("Failed to load your vehicles");
-        }
-        
-        // If unauthorized, redirect to login
-        if (axios.isAxiosError(error) && error.response?.status === 401) {
-          router.push("/login");
-        }
+        setError("Failed to load your vehicles");
       } finally {
         setLoading(false);
       }
     };
 
     fetchVehicles();
-  }, [router, API_URL]);
+  }, []);
 
   const handleDeleteVehicle = async () => {
     if (!vehicleToDelete) return;
@@ -97,28 +85,14 @@ export default function VehiclesList() {
     try {
       setIsDeleting(true);
       
-      const token = localStorage.getItem('token');
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      await axios.delete(`${API_URL}/api/vehicles/${vehicleToDelete.vehicleId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await apiClient.delete(`/api/vehicles/${vehicleToDelete.vehicleId}`);
       
       // Update local state
       setVehicles(vehicles.filter(v => v.vehicleId !== vehicleToDelete.vehicleId));
       toast.success("Vehicle deleted successfully");
     } catch (error) {
       console.error("Error deleting vehicle:", error);
-      
-      if (axios.isAxiosError(error) && error.response) {
-        const errorMessage = error.response.data.message || "Failed to delete vehicle";
-        toast.error(errorMessage);
-      } else {
-        toast.error("Failed to delete vehicle");
-      }
+      toast.error("Failed to delete vehicle");
     } finally {
       setVehicleToDelete(null);
       setIsDeleting(false);

@@ -63,10 +63,18 @@ import timeSlotService, { TimeSlotInfo } from "../../../services/timeSlotService
 // Define interfaces for data types
 interface Vehicle {
   vehicleId: number;
+  userId: number;
   make: string;
   model: string;
   year: number;
   licensePlate: string;
+  id?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  appointments?: any;
+  orders?: any;
+  serviceHistories?: any;
+  user?: any;
 }
 
 interface InspectionType {
@@ -167,52 +175,77 @@ export default function OrderForm() {
     return null;
   };
 
-  // Fetch vehicles, services and inspection types when component mounts
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        
-        const token = getAuthToken();
-        if (!token) {
-          router.push("/login");
-          return;
-        }
-
-        // Fetch user's vehicles
-        const vehiclesResponse = await axios.get(`${API_URL}/api/vehicles`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        // Fetch available services (excluding inspection category)
-        const servicesResponse = await axios.get(`${API_URL}/api/services`);
-        const filteredServices = servicesResponse.data.filter(
-          (service: Service) => service.category.toLowerCase() !== 'inspection'
-        );
-        
-        // Get inspection types from services API (where category = inspection)
-        const inspectionTypes = servicesResponse.data.filter(
-          (service: Service) => service.category.toLowerCase() === 'inspection'
-        );
-        
-        setVehicles(vehiclesResponse.data);
-        setServices(filteredServices);
-        setInspectionTypes(inspectionTypes);
-      } catch (error) {
-        console.error("Error loading data:", error);
-        toast.error("Failed to load necessary data");
-        
-        // If unauthorized, redirect to login
-        if (axios.isAxiosError(error) && error.response?.status === 401) {
-          router.push("/login");
-        }
-      } finally {
-        setLoading(false);
+ // Fetch vehicles, services and inspection types when component mounts
+useEffect(() => {
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      const token = getAuthToken();
+      if (!token) {
+        router.push("/login");
+        return;
       }
-    };
 
-    loadData();
-  }, [router, API_URL]);
+      // Fetch user's vehicles
+      const vehiclesResponse = await axios.get(`${API_URL}/api/vehicles`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Handle the nested data structure with $values array
+      let vehiclesData = [];
+      if (vehiclesResponse.data && vehiclesResponse.data.$values) {
+        // If data is in $values array format
+        vehiclesData = vehiclesResponse.data.$values;
+        console.log("Vehicles data extracted from $values:", vehiclesData);
+      } else if (Array.isArray(vehiclesResponse.data)) {
+        // If data is directly an array
+        vehiclesData = vehiclesResponse.data;
+        console.log("Vehicles data is already an array:", vehiclesData);
+      } else {
+        console.error("Invalid vehicles data format:", vehiclesResponse.data);
+        toast.error("Failed to load vehicles data");
+      }
+      
+      setVehicles(vehiclesData);
+      
+      // Fetch available services (excluding inspection category)
+      const servicesResponse = await axios.get(`${API_URL}/api/services`);
+      
+      // Handle potential nested data structure for services too
+      let servicesData = [];
+      if (servicesResponse.data && servicesResponse.data.$values) {
+        servicesData = servicesResponse.data.$values;
+      } else if (Array.isArray(servicesResponse.data)) {
+        servicesData = servicesResponse.data;
+      }
+      
+      const filteredServices = servicesData.filter(
+        (service: Service) => service.category.toLowerCase() !== 'inspection'
+      );
+      
+      // Get inspection types from services API (where category = inspection)
+      const inspectionTypes = servicesData.filter(
+        (service: Service) => service.category.toLowerCase() === 'inspection'
+      );
+      
+      setServices(filteredServices);
+      setInspectionTypes(inspectionTypes);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      toast.error("Failed to load necessary data");
+      
+      // If unauthorized, redirect to login
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        router.push("/login");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadData();
+}, [router, API_URL]);
 
   // Update selected service when serviceId changes
   useEffect(() => {
@@ -465,7 +498,7 @@ export default function OrderForm() {
   }
 
   // Check if user has no vehicles
-  if (vehicles.length === 0) {
+  if (!loading && vehicles.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -526,7 +559,7 @@ export default function OrderForm() {
                     <SelectContent>
                       {vehicles.map((vehicle) => (
                         <SelectItem 
-                          key={vehicle.vehicleId} 
+                          key={vehicle.vehicleId.toString()} 
                           value={vehicle.vehicleId.toString()}
                         >
                           {vehicle.year} {vehicle.make} {vehicle.model} ({vehicle.licensePlate})
@@ -856,40 +889,39 @@ export default function OrderForm() {
                       <span></span>
                     </div>
                     {selectedAdditionalServices.map(service => (
-                      <div key={service.serviceId} className="flex justify-between text-sm pl-2">
-                        <span>- {service.serviceName}</span>
-                        <span>${service.price.toFixed(2)}</span>
-                      </div>
-                    ))}
-                  </>
-                )}
-                
-                <div className="flex justify-between font-medium pt-2 border-t mt-2">
-                  <span>Total:</span>
-                  <span>${calculateTotal()}</span>
-                </div>
+                      <div key={service.serviceId} className="flex justify-between text-sm pl-2"><span>- {service.serviceName}</span>
+                      <span>${service.price.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+              
+              <div className="flex justify-between font-medium pt-2 border-t mt-2">
+                <span>Total:</span>
+                <span>${calculateTotal()}</span>
               </div>
             </div>
-          </form>
-        </Form>
-      </CardContent>
-      <CardFooter className="flex justify-between">
-        <Button
-          variant="outline"
-          onClick={() => router.back()}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-        <Button
-          type="submit"
-          onClick={form.handleSubmit(onSubmit)}
-          disabled={submitting}
-        >
-          {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Place Order
-        </Button>
-      </CardFooter>
-    </Card>
-  );
+          </div>
+        </form>
+      </Form>
+    </CardContent>
+    <CardFooter className="flex justify-between">
+      <Button
+        variant="outline"
+        onClick={() => router.back()}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Back
+      </Button>
+      <Button
+        type="submit"
+        onClick={form.handleSubmit(onSubmit)}
+        disabled={submitting}
+      >
+        {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        Place Order
+      </Button>
+    </CardFooter>
+  </Card>
+);
 }

@@ -1,5 +1,5 @@
 // services/api.ts
-import axios from 'axios';
+import apiClient from './apiClient';
 
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -101,7 +101,7 @@ const orderApi = {
   // Authentication
   login: async (username: string, password: string): Promise<any> => {
     try {
-      const response = await axios.post(`${API_URL}/api/auth/login`, {
+      const response = await apiClient.post('/api/auth/login', {
         username,
         password
       });
@@ -114,7 +114,7 @@ const orderApi = {
 
   register: async (userData: any): Promise<any> => {
     try {
-      const response = await axios.post(`${API_URL}/api/auth/register`, userData);
+      const response = await apiClient.post('/api/auth/register', userData);
       return response.data;
     } catch (error) {
       console.error('Registration error:', error);
@@ -124,7 +124,7 @@ const orderApi = {
 
   getCurrentUser: async (): Promise<User> => {
     try {
-      const response = await axios.get(`${API_URL}/api/auth/me`, {
+      const response = await apiClient.get('/api/auth/me', {
         headers: authHeader()
       });
       return response.data;
@@ -137,7 +137,7 @@ const orderApi = {
   // Vehicles
   getUserVehicles: async (): Promise<Vehicle[]> => {
     try {
-      const response = await axios.get(`${API_URL}/api/vehicles`, {
+      const response = await apiClient.get('/api/vehicles', {
         headers: authHeader()
       });
       return response.data;
@@ -149,7 +149,7 @@ const orderApi = {
 
   getVehicleById: async (id: number): Promise<Vehicle> => {
     try {
-      const response = await axios.get(`${API_URL}/api/vehicles/${id}`, {
+      const response = await apiClient.get(`/api/vehicles/${id}`, {
         headers: authHeader()
       });
       return response.data;
@@ -161,7 +161,7 @@ const orderApi = {
 
   createVehicle: async (vehicleData: any): Promise<Vehicle> => {
     try {
-      const response = await axios.post(`${API_URL}/api/vehicles`, vehicleData, {
+      const response = await apiClient.post('/api/vehicles', vehicleData, {
         headers: {
           ...authHeader(),
           'Content-Type': 'application/json'
@@ -176,7 +176,7 @@ const orderApi = {
 
   updateVehicle: async (id: number, vehicleData: any): Promise<Vehicle> => {
     try {
-      const response = await axios.put(`${API_URL}/api/vehicles/${id}`, vehicleData, {
+      const response = await apiClient.put(`/api/vehicles/${id}`, vehicleData, {
         headers: {
           ...authHeader(),
           'Content-Type': 'application/json'
@@ -191,7 +191,7 @@ const orderApi = {
 
   deleteVehicle: async (id: number): Promise<void> => {
     try {
-      await axios.delete(`${API_URL}/api/vehicles/${id}`, {
+      await apiClient.delete(`/api/vehicles/${id}`, {
         headers: authHeader()
       });
     } catch (error) {
@@ -203,7 +203,7 @@ const orderApi = {
   // Services
   getAllServices: async (): Promise<Service[]> => {
     try {
-      const response = await axios.get(`${API_URL}/api/services`);
+      const response = await apiClient.get('/api/services');
       return response.data;
     } catch (error) {
       console.error('Get services error:', error);
@@ -213,7 +213,7 @@ const orderApi = {
 
   getServiceById: async (id: number): Promise<Service> => {
     try {
-      const response = await axios.get(`${API_URL}/api/services/${id}`);
+      const response = await apiClient.get(`/api/services/${id}`);
       return response.data;
     } catch (error) {
       console.error(`Get service ${id} error:`, error);
@@ -223,7 +223,7 @@ const orderApi = {
 
   getServicesByCategory: async (category: string): Promise<Service[]> => {
     try {
-      const response = await axios.get(`${API_URL}/api/services/category/${category}`);
+      const response = await apiClient.get(`/api/services/category/${category}`);
       return response.data;
     } catch (error) {
       console.error(`Get services by category ${category} error:`, error);
@@ -231,75 +231,53 @@ const orderApi = {
     }
   },
 
+  // Orders
+  getAllOrders: async () => {
+    const response = await apiClient.get('/api/orders');
+    return response.data;
+  },
+
+  getOrderById: async (id: number) => {
+    const response = await apiClient.get(`/api/orders/${id}`);
+    return response.data;
+  },
+
+  createOrder: async (orderData: any) => {
+    const response = await apiClient.post('/api/orders', orderData);
+    return response.data;
+  },
+
+  updateOrder: async (id: number, orderData: any) => {
+    const response = await apiClient.put(`/api/orders/${id}`, orderData);
+    return response.data;
+  },
+
+  deleteOrder: async (id: number) => {
+    await apiClient.delete(`/api/orders/${id}`);
+  },
+
   // Orders with Inspection
-  createOrderWithInspection: async (orderData: CreateOrderRequest): Promise<Order> => {
-    try {
-      const response = await axios.post(
-        `${API_URL}/api/orders/CreateWithInspection`, 
-        orderData, 
-        {
-          headers: {
-            ...authHeader(),
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Create order error:', error);
-      throw error;
-    }
+  createOrderWithInspection: async (orderData: any) => {
+    const response = await apiClient.post('/api/orders/CreateWithInspection', orderData);
+    return response.data;
   },
 
-  getUserOrders: async (): Promise<Order[]> => {
-    try {
-      const response = await axios.get(`${API_URL}/api/orders`, {
-        headers: authHeader()
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Get orders error:', error);
-      throw error;
-    }
+  getUserOrders: async () => {
+    const response = await apiClient.get('/api/orders/user');
+    return response.data;
   },
 
-  getOrderById: async (id: number): Promise<Order> => {
-    try {
-      const response = await axios.get(`${API_URL}/api/orders/${id}`, {
-        headers: authHeader()
-      });
-      return response.data;
-    } catch (error) {
-      console.error(`Get order ${id} error:`, error);
-      throw error;
+  // Combined details
+  getCombinedDetails: async (userId: number, vehicleId: number, serviceId?: number) => {
+    const params = new URLSearchParams();
+    params.append('userId', userId.toString());
+    params.append('vehicleId', vehicleId.toString());
+    if (serviceId) {
+      params.append('serviceId', serviceId.toString());
     }
-  },
-
-  updateOrder: async (id: number, orderData: UpdateOrderRequest): Promise<Order> => {
-    try {
-      const response = await axios.put(`${API_URL}/api/orders/${id}`, orderData, {
-        headers: {
-          ...authHeader(),
-          'Content-Type': 'application/json'
-        }
-      });
-      return response.data.order;
-    } catch (error) {
-      console.error(`Update order ${id} error:`, error);
-      throw error;
-    }
-  },
-
-  cancelOrder: async (id: number, notes?: string): Promise<Order> => {
-    try {
-      return await orderApi.updateOrder(id, { 
-        status: 'cancelled', 
-        notes: notes || 'Cancelled by customer'
-      });
-    } catch (error) {
-      console.error(`Cancel order ${id} error:`, error);
-      throw error;
-    }
+    
+    const response = await apiClient.get(`/api/Detail/combined-details?${params}`);
+    return response.data;
   }
 };
 

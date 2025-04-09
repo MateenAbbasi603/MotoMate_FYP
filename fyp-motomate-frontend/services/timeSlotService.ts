@@ -1,5 +1,5 @@
 // services/timeSlotService.ts
-import axios from 'axios';
+import apiClient from './apiClient';
 
 export interface TimeSlotInfo {
   timeSlot: string;
@@ -7,56 +7,32 @@ export interface TimeSlotInfo {
   totalSlots: number;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
-
 export const timeSlotService = {
   getAvailableTimeSlots: async (date: Date): Promise<string[]> => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
+    const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+    
+    const response = await apiClient.get('/api/TimeSlots/Available', {
+      params: { date: formattedDate }
+    });
 
-      const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-      
-      const response = await axios.get(`${API_URL}/api/TimeSlots/Available`, {
-        params: { date: formattedDate },
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.data.success) {
-        return response.data.availableSlots;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch available time slots');
-      }
-    } catch (error) {
-      console.error('Error fetching available time slots:', error);
-      throw error;
+    if (response.data.success) {
+      return response.data.availableSlots;
+    } else {
+      throw new Error(response.data.message || 'Failed to fetch available time slots');
     }
   },
 
   getTimeSlotsInfo: async (date: Date): Promise<TimeSlotInfo[]> => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
+    const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+    
+    const response = await apiClient.get('/api/TimeSlots/Info', {
+      params: { date: formattedDate }
+    });
 
-      const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-      
-      const response = await axios.get(`${API_URL}/api/TimeSlots/Info`, {
-        params: { date: formattedDate },
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.data.success) {
-        return response.data.timeSlotInfos;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch time slot information');
-      }
-    } catch (error) {
-      console.error('Error fetching time slot information:', error);
-      throw error;
+    if (response.data.success) {
+      return response.data.timeSlotInfos;
+    } else {
+      throw new Error(response.data.message || 'Failed to fetch time slot information');
     }
   },
 
@@ -69,7 +45,7 @@ export const timeSlotService = {
 
       const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
       
-      const response = await axios.get(`${API_URL}/api/TimeSlots/IsAvailable`, {
+      const response = await apiClient.get('/api/TimeSlots/IsAvailable', {
         params: { 
           date: formattedDate,
           timeSlot
@@ -97,7 +73,7 @@ export const timeSlotService = {
 
       const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
       
-      const response = await axios.get(`${API_URL}/api/TimeSlots/IsAvailable`, {
+      const response = await apiClient.get('/api/TimeSlots/IsAvailable', {
         params: { 
           date: formattedDate,
           timeSlot

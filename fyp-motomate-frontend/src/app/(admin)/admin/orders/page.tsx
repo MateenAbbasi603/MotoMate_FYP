@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import axios from 'axios';
 import {
   Table,
   TableBody,
@@ -51,6 +50,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import apiClient from '../../../../../services/apiClient';
+import orderApi from '../../../../../services/orderApi';
 
 // Define TypeScript interfaces for our data
 interface Vehicle {
@@ -125,13 +126,11 @@ const StatusBadge = ({ status }: { status: string }) => {
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [combinedInfoMap, setCombinedInfoMap] = useState<{[key: string]: CombinedInfo}>({});
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   
-  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
   const router = useRouter();
 
   // Fetch orders and combined details
@@ -140,44 +139,56 @@ export default function OrdersPage() {
       try {
         setLoading(true);
         setError(null);
-        const response = await axios.get(`${API_URL}/api/Orders`);
-        console.log('Fetched orders:', response.data);
+
+        // Use orderApi instead of direct axios call
+        const ordersData = await orderApi.getAllOrders();
+        console.log('Fetched orders:', ordersData);
         
-        setOrders(response.data);
+        if (Array.isArray(ordersData)) {
+          setOrders(ordersData);
 
-        // Fetch combined details for each unique user, vehicle, and service
-        const uniqueDetails = new Set<string>();
-        response.data.forEach((order: Order) => {
-          if (order.userId && order.vehicleId && order.serviceId) {
-            uniqueDetails.add(`userId=${order.userId}&vehicleId=${order.vehicleId}&serviceId=${order.serviceId}`);
-          }
-        });
+          // Fetch combined details for each unique user, vehicle, and service
+          const uniqueDetails = new Set<string>();
+          ordersData.forEach((order: Order) => {
+            if (order.userId && order.vehicleId && order.serviceId) {
+              uniqueDetails.add(`userId=${order.userId}&vehicleId=${order.vehicleId}&serviceId=${order.serviceId}`);
+            }
+          });
 
-        // Fetch combined details for unique combinations
-        const combinedDetailsPromises = Array.from(uniqueDetails).map(async (detailQuery) => {
-          try {
-            const combinedResponse = await axios.get(`${API_URL}/api/Detail/combined-details?${detailQuery}`);
-            return { 
-              query: detailQuery, 
-              data: combinedResponse.data 
-            };
-          } catch (err) {
-            console.error(`Failed to fetch combined details for ${detailQuery}:`, err);
-            return null;
-          }
-        });
+          // Fetch combined details for unique combinations
+          const combinedDetailsPromises = Array.from(uniqueDetails).map(async (detailQuery) => {
+            try {
+              const [userId, vehicleId, serviceId] = detailQuery.split('&').map(param => {
+                const [key, value] = param.split('=');
+                return parseInt(value);
+              });
 
-        const combinedDetailsResults = await Promise.all(combinedDetailsPromises);
-        
-        // Create a map of combined details
-        const infoMap: {[key: string]: CombinedInfo} = {};
-        combinedDetailsResults.forEach(result => {
-          if (result) {
-            infoMap[result.query] = result.data;
-          }
-        });
+              const combinedData = await orderApi.getCombinedDetails(userId, vehicleId, serviceId);
+              return {
+                query: detailQuery,
+                data: combinedData
+              };
+            } catch (err) {
+              console.error(`Failed to fetch combined details for ${detailQuery}:`, err);
+              return null;
+            }
+          });
 
-        setCombinedInfoMap(infoMap);
+          const combinedDetailsResults = await Promise.all(combinedDetailsPromises);
+          
+          // Create a map of combined details
+          const infoMap: {[key: string]: CombinedInfo} = {};
+          combinedDetailsResults.forEach(result => {
+            if (result) {
+              infoMap[result.query] = result.data;
+            }
+          });
+
+          setCombinedInfoMap(infoMap);
+        } else {
+          console.error('Unexpected orders data format:', ordersData);
+          setError('Received invalid data format from server');
+        }
       } catch (err) {
         console.error('Failed to fetch orders:', err);
         setError('Failed to load orders. Please try again.');
@@ -187,7 +198,7 @@ export default function OrdersPage() {
     };
 
     fetchOrders();
-  }, [API_URL]);
+  }, []);
 
   // Filter orders
   const filteredOrders = orders.filter(order => {
@@ -217,9 +228,13 @@ export default function OrdersPage() {
   const handleRefresh = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_URL}/api/Orders`);
-      setOrders(response.data);
-      toast.success('Orders refreshed successfully');
+      const ordersData = await orderApi.getAllOrders();
+      if (Array.isArray(ordersData)) {
+        setOrders(ordersData);
+        toast.success('Orders refreshed successfully');
+      } else {
+        throw new Error('Invalid data format received');
+      }
     } catch (err) {
       toast.error('Failed to refresh orders');
       setError('Failed to refresh orders. Please try again.');
