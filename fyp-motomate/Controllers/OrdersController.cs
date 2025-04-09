@@ -32,209 +32,209 @@ namespace fyp_motomate.Controllers
             _logger = logger;
         }
 
-// GET: api/Orders
-[HttpGet]
-[AllowAnonymous]
-public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
-{
-    // Check if user is authenticated
-    if (!User.Identity.IsAuthenticated)
-    {
-        // For unauthenticated users, return all orders
-        return await _context.Orders
-            .Include(o => o.User)
-            .Include(o => o.Vehicle)
-            .Include(o => o.Service)
-            .ToListAsync();
-    }
-
-    // For authenticated users, safely get the user ID
-    var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-    if (userIdClaim == null || string.IsNullOrEmpty(userIdClaim.Value))
-    {
-        return BadRequest(new { message = "User ID not found in token" });
-    }
-
-    int userId;
-    if (!int.TryParse(userIdClaim.Value, out userId))
-    {
-        return BadRequest(new { message = "Invalid user ID format" });
-    }
-
-    string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-
-    // If user is a customer, only return their orders
-    if (userRole == "customer")
-    {
-        return await _context.Orders
-            .Where(o => o.UserId == userId)
-            .Include(o => o.Vehicle)
-            .Include(o => o.Service)
-            .ToListAsync();
-    }
-    // If user is staff, return all orders
-    else
-    {
-        return await _context.Orders
-            .Include(o => o.User)
-            .Include(o => o.Vehicle)
-            .Include(o => o.Service)
-            .ToListAsync();
-    }
-}
-
-
-
-// GET: api/Orders/5
-[HttpGet("{id}")]
-[AllowAnonymous]
-public async Task<ActionResult<object>> GetOrder(int id)
-{
-    try
-    {
-        // Fetch the order with all related entities
-        var order = await _context.Orders
-            .Include(o => o.User)    // Include customer information
-            .Include(o => o.Vehicle) // Include vehicle information
-            .Include(o => o.Service) // Include service information
-            .Include(o => o.Inspection) // Include inspection if exists
-                .ThenInclude(i => i.Service) // Include the inspection service for price
-            .Include(o => o.OrderServices) // Include additional services
-                .ThenInclude(os => os.Service)
-            .FirstOrDefaultAsync(o => o.OrderId == id);
-
-        if (order == null)
+        // GET: api/Orders
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
         {
-            return NotFound(new { message = "Order not found" });
+            // Check if user is authenticated
+            if (!User.Identity.IsAuthenticated)
+            {
+                // For unauthenticated users, return all orders
+                return await _context.Orders
+                    .Include(o => o.User)
+                    .Include(o => o.Vehicle)
+                    .Include(o => o.Service)
+                    .ToListAsync();
+            }
+
+            // For authenticated users, safely get the user ID
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || string.IsNullOrEmpty(userIdClaim.Value))
+            {
+                return BadRequest(new { message = "User ID not found in token" });
+            }
+
+            int userId;
+            if (!int.TryParse(userIdClaim.Value, out userId))
+            {
+                return BadRequest(new { message = "Invalid user ID format" });
+            }
+
+            string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+            // If user is a customer, only return their orders
+            if (userRole == "customer")
+            {
+                return await _context.Orders
+                    .Where(o => o.UserId == userId)
+                    .Include(o => o.Vehicle)
+                    .Include(o => o.Service)
+                    .ToListAsync();
+            }
+            // If user is staff, return all orders
+            else
+            {
+                return await _context.Orders
+                    .Include(o => o.User)
+                    .Include(o => o.Vehicle)
+                    .Include(o => o.Service)
+                    .ToListAsync();
+            }
         }
 
-        // Check authentication and permissions if needed
-        if (User.Identity.IsAuthenticated)
-        {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim != null && !string.IsNullOrEmpty(userIdClaim.Value))
-            {
-                if (int.TryParse(userIdClaim.Value, out int userId))
-                {
-                    string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
-                    // If user is a customer, they can only view their own orders
-                    if (userRole == "customer" && order.UserId != userId)
+
+        // GET: api/Orders/5
+        [HttpGet("{id}")]
+        [AllowAnonymous]
+        public async Task<ActionResult<object>> GetOrder(int id)
+        {
+            try
+            {
+                // Fetch the order with all related entities
+                var order = await _context.Orders
+                    .Include(o => o.User)    // Include customer information
+                    .Include(o => o.Vehicle) // Include vehicle information
+                    .Include(o => o.Service) // Include service information
+                    .Include(o => o.Inspection) // Include inspection if exists
+                        .ThenInclude(i => i.Service) // Include the inspection service for price
+                    .Include(o => o.OrderServices) // Include additional services
+                        .ThenInclude(os => os.Service)
+                    .FirstOrDefaultAsync(o => o.OrderId == id);
+
+                if (order == null)
+                {
+                    return NotFound(new { message = "Order not found" });
+                }
+
+                // Check authentication and permissions if needed
+                if (User.Identity.IsAuthenticated)
+                {
+                    var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                    if (userIdClaim != null && !string.IsNullOrEmpty(userIdClaim.Value))
                     {
-                        return Forbid();
+                        if (int.TryParse(userIdClaim.Value, out int userId))
+                        {
+                            string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+                            // If user is a customer, they can only view their own orders
+                            if (userRole == "customer" && order.UserId != userId)
+                            {
+                                return Forbid();
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        // Map to DTO to prevent circular references
-        var orderDto = new OrderResponseDto
-        {
-            OrderId = order.OrderId,
-            UserId = order.UserId,
-            VehicleId = order.VehicleId,
-            ServiceId = order.ServiceId,
-            IncludesInspection = order.IncludesInspection,
-            OrderDate = order.OrderDate,
-            Status = order.Status,
-            TotalAmount = order.TotalAmount,
-            Notes = order.Notes
-        };
-
-        // Add user info if available
-        if (order.User != null)
-        {
-            orderDto.User = new UserDetailsDto
-            {
-                UserId = order.User.UserId,
-                Name = order.User.Name,
-                Email = order.User.Email,
-                Phone = order.User.Phone,
-                Address = order.User.Address
-            };
-        }
-
-        // Add vehicle info if available
-        if (order.Vehicle != null)
-        {
-            orderDto.Vehicle = new VehicleDetailsDto
-            {
-                VehicleId = order.Vehicle.VehicleId,
-                Make = order.Vehicle.Make,
-                Model = order.Vehicle.Model,
-                Year = order.Vehicle.Year,
-                LicensePlate = order.Vehicle.LicensePlate
-            };
-        }
-
-        // Add service info if available
-        if (order.Service != null)
-        {
-            orderDto.Service = new ServiceDto
-            {
-                ServiceId = order.Service.ServiceId,
-                ServiceName = order.Service.ServiceName,
-                Category = order.Service.Category,
-                Price = order.Service.Price,
-                Description = order.Service.Description
-            };
-        }
-
-        // Add inspection info if available
-        if (order.Inspection != null)
-        {
-            decimal inspectionPrice = 0;
-            if (order.Inspection.Service != null)
-            {
-                inspectionPrice = order.Inspection.Service.Price;
-            }
-            
-            orderDto.Inspection = new InspectionDetailsDto
-            {
-                InspectionId = order.Inspection.InspectionId,
-                ServiceId = order.Inspection.ServiceId,
-                ScheduledDate = order.Inspection.ScheduledDate,
-                Status = order.Inspection.Status,
-                TimeSlot = order.Inspection.TimeSlot,
-                BodyCondition = order.Inspection.BodyCondition,
-                EngineCondition = order.Inspection.EngineCondition,
-                ElectricalCondition = order.Inspection.ElectricalCondition,
-                TireCondition = order.Inspection.TireCondition,
-                BrakeCondition = order.Inspection.BrakeCondition,
-                TransmissionCondition = order.Inspection.TransmissionCondition,
-                Notes = order.Inspection.Notes,
-                Price = inspectionPrice
-            };
-        }
-
-        // Add additional services if available
-        if (order.OrderServices != null && order.OrderServices.Any())
-        {
-            orderDto.AdditionalServices = order.OrderServices
-                .Select(os => new ServiceDto
+                // Map to DTO to prevent circular references
+                var orderDto = new OrderResponseDto
                 {
-                    ServiceId = os.Service.ServiceId,
-                    ServiceName = os.Service.ServiceName,
-                    Category = os.Service.Category,
-                    Price = os.Service.Price,
-                    Description = os.Service.Description
-                })
-                .ToList();
-        }
-        else
-        {
-            orderDto.AdditionalServices = new List<ServiceDto>();
+                    OrderId = order.OrderId,
+                    UserId = order.UserId,
+                    VehicleId = order.VehicleId,
+                    ServiceId = order.ServiceId,
+                    IncludesInspection = order.IncludesInspection,
+                    OrderDate = order.OrderDate,
+                    Status = order.Status,
+                    TotalAmount = order.TotalAmount,
+                    Notes = order.Notes
+                };
+
+                // Add user info if available
+                if (order.User != null)
+                {
+                    orderDto.User = new UserDetailsDto
+                    {
+                        UserId = order.User.UserId,
+                        Name = order.User.Name,
+                        Email = order.User.Email,
+                        Phone = order.User.Phone,
+                        Address = order.User.Address
+                    };
+                }
+
+                // Add vehicle info if available
+                if (order.Vehicle != null)
+                {
+                    orderDto.Vehicle = new VehicleDetailsDto
+                    {
+                        VehicleId = order.Vehicle.VehicleId,
+                        Make = order.Vehicle.Make,
+                        Model = order.Vehicle.Model,
+                        Year = order.Vehicle.Year,
+                        LicensePlate = order.Vehicle.LicensePlate
+                    };
+                }
+
+                // Add service info if available
+                if (order.Service != null)
+                {
+                    orderDto.Service = new ServiceDto
+                    {
+                        ServiceId = order.Service.ServiceId,
+                        ServiceName = order.Service.ServiceName,
+                        Category = order.Service.Category,
+                        Price = order.Service.Price,
+                        Description = order.Service.Description
+                    };
+                }
+
+                // Add inspection info if available
+                if (order.Inspection != null)
+                {
+                    decimal inspectionPrice = 0;
+                    if (order.Inspection.Service != null)
+                    {
+                        inspectionPrice = order.Inspection.Service.Price;
+                    }
+
+                    orderDto.Inspection = new InspectionDetailsDto
+                    {
+                        InspectionId = order.Inspection.InspectionId,
+                        ServiceId = order.Inspection.ServiceId,
+                        ScheduledDate = order.Inspection.ScheduledDate,
+                        Status = order.Inspection.Status,
+                        TimeSlot = order.Inspection.TimeSlot,
+                        BodyCondition = order.Inspection.BodyCondition,
+                        EngineCondition = order.Inspection.EngineCondition,
+                        ElectricalCondition = order.Inspection.ElectricalCondition,
+                        TireCondition = order.Inspection.TireCondition,
+                        BrakeCondition = order.Inspection.BrakeCondition,
+                        TransmissionCondition = order.Inspection.TransmissionCondition,
+                        Notes = order.Inspection.Notes,
+                        Price = inspectionPrice
+                    };
+                }
+
+                // Add additional services if available
+                if (order.OrderServices != null && order.OrderServices.Any())
+                {
+                    orderDto.AdditionalServices = order.OrderServices
+                        .Select(os => new ServiceDto
+                        {
+                            ServiceId = os.Service.ServiceId,
+                            ServiceName = os.Service.ServiceName,
+                            Category = os.Service.Category,
+                            Price = os.Service.Price,
+                            Description = os.Service.Description
+                        })
+                        .ToList();
+                }
+                else
+                {
+                    orderDto.AdditionalServices = new List<ServiceDto>();
+                }
+
+                return Ok(orderDto);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An error occurred while fetching the order", error = ex.Message });
+            }
         }
 
-        return Ok(orderDto);
-    }
-    catch (Exception ex)
-    {
-        return StatusCode(500, new { message = "An error occurred while fetching the order", error = ex.Message });
-    }
-}
-        
-        
+
         // POST: api/Orders
         [HttpPost]
         public async Task<ActionResult<Order>> CreateOrder([FromBody] OrderRequest request)
@@ -316,7 +316,7 @@ public async Task<ActionResult<object>> GetOrder(int id)
                     BrakeCondition = "Not Inspected Yet",
                     ElectricalCondition = "Not Inspected Yet",
                     BodyCondition = "Not Inspected Yet",
-                    TireCondition = "Not Inspected Yet", 
+                    TireCondition = "Not Inspected Yet",
                     InteriorCondition = "Not Inspected Yet",
                     SuspensionCondition = "Not Inspected Yet",
                     TiresCondition = "Not Inspected Yet"
@@ -359,7 +359,7 @@ public async Task<ActionResult<object>> GetOrder(int id)
             try
             {
                 _logger.LogInformation("CreateOrderWithInspection started with request: {@Request}", request);
-                
+
                 // Validate request
                 if (request == null)
                 {
@@ -437,7 +437,7 @@ public async Task<ActionResult<object>> GetOrder(int id)
                     totalAmount += service.Price;
                     _logger.LogInformation("Added primary service price: {Price}, New total: {Total}", service.Price, totalAmount);
                 }
-                
+
                 // Validate additional services if provided
                 List<Service> additionalServices = new List<Service>();
                 if (request.AdditionalServiceIds != null && request.AdditionalServiceIds.Any())
@@ -470,9 +470,10 @@ public async Task<ActionResult<object>> GetOrder(int id)
                 if (!isSlotAvailable)
                 {
                     _logger.LogWarning("Time slot not available: {Date} {TimeSlot}", request.InspectionDate, request.TimeSlot);
-                    return BadRequest(new { 
-                        success = false, 
-                        message = "The selected time slot is no longer available. Please choose a different time." 
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "The selected time slot is no longer available. Please choose a different time."
                     });
                 }
 
@@ -498,10 +499,10 @@ public async Task<ActionResult<object>> GetOrder(int id)
                     _logger.LogInformation("Creating order");
                     _context.Orders.Add(order);
                     await _context.SaveChangesAsync();
-                    
+
                     int orderId = order.OrderId;
                     _logger.LogInformation("Order created with ID: {OrderId}", orderId);
-                    
+
                     // Add additional services as OrderService entries
                     if (additionalServices.Any())
                     {
@@ -519,7 +520,7 @@ public async Task<ActionResult<object>> GetOrder(int id)
                         await _context.SaveChangesAsync();
                         _logger.LogInformation("Added {Count} additional services to order", additionalServices.Count);
                     }
-                    
+
                     // If order was created successfully, create the inspection
                     var inspection = new Inspection
                     {
@@ -546,10 +547,10 @@ public async Task<ActionResult<object>> GetOrder(int id)
                     _logger.LogInformation("Creating inspection with OrderId: {OrderId}", inspection.OrderId);
                     _context.Inspections.Add(inspection);
                     await _context.SaveChangesAsync();
-                    
+
                     int inspectionId = inspection.InspectionId;
                     _logger.LogInformation("Inspection created with ID: {InspectionId}", inspectionId);
-                    
+
                     // Create notifications
                     var userNotification = new Notification
                     {
@@ -558,7 +559,7 @@ public async Task<ActionResult<object>> GetOrder(int id)
                         Status = "unread",
                         CreatedAt = DateTime.UtcNow
                     };
-                    
+
                     var staffNotification = new Notification
                     {
                         UserId = 1, // Admin or service manager
@@ -566,16 +567,17 @@ public async Task<ActionResult<object>> GetOrder(int id)
                         Status = "unread",
                         CreatedAt = DateTime.UtcNow
                     };
-                    
+
                     _context.Notifications.AddRange(userNotification, staffNotification);
                     await _context.SaveChangesAsync();
-                    
+
                     return CreatedAtAction(
-                        nameof(GetOrder), 
-                        new { id = orderId }, 
-                        new { 
-                            success = true, 
-                            message = "Order created successfully", 
+                        nameof(GetOrder),
+                        new { id = orderId },
+                        new
+                        {
+                            success = true,
+                            message = "Order created successfully",
                             orderId = orderId,
                             inspectionId = inspectionId
                         }
@@ -584,7 +586,7 @@ public async Task<ActionResult<object>> GetOrder(int id)
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error creating order or inspection");
-                    
+
                     // Get detailed error information
                     var detailedError = ex.Message;
                     var innerEx = ex.InnerException;
@@ -593,10 +595,11 @@ public async Task<ActionResult<object>> GetOrder(int id)
                         detailedError += " | Inner Exception: " + innerEx.Message;
                         innerEx = innerEx.InnerException;
                     }
-                    
-                    return StatusCode(500, new { 
-                        success = false, 
-                        message = "Error creating order or inspection", 
+
+                    return StatusCode(500, new
+                    {
+                        success = false,
+                        message = "Error creating order or inspection",
                         error = detailedError
                     });
                 }
@@ -604,7 +607,7 @@ public async Task<ActionResult<object>> GetOrder(int id)
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unhandled exception in CreateOrderWithInspection");
-                
+
                 var detailedError = ex.Message;
                 var innerEx = ex.InnerException;
                 while (innerEx != null)
@@ -612,10 +615,11 @@ public async Task<ActionResult<object>> GetOrder(int id)
                     detailedError += " | Inner Exception: " + innerEx.Message;
                     innerEx = innerEx.InnerException;
                 }
-                
-                return StatusCode(500, new { 
-                    success = false, 
-                    message = "An unexpected error occurred", 
+
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "An unexpected error occurred",
                     error = detailedError
                 });
             }
@@ -628,12 +632,12 @@ public async Task<ActionResult<object>> GetOrder(int id)
             try
             {
                 _logger.LogInformation("CreateOrderWithInspectionDirectSQL started");
-                
+
                 // Perform same validations as in the other method
                 // (vehicle, user, service validation, etc.)
-                
+
                 int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-                
+
                 // Create order using Entity Framework
                 var order = new Order
                 {
@@ -646,12 +650,12 @@ public async Task<ActionResult<object>> GetOrder(int id)
                     TotalAmount = 100.00m, // Set appropriate amount
                     Notes = request.Notes ?? ""
                 };
-                
+
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
-                
+
                 int orderId = order.OrderId;
-                
+
                 // Create inspection using direct SQL
                 string sql = @"
                 INSERT INTO Inspections (
@@ -667,7 +671,7 @@ public async Task<ActionResult<object>> GetOrder(int id)
                     @InteriorCondition, @SuspensionCondition, @TiresCondition
                 );
                 SELECT SCOPE_IDENTITY();";
-                
+
                 var parameters = new SqlParameter[]
                 {
                     new SqlParameter("@UserId", userId),
@@ -689,10 +693,11 @@ public async Task<ActionResult<object>> GetOrder(int id)
                     new SqlParameter("@SuspensionCondition", "Not Inspected Yet"),
                     new SqlParameter("@TiresCondition", "Not Inspected Yet")
                 };
-                
+
                 var result = await _context.Database.ExecuteSqlRawAsync(sql, parameters);
-                
-                return Ok(new {
+
+                return Ok(new
+                {
                     success = true,
                     message = "Order with inspection created successfully using direct SQL",
                     orderId = orderId
@@ -701,7 +706,8 @@ public async Task<ActionResult<object>> GetOrder(int id)
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in CreateOrderWithInspectionDirectSQL");
-                return StatusCode(500, new {
+                return StatusCode(500, new
+                {
                     success = false,
                     message = "An error occurred",
                     error = ex.Message
@@ -824,196 +830,310 @@ public async Task<ActionResult<object>> GetOrder(int id)
             return Ok(new { message = "Order deleted successfully" });
         }
 
- // POST: api/Orders/5/add-service
-[HttpPost("{id}/add-service")]
-[Authorize(Roles = "super_admin,admin,service_agent")]
-public async Task<IActionResult> AddServiceToOrder(int id, [FromBody] AddServiceRequest request)
-{
-    // First, fetch the order with all related entities
-    var order = await _context.Orders
-        .Include(o => o.User)
-        .Include(o => o.Vehicle)
-        .Include(o => o.Service)
-        .Include(o => o.Inspection)
-        .Include(o => o.OrderServices)
-            .ThenInclude(os => os.Service)
-        .FirstOrDefaultAsync(o => o.OrderId == id);
-
-    if (order == null)
-    {
-        return NotFound(new { message = "Order not found" });
-    }
-
-    // Validate service
-    var service = await _context.Services.FindAsync(request.ServiceId);
-    if (service == null)
-    {
-        return BadRequest(new { message = "Service not found" });
-    }
-
-    // Check if the service is an inspection type
-    if (service.Category.ToLower() == "inspection")
-    {
-        return BadRequest(new { message = "Cannot add another inspection service to this order" });
-    }
-
-    // Check if the service is already added to the order
-    bool serviceAlreadyExists = order.OrderServices.Any(os => os.ServiceId == request.ServiceId);
-    if (serviceAlreadyExists)
-    {
-        return BadRequest(new { message = "This service is already added to the order" });
-    }
-
-    // Create a new OrderService entry to track additional services
-    var orderService = new OrderService
-    {
-        OrderId = order.OrderId,
-        ServiceId = request.ServiceId,
-        AddedAt = DateTime.UtcNow,
-        Notes = request.Notes
-    };
-    
-    _context.OrderServices.Add(orderService);
-    
-    // Update the total amount by adding the new service price
-    order.TotalAmount += service.Price;
-    
-    // Add notes about the service addition
-    if (!string.IsNullOrEmpty(request.Notes))
-    {
-        order.Notes = string.IsNullOrEmpty(order.Notes) 
-            ? $"Additional service added: {service.ServiceName}. {request.Notes}" 
-            : $"{order.Notes}\nAdditional service added: {service.ServiceName}. {request.Notes}";
-    }
-    else
-    {
-        order.Notes = string.IsNullOrEmpty(order.Notes) 
-            ? $"Additional service added: {service.ServiceName}" 
-            : $"{order.Notes}\nAdditional service added: {service.ServiceName}";
-    }
-
-    try
-    {
-        await _context.SaveChangesAsync();
-    }
-    catch (DbUpdateConcurrencyException)
-    {
-        if (!OrderExists(id))
+        // GET: api/Orders/5/appointment
+        [HttpGet("{id}/appointment")]
+        [Authorize(Roles = "super_admin,admin,service_agent,mechanic")]
+        public async Task<ActionResult<AppointmentResponseDto>> GetOrderAppointment(int id)
         {
-            return NotFound(new { message = "Order not found" });
-        }
-        else
-        {
-            throw;
-        }
-    }
-
-    // Create notification about the service addition
-    var notification = new Notification
-    {
-        UserId = order.UserId,
-        Message = $"Additional service '{service.ServiceName}' has been added to your order",
-        Status = "unread",
-        CreatedAt = DateTime.UtcNow
-    };
-    _context.Notifications.Add(notification);
-    await _context.SaveChangesAsync();
-
-    // Fetch the updated order with all services
-    var updatedOrder = await _context.Orders
-        .Include(o => o.User)
-        .Include(o => o.Vehicle)
-        .Include(o => o.Service)
-        .Include(o => o.Inspection)
-        .Include(o => o.OrderServices)
-            .ThenInclude(os => os.Service)
-        .FirstOrDefaultAsync(o => o.OrderId == id);
-
-    // Create comprehensive DTO with all required information
-    var orderDto = new OrderResponseDto
-    {
-        OrderId = updatedOrder.OrderId,
-        UserId = updatedOrder.UserId,
-        VehicleId = updatedOrder.VehicleId,
-        ServiceId = updatedOrder.ServiceId,
-        IncludesInspection = updatedOrder.IncludesInspection,
-        OrderDate = updatedOrder.OrderDate,
-        Status = updatedOrder.Status,
-        TotalAmount = updatedOrder.TotalAmount,
-        Notes = updatedOrder.Notes,
-        
-        // User details
-        User = updatedOrder.User != null ? new UserDetailsDto
-        {
-            UserId = updatedOrder.User.UserId,
-            Name = updatedOrder.User.Name,
-            Email = updatedOrder.User.Email,
-            Phone = updatedOrder.User.Phone,
-            Address = updatedOrder.User.Address
-        } : null,
-        
-        // Vehicle details
-        Vehicle = updatedOrder.Vehicle != null ? new VehicleDetailsDto
-        {
-            VehicleId = updatedOrder.Vehicle.VehicleId,
-            Make = updatedOrder.Vehicle.Make,
-            Model = updatedOrder.Vehicle.Model,
-            Year = updatedOrder.Vehicle.Year,
-            LicensePlate = updatedOrder.Vehicle.LicensePlate
-        } : null,
-        
-        // Main service details
-        Service = updatedOrder.Service != null ? new ServiceDto 
-        {
-            ServiceId = updatedOrder.Service.ServiceId,
-            ServiceName = updatedOrder.Service.ServiceName,
-            Category = updatedOrder.Service.Category,
-            Price = updatedOrder.Service.Price,
-            Description = updatedOrder.Service.Description
-        } : null,
-        
-        // Inspection details if applicable
-        Inspection = updatedOrder.Inspection != null ? new InspectionDetailsDto
-        {
-            InspectionId = updatedOrder.Inspection.InspectionId,
-            ScheduledDate = updatedOrder.Inspection.ScheduledDate,
-            Status = updatedOrder.Inspection.Status,
-            TimeSlot = updatedOrder.Inspection.TimeSlot,
-            BodyCondition = updatedOrder.Inspection.BodyCondition,
-            EngineCondition = updatedOrder.Inspection.EngineCondition,
-            ElectricalCondition = updatedOrder.Inspection.ElectricalCondition,
-            TireCondition = updatedOrder.Inspection.TireCondition,
-            BrakeCondition = updatedOrder.Inspection.BrakeCondition,
-            TransmissionCondition = updatedOrder.Inspection.TransmissionCondition,
-            Notes = updatedOrder.Inspection.Notes,
-            Price = updatedOrder.Service?.Price ?? 0
-        } : null,
-        
-        // Additional services list
-        AdditionalServices = updatedOrder.OrderServices
-            .Select(os => new ServiceDto
+            try
             {
-                ServiceId = os.Service.ServiceId,
-                ServiceName = os.Service.ServiceName,
-                Category = os.Service.Category,
-                Price = os.Service.Price,
-                Description = os.Service.Description
-            }).ToList()
-    };
+                // Check if the order exists
+                var order = await _context.Orders.FindAsync(id);
+                if (order == null)
+                {
+                    return NotFound(new { message = "Order not found" });
+                }
 
-    return Ok(new { 
-        message = "Service added to order successfully", 
-        order = orderDto,
-        addedService = new ServiceDto
-        {
-            ServiceId = service.ServiceId,
-            ServiceName = service.ServiceName,
-            Category = service.Category,
-            Price = service.Price,
-            Description = service.Description
+                // Get the appointment for this order
+                var appointment = await _context.Set<Appointment>()
+                    .Include(a => a.User)
+                    .Include(a => a.Vehicle)
+                    .Include(a => a.Service)
+                    .Include(a => a.Mechanic)
+                    .FirstOrDefaultAsync(a => a.OrderId == id);
+
+                if (appointment == null)
+                {
+                    return NotFound(new { message = "No appointment found for this order" });
+                }
+
+                // Check permissions
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+                if (userIdClaim != null && !string.IsNullOrEmpty(userIdClaim.Value))
+                {
+                    if (int.TryParse(userIdClaim.Value, out int userId))
+                    {
+                        // Customers can only view appointments for their own orders
+                        if (userRole.ToLower() == "customer" && order.UserId != userId)
+                        {
+                            return Forbid();
+                        }
+
+                        // Mechanics can only view appointments assigned to them
+                        if (userRole.ToLower() == "mechanic" && appointment.MechanicId != userId)
+                        {
+                            return Forbid();
+                        }
+                    }
+                }
+
+                // Map to DTO
+                var appointmentDto = new AppointmentResponseDto
+                {
+                    AppointmentId = appointment.AppointmentId,
+                    OrderId = appointment.OrderId,
+                    UserId = appointment.UserId,
+                    VehicleId = appointment.VehicleId,
+                    ServiceId = appointment.ServiceId,
+                    MechanicId = appointment.MechanicId,
+                    AppointmentDate = appointment.AppointmentDate,
+                    TimeSlot = appointment.TimeSlot,
+                    Status = appointment.Status,
+                    Notes = appointment.Notes,
+                    CreatedAt = appointment.CreatedAt,
+
+                    // Map related entities
+                    User = appointment.User != null ? new UserDetailsDto
+                    {
+                        UserId = appointment.User.UserId,
+                        Name = appointment.User.Name,
+                        Email = appointment.User.Email,
+                        Phone = appointment.User.Phone,
+                        Address = appointment.User.Address
+                    } : null,
+
+                    Mechanic = appointment.Mechanic != null ? new UserDetailsDto
+                    {
+                        UserId = appointment.Mechanic.UserId,
+                        Name = appointment.Mechanic.Name,
+                        Email = appointment.Mechanic.Email,
+                        Phone = appointment.Mechanic.Phone
+                    } : null,
+
+                    Vehicle = appointment.Vehicle != null ? new VehicleDetailsDto
+                    {
+                        VehicleId = appointment.Vehicle.VehicleId,
+                        Make = appointment.Vehicle.Make,
+                        Model = appointment.Vehicle.Model,
+                        Year = appointment.Vehicle.Year,
+                        LicensePlate = appointment.Vehicle.LicensePlate
+                    } : null,
+
+                    Service = appointment.Service != null ? new ServiceDto
+                    {
+                        ServiceId = appointment.Service.ServiceId,
+                        ServiceName = appointment.Service.ServiceName,
+                        Category = appointment.Service.Category,
+                        Price = appointment.Service.Price,
+                        Description = appointment.Service.Description
+                    } : null
+                };
+
+                return Ok(appointmentDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving appointment for order {OrderId}", id);
+                return StatusCode(500, new { message = "An error occurred while retrieving the appointment", error = ex.Message });
+            }
         }
-    });
-}
+
+
+
+
+        // POST: api/Orders/5/add-service
+        [HttpPost("{id}/add-service")]
+        [Authorize(Roles = "super_admin,admin,service_agent")]
+        public async Task<IActionResult> AddServiceToOrder(int id, [FromBody] AddServiceRequest request)
+        {
+            // First, fetch the order with all related entities
+            var order = await _context.Orders
+                .Include(o => o.User)
+                .Include(o => o.Vehicle)
+                .Include(o => o.Service)
+                .Include(o => o.Inspection)
+                .Include(o => o.OrderServices)
+                    .ThenInclude(os => os.Service)
+                .FirstOrDefaultAsync(o => o.OrderId == id);
+
+            if (order == null)
+            {
+                return NotFound(new { message = "Order not found" });
+            }
+
+            // Validate service
+            var service = await _context.Services.FindAsync(request.ServiceId);
+            if (service == null)
+            {
+                return BadRequest(new { message = "Service not found" });
+            }
+
+            // Check if the service is an inspection type
+            if (service.Category.ToLower() == "inspection")
+            {
+                return BadRequest(new { message = "Cannot add another inspection service to this order" });
+            }
+
+            // Check if the service is already added to the order
+            bool serviceAlreadyExists = order.OrderServices.Any(os => os.ServiceId == request.ServiceId);
+            if (serviceAlreadyExists)
+            {
+                return BadRequest(new { message = "This service is already added to the order" });
+            }
+
+            // Create a new OrderService entry to track additional services
+            var orderService = new OrderService
+            {
+                OrderId = order.OrderId,
+                ServiceId = request.ServiceId,
+                AddedAt = DateTime.UtcNow,
+                Notes = request.Notes
+            };
+
+            _context.OrderServices.Add(orderService);
+
+            // Update the total amount by adding the new service price
+            order.TotalAmount += service.Price;
+
+            // Add notes about the service addition
+            if (!string.IsNullOrEmpty(request.Notes))
+            {
+                order.Notes = string.IsNullOrEmpty(order.Notes)
+                    ? $"Additional service added: {service.ServiceName}. {request.Notes}"
+                    : $"{order.Notes}\nAdditional service added: {service.ServiceName}. {request.Notes}";
+            }
+            else
+            {
+                order.Notes = string.IsNullOrEmpty(order.Notes)
+                    ? $"Additional service added: {service.ServiceName}"
+                    : $"{order.Notes}\nAdditional service added: {service.ServiceName}";
+            }
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!OrderExists(id))
+                {
+                    return NotFound(new { message = "Order not found" });
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            // Create notification about the service addition
+            var notification = new Notification
+            {
+                UserId = order.UserId,
+                Message = $"Additional service '{service.ServiceName}' has been added to your order",
+                Status = "unread",
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Notifications.Add(notification);
+            await _context.SaveChangesAsync();
+
+            // Fetch the updated order with all services
+            var updatedOrder = await _context.Orders
+                .Include(o => o.User)
+                .Include(o => o.Vehicle)
+                .Include(o => o.Service)
+                .Include(o => o.Inspection)
+                .Include(o => o.OrderServices)
+                    .ThenInclude(os => os.Service)
+                .FirstOrDefaultAsync(o => o.OrderId == id);
+
+            // Create comprehensive DTO with all required information
+            var orderDto = new OrderResponseDto
+            {
+                OrderId = updatedOrder.OrderId,
+                UserId = updatedOrder.UserId,
+                VehicleId = updatedOrder.VehicleId,
+                ServiceId = updatedOrder.ServiceId,
+                IncludesInspection = updatedOrder.IncludesInspection,
+                OrderDate = updatedOrder.OrderDate,
+                Status = updatedOrder.Status,
+                TotalAmount = updatedOrder.TotalAmount,
+                Notes = updatedOrder.Notes,
+
+                // User details
+                User = updatedOrder.User != null ? new UserDetailsDto
+                {
+                    UserId = updatedOrder.User.UserId,
+                    Name = updatedOrder.User.Name,
+                    Email = updatedOrder.User.Email,
+                    Phone = updatedOrder.User.Phone,
+                    Address = updatedOrder.User.Address
+                } : null,
+
+                // Vehicle details
+                Vehicle = updatedOrder.Vehicle != null ? new VehicleDetailsDto
+                {
+                    VehicleId = updatedOrder.Vehicle.VehicleId,
+                    Make = updatedOrder.Vehicle.Make,
+                    Model = updatedOrder.Vehicle.Model,
+                    Year = updatedOrder.Vehicle.Year,
+                    LicensePlate = updatedOrder.Vehicle.LicensePlate
+                } : null,
+
+                // Main service details
+                Service = updatedOrder.Service != null ? new ServiceDto
+                {
+                    ServiceId = updatedOrder.Service.ServiceId,
+                    ServiceName = updatedOrder.Service.ServiceName,
+                    Category = updatedOrder.Service.Category,
+                    Price = updatedOrder.Service.Price,
+                    Description = updatedOrder.Service.Description
+                } : null,
+
+                // Inspection details if applicable
+                Inspection = updatedOrder.Inspection != null ? new InspectionDetailsDto
+                {
+                    InspectionId = updatedOrder.Inspection.InspectionId,
+                    ScheduledDate = updatedOrder.Inspection.ScheduledDate,
+                    Status = updatedOrder.Inspection.Status,
+                    TimeSlot = updatedOrder.Inspection.TimeSlot,
+                    BodyCondition = updatedOrder.Inspection.BodyCondition,
+                    EngineCondition = updatedOrder.Inspection.EngineCondition,
+                    ElectricalCondition = updatedOrder.Inspection.ElectricalCondition,
+                    TireCondition = updatedOrder.Inspection.TireCondition,
+                    BrakeCondition = updatedOrder.Inspection.BrakeCondition,
+                    TransmissionCondition = updatedOrder.Inspection.TransmissionCondition,
+                    Notes = updatedOrder.Inspection.Notes,
+                    Price = updatedOrder.Service?.Price ?? 0
+                } : null,
+
+                // Additional services list
+                AdditionalServices = updatedOrder.OrderServices
+                    .Select(os => new ServiceDto
+                    {
+                        ServiceId = os.Service.ServiceId,
+                        ServiceName = os.Service.ServiceName,
+                        Category = os.Service.Category,
+                        Price = os.Service.Price,
+                        Description = os.Service.Description
+                    }).ToList()
+            };
+
+            return Ok(new
+            {
+                message = "Service added to order successfully",
+                order = orderDto,
+                addedService = new ServiceDto
+                {
+                    ServiceId = service.ServiceId,
+                    ServiceName = service.ServiceName,
+                    Category = service.Category,
+                    Price = service.Price,
+                    Description = service.Description
+                }
+            });
+        }
 
         private bool OrderExists(int id)
         {
@@ -1031,7 +1151,7 @@ public async Task<IActionResult> AddServiceToOrder(int id, [FromBody] AddService
         public int InspectionTypeId { get; set; }
 
         public int? ServiceId { get; set; }
-        
+
         public List<int> AdditionalServiceIds { get; set; } = new List<int>();
 
         [Required]
@@ -1042,7 +1162,7 @@ public async Task<IActionResult> AddServiceToOrder(int id, [FromBody] AddService
 
         public string Notes { get; set; }
     }
-    
+
     public class OrderUpdateRequest
     {
         public string Status { get; set; }
@@ -1050,24 +1170,24 @@ public async Task<IActionResult> AddServiceToOrder(int id, [FromBody] AddService
         public decimal TotalAmount { get; set; }
         public int? ServiceId { get; set; }
     }
-    
+
     public class OrderRequest
     {
         public int UserId { get; set; }
-        
+
         [Required]
         public int VehicleId { get; set; }
-        
+
         public int? ServiceId { get; set; }
-        
+
         [Required]
         public bool IncludesInspection { get; set; }
-        
+
         public DateTime? InspectionDate { get; set; }
-        
+
         [Required]
         public decimal TotalAmount { get; set; }
-        
+
         public string Notes { get; set; }
     }
 
@@ -1075,7 +1195,7 @@ public async Task<IActionResult> AddServiceToOrder(int id, [FromBody] AddService
     {
         [Required]
         public int ServiceId { get; set; }
-        
+
         public string Notes { get; set; }
     }
 }

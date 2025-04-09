@@ -15,6 +15,7 @@ namespace fyp_motomate.Services
         Task<List<string>> GetAvailableTimeSlotsAsync(DateTime date);
         Task<bool> IsTimeSlotAvailableAsync(DateTime date, string timeSlot);
         Task<int> GetTimeSlotAvailableCountAsync(DateTime date, string timeSlot);
+        Task<List<TimeSlotInfo>> GetAvailableTimeSlotsForMechanicAsync(DateTime date, int mechanicId);
     }
 
     public class TimeSlotInfo
@@ -47,18 +48,28 @@ namespace fyp_motomate.Services
 
         public async Task<List<TimeSlotInfo>> GetAvailableTimeSlotsInfoAsync(DateTime date)
         {
-            // Get all time slots for the specified date
-            var existingSlots = await _context.Inspections
+            // Get all inspection slots for the specified date
+            var existingInspectionSlots = await _context.Inspections
                 .Where(i => i.ScheduledDate.Date == date.Date && i.Status != "cancelled")
                 .GroupBy(i => i.TimeSlot)
+                .Select(g => new { TimeSlot = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.TimeSlot, x => x.Count);
+
+            // Get all appointment slots for the specified date
+            var existingAppointmentSlots = await _context.Appointments
+                .Where(a => a.AppointmentDate.Date == date.Date && a.Status != "cancelled")
+                .GroupBy(a => a.TimeSlot)
                 .Select(g => new { TimeSlot = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.TimeSlot, x => x.Count);
 
             // Create TimeSlotInfo objects for all time slots
             var timeSlotInfos = ALL_TIME_SLOTS.Select(slot =>
             {
-                int usedCount = existingSlots.ContainsKey(slot) ? existingSlots[slot] : 0;
-                int availableCount = MAX_SLOTS_PER_TIME_INTERVAL - usedCount;
+                // Count both inspections and appointments
+                int inspectionCount = existingInspectionSlots.ContainsKey(slot) ? existingInspectionSlots[slot] : 0;
+                int appointmentCount = existingAppointmentSlots.ContainsKey(slot) ? existingAppointmentSlots[slot] : 0;
+                int totalUsed = inspectionCount + appointmentCount;
+                int availableCount = MAX_SLOTS_PER_TIME_INTERVAL - totalUsed;
 
                 return new TimeSlotInfo
                 {
@@ -90,14 +101,48 @@ namespace fyp_motomate.Services
 
         public async Task<int> GetTimeSlotAvailableCountAsync(DateTime date, string timeSlot)
         {
-            // Check if the specified time slot is available
-            var slotCount = await _context.Inspections
+            // Count inspections in this time slot
+            var inspectionCount = await _context.Inspections
                 .Where(i => i.ScheduledDate.Date == date.Date && 
                            i.TimeSlot == timeSlot && 
                            i.Status != "cancelled")
                 .CountAsync();
 
-            return MAX_SLOTS_PER_TIME_INTERVAL - slotCount;
+            // Count appointments in this time slot
+            var appointmentCount = await _context.Appointments
+                .Where(a => a.AppointmentDate.Date == date.Date && 
+                           a.TimeSlot == timeSlot && 
+                           a.Status != "cancelled")
+                .CountAsync();
+
+            // Calculate available slots
+            int totalUsed = inspectionCount + appointmentCount;
+            return MAX_SLOTS_PER_TIME_INTERVAL - totalUsed;
+        }
+
+        public async Task<List<TimeSlotInfo>> GetAvailableTimeSlotsForMechanicAsync(DateTime date, int mechanicId)
+        {
+            // First get general availability for the date
+            var generalAvailability = await GetAvailableTimeSlotsInfoAsync(date);
+            
+            // Now check which slots the mechanic is already booked for
+            var mechanicBookedSlots = await _context.Appointments
+                .Where(a => a.AppointmentDate.Date == date.Date && 
+                           a.MechanicId == mechanicId &&
+                           a.Status != "cancelled")
+                .Select(a => a.TimeSlot)
+                .ToListAsync();
+            
+            // Mark slots where the mechanic is already booked as unavailable
+            foreach (var slot in generalAvailability)
+            {
+                if (mechanicBookedSlots.Contains(slot.TimeSlot))
+                {
+                    slot.AvailableSlots = 0; // Mechanic is already booked for this slot
+                }
+            }
+            
+            return generalAvailability;
         }
     }
 }

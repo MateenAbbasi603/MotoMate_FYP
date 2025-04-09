@@ -51,6 +51,9 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
+// Add these lines in your Program.cs where services are registered
+builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
+builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
@@ -109,7 +112,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
     app.UseDeveloperExceptionPage();
-        app.UseHttpsRedirection();
+    app.UseHttpsRedirection();
 
 }
 else

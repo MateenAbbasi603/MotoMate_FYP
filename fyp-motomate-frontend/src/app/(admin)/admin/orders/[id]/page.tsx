@@ -14,29 +14,33 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
+import {
   Alert,
   AlertDescription,
-  AlertTitle 
+  AlertTitle
 } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
-  ChevronLeft, 
-  Pencil, 
-  Calendar, 
-  Car, 
-  User,  
-  CreditCard, 
-  FileText, 
-  ClipboardCheck, 
-  AlertTriangle, 
-  Clock, 
+import AppointmentDialog from '@/components/Admin/AppointmentDialog';
+
+import {
+  ChevronLeft,
+  Pencil,
+  Calendar,
+  Car,
+  User,
+  Wrench,
+  CreditCard,
+  FileText,
+  ClipboardCheck,
+  AlertTriangle,
+  Clock,
   MapPin,
   Mail,
   Phone,
   UserCheck,
   Plus,
-  PenTool
+  PenTool,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -159,33 +163,154 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const [serviceNotes, setServiceNotes] = useState<string>('');
   const [isAddingService, setIsAddingService] = useState<boolean>(false);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
-  
+  const [isAppointmentDialogOpen, setIsAppointmentDialogOpen] = useState(false);
+  const [appointment, setAppointment] = useState(null);
+  const [loadingAppointment, setLoadingAppointment] = useState(false);
+
   const router = useRouter();
   const { id } = params;
 
+
+  console.log(order,"order");
+  
   // Helper function to normalize additionalServices
   const normalizeAdditionalServices = (orderData: OrderData): ServiceData[] => {
     if (!orderData.additionalServices) {
       return [];
     }
-    
+
     // If it's an object with $values property
-    if (typeof orderData.additionalServices === 'object' && 
-        !Array.isArray(orderData.additionalServices) && 
-        orderData.additionalServices.$values) {
+    if (typeof orderData.additionalServices === 'object' &&
+      !Array.isArray(orderData.additionalServices) &&
+      orderData.additionalServices.$values) {
       return orderData.additionalServices.$values;
     }
-    
+
     // If it's already an array
     if (Array.isArray(orderData.additionalServices)) {
       return orderData.additionalServices;
     }
-    
+
     // Default to empty array
     return [];
   };
 
   // Fetch order and services
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!id) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Call both API requests in parallel
+        const [orderData, servicesResponse] = await Promise.all([
+          orderService.getOrderById(id),
+          axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Services`)
+        ]);
+
+        // Process order data
+        if (!orderData) {
+          setError('Order not found');
+          setLoading(false);
+          return;
+        }
+
+        console.log('Initial order data:', orderData);
+
+        // Initialize order with the data we have
+        let enhancedOrder = { ...orderData };
+
+        // Normalize additionalServices
+        const normalizedAdditionalServices = normalizeAdditionalServices(enhancedOrder);
+        enhancedOrder.additionalServices = normalizedAdditionalServices;
+
+        // If the order details don't include user or vehicle data, fetch it separately
+        if ((!enhancedOrder.user || !enhancedOrder.vehicle) && orderData.userId && orderData.vehicleId) {
+          try {
+            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+            const combinedResponse = await axios.get(
+              `${API_URL}/api/Detail/combined-details?userId=${orderData.userId}&vehicleId=${orderData.vehicleId}${orderData.serviceId ? `&serviceId=${orderData.serviceId}` : ''}`
+            );
+
+            console.log('Combined details:', combinedResponse.data);
+
+            // Update order with combined details
+            enhancedOrder = {
+              ...enhancedOrder,
+              user: combinedResponse.data.user || enhancedOrder.user,
+              vehicle: combinedResponse.data.vehicle || enhancedOrder.vehicle,
+              service: combinedResponse.data.service || enhancedOrder.service
+            };
+          } catch (combinedErr) {
+            console.error('Failed to fetch combined details:', combinedErr);
+          }
+        }
+
+        // If the order includes an inspection but doesn't have price info, fetch the inspection service details
+        if (enhancedOrder.includesInspection && enhancedOrder.inspection && !enhancedOrder.inspection.price) {
+          try {
+            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+            const inspectionServiceId = enhancedOrder.inspection.serviceId || orderData.inspection?.serviceId;
+
+            if (inspectionServiceId) {
+              const inspectionServiceResponse = await axios.get(
+                `${API_URL}/api/Services/${inspectionServiceId}`
+              );
+
+              console.log('Inspection service details:', inspectionServiceResponse.data);
+
+              // Update the inspection with the service price
+              enhancedOrder = {
+                ...enhancedOrder,
+                inspection: {
+                  ...enhancedOrder.inspection,
+                  price: inspectionServiceResponse.data.price
+                }
+              };
+            }
+          } catch (serviceErr) {
+            console.error('Failed to fetch inspection service details:', serviceErr);
+          }
+        }
+
+        console.log('Enhanced order to set:', enhancedOrder);
+        setOrder(enhancedOrder);
+
+        // Process services data
+        let servicesData = [];
+        if (servicesResponse.data && servicesResponse.data.$values) {
+          // If data is in $values array format
+          servicesData = servicesResponse.data.$values;
+          console.log("Services data extracted from $values:", servicesData);
+        } else if (Array.isArray(servicesResponse.data)) {
+          // If data is directly an array
+          servicesData = servicesResponse.data;
+          console.log("Services data is already an array:", servicesData);
+        } else {
+          console.error("Invalid services data format:", servicesResponse.data);
+          toast.error("Failed to load services data");
+        }
+
+        // Filter out inspection services
+        const nonInspectionServices = servicesData.filter(
+          (service: ServiceData) => service.category.toLowerCase() !== 'inspection'
+        );
+
+        setServices(nonInspectionServices);
+      } catch (err) {
+        console.error(`Failed to fetch order ${id} or services:`, err);
+        setError('Failed to load order details. Please try again.');
+        setOrder(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id]);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!id) return;
@@ -237,7 +362,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             console.error('Failed to fetch combined details:', combinedErr);
           }
         }
-
+  
         // If the order includes an inspection but doesn't have price info, fetch the inspection service details
         if (enhancedOrder.includesInspection && enhancedOrder.inspection && !enhancedOrder.inspection.price) {
           try {
@@ -268,6 +393,11 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         console.log('Enhanced order to set:', enhancedOrder);
         setOrder(enhancedOrder);
         
+        // Fetch appointment data if the order exists
+        if (enhancedOrder.orderId) {
+          fetchAppointmentData(enhancedOrder.orderId);
+        }
+        
         // Process services data
         let servicesData = [];
         if (servicesResponse.data && servicesResponse.data.$values) {
@@ -285,7 +415,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         
         // Filter out inspection services
         const nonInspectionServices = servicesData.filter(
-          (service: ServiceData) => service.category.toLowerCase() !== 'inspection'
+          (service:any) => service.category.toLowerCase() !== 'inspection'
         );
         
         setServices(nonInspectionServices);
@@ -297,7 +427,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         setLoading(false);
       }
     };
-
+  
     fetchData();
   }, [id]);
 
@@ -323,7 +453,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   // Handle status update
   const handleStatusUpdate = async (newStatus: string) => {
     if (!order) return;
-    
+
     try {
       await orderService.updateOrder(order.orderId, { status: newStatus });
       setOrder({ ...order, status: newStatus });
@@ -337,7 +467,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const calculateTotalAmount = () => {
     const servicePrice = order?.service?.price || 0;
     const inspectionPrice = order?.includesInspection ? order.inspection?.price || 0 : 0;
-    
+
     // Calculate additional services total
     let additionalServicesTotal = 0;
     if (order?.additionalServices && Array.isArray(order.additionalServices)) {
@@ -345,7 +475,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         (sum, service) => sum + (service.price || 0), 0
       );
     }
-    
+
     return servicePrice + inspectionPrice + additionalServicesTotal;
   };
 
@@ -359,14 +489,14 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
     try {
       setIsAddingService(true);
       const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-      
+
       // Get the authentication token from localStorage
       const token = localStorage.getItem('token');
       if (!token) {
         toast.error('Authentication token not found. Please log in again.');
         return;
       }
-      
+
       const response = await axios.post(
         `${API_URL}/api/Orders/${id}/add-service`,
         {
@@ -385,29 +515,29 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
 
       // Fetch the full order details after adding the service to ensure we have all data
       const updatedOrderData = await orderService.getOrderById(id);
-      
+
       if (!updatedOrderData) {
         toast.error('Failed to retrieve updated order information');
         return;
       }
-      
+
       console.log('Updated order data:', updatedOrderData);
-      
+
       // Make sure we have the complete user, vehicle, and services data
       let enhancedOrder = { ...updatedOrderData };
-      
+
       // Normalize additionalServices
       enhancedOrder.additionalServices = normalizeAdditionalServices(enhancedOrder);
-      
+
       if (updatedOrderData.userId && updatedOrderData.vehicleId) {
         try {
           const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
           const combinedResponse = await axios.get(
             `${API_URL}/api/Detail/combined-details?userId=${updatedOrderData.userId}&vehicleId=${updatedOrderData.vehicleId}${updatedOrderData.serviceId ? `&serviceId=${updatedOrderData.serviceId}` : ''}`
           );
-          
+
           console.log('Combined details after service add:', combinedResponse.data);
-          
+
           // Update order with combined details
           enhancedOrder = {
             ...enhancedOrder,
@@ -419,40 +549,40 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
           console.error('Failed to fetch combined details:', combinedErr);
         }
       }
-      
+
       // If there's a newly added service from the response, make sure it's in the additionalServices
       if (response.data.addedService) {
         let addedService = response.data.addedService;
-        
+
         // Remove any $id property if present (just to be safe)
         if (addedService.$id) {
           const { $id, ...serviceData } = addedService;
           addedService = serviceData;
         }
-        
-        const additionalServices = Array.isArray(enhancedOrder.additionalServices) 
-          ? enhancedOrder.additionalServices 
+
+        const additionalServices = Array.isArray(enhancedOrder.additionalServices)
+          ? enhancedOrder.additionalServices
           : [];
-        
+
         // Check if this service already exists in the additionalServices array
         const existingIndex = additionalServices.findIndex(
-          (s:any) => s.serviceId === addedService.serviceId
+          (s: any) => s.serviceId === addedService.serviceId
         );
-        
+
         if (existingIndex === -1) {
           // Add it if it doesn't already exist
           enhancedOrder.additionalServices = [...additionalServices, addedService];
         }
       }
-      
+
       console.log('Enhanced order after service add:', enhancedOrder);
       setOrder(enhancedOrder);
-      
+
       // Reset form
       setSelectedServiceId('');
       setServiceNotes('');
       setIsDialogOpen(false);
-      
+
       toast.success('Service added to order successfully');
     } catch (err: any) {
       console.error('Failed to add service to order:', err);
@@ -477,6 +607,130 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       return order.additionalServices;
     }
     return [];
+  };
+
+  const fetchAppointmentData = async (orderId: string) => {
+    try {
+      setLoadingAppointment(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No authentication token found');
+        return;
+      }
+      
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Orders/${orderId}/appointment`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+      
+      if (response.data) {
+        setAppointment(response.data);
+      }
+    } catch (error:any) {
+      console.error('Error fetching appointment data:', error);
+      // If we get a 404, it means there's no appointment yet - this is normal
+      if (error.response && error.response.status !== 404) {
+        toast.error('Failed to load appointment data');
+      }
+    } finally {
+      setLoadingAppointment(false);
+    }
+  };
+
+  const handleAppointmentCreated = (newAppointment:any) => {
+    setAppointment(newAppointment);
+    
+    // Update the order status if not already updated
+    if (order && order.status === 'pending') {
+      setOrder({
+        ...order,
+        status: 'in progress'
+      });
+    }
+    
+    toast.success('Mechanic assigned successfully');
+  };
+
+  const AppointmentSection = ({ appointment, loadingAppointment }:any) => {
+    if (loadingAppointment) {
+      return (
+        <div className="flex items-center justify-center p-4 bg-muted/50 rounded-md">
+          <Loader2 className="h-5 w-5 animate-spin mr-2" />
+          <p>Loading appointment information...</p>
+        </div>
+      );
+    }
+    
+    if (!appointment) {
+      return (
+        <div className="p-4 bg-muted/50 rounded-md">
+          <p className="text-muted-foreground">No mechanic has been assigned to this order yet.</p>
+          <Button 
+            onClick={() => setIsAppointmentDialogOpen(true)} 
+            className="mt-3"
+            variant="outline"
+          >
+            <Wrench className="mr-2 h-4 w-4" />
+            Assign Mechanic
+          </Button>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 bg-blue-50 rounded-md">
+          <div className="flex items-center">
+            <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+            <div>
+              <p className="text-sm text-blue-600">Appointment Date</p>
+              <p className="font-medium">{formatDate(appointment.appointmentDate)}</p>
+            </div>
+          </div>
+          <div className="flex items-center">
+            <Clock className="h-5 w-5 text-blue-600 mr-2" />
+            <div>
+              <p className="text-sm text-blue-600">Time Slot</p>
+              <p className="font-medium">{appointment.timeSlot}</p>
+            </div>
+          </div>
+          <StatusBadge status={appointment.status} />
+        </div>
+        
+        <div className="bg-muted/50 p-4 rounded-md">
+          <h4 className="font-medium mb-3 flex items-center">
+            <UserCheck className="mr-2 h-4 w-4 text-primary" />
+            Assigned Mechanic
+          </h4>
+          {appointment.mechanic ? (
+            <div className="space-y-2">
+              <p className="font-medium">{appointment.mechanic.name}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Email</p>
+                  <p>{appointment.mechanic.email}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Phone</p>
+                  <p>{appointment.mechanic.phone}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground">Mechanic information not available</p>
+          )}
+          
+          {appointment.notes && (
+            <div className="mt-3 pt-3 border-t">
+              <p className="text-sm text-muted-foreground mb-1">Appointment Notes</p>
+              <p className="text-sm">{appointment.notes}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -534,8 +788,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                         <div className="grid gap-4 py-4">
                           <div className="grid gap-2">
                             <Label htmlFor="service">Service</Label>
-                            <Select 
-                              value={selectedServiceId} 
+                            <Select
+                              value={selectedServiceId}
                               onValueChange={setSelectedServiceId}
                             >
                               <SelectTrigger id="service">
@@ -544,8 +798,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                               <SelectContent>
                                 {services && services.length > 0 ? (
                                   services.map((service) => (
-                                    <SelectItem 
-                                      key={service.serviceId} 
+                                    <SelectItem
+                                      key={service.serviceId}
                                       value={service.serviceId.toString()}
                                     >
                                       {service.serviceName} - ${service.price.toFixed(2)}
@@ -570,14 +824,14 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                           </div>
                         </div>
                         <DialogFooter>
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             onClick={() => setIsDialogOpen(false)}
                           >
                             Cancel
                           </Button>
-                          <Button 
-                            onClick={handleAddService} 
+                          <Button
+                            onClick={handleAddService}
                             disabled={isAddingService || !selectedServiceId}
                           >
                             {isAddingService ? 'Adding...' : 'Add Service'}
@@ -588,7 +842,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   </div>
                 </div>
               </CardHeader>
-              
+
               <CardContent>
                 <Tabs defaultValue="details">
                   <TabsList className="mb-4">
@@ -597,8 +851,10 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       <TabsTrigger value="inspection">Inspection</TabsTrigger>
                     )}
                     <TabsTrigger value="notes">Notes</TabsTrigger>
+                    <TabsTrigger value="appointment">Mechanic Assignment</TabsTrigger>
+
                   </TabsList>
-                  
+
                   <TabsContent value="details" className="space-y-6">
                     {/* Vehicle info */}
                     <div>
@@ -623,7 +879,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Service info */}
                     <div>
                       <h3 className="text-lg font-medium flex items-center mb-3">
@@ -641,7 +897,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                           <span className="text-sm">Service Price</span>
                           <span className="font-medium">${order.service?.price?.toFixed(2) || '0.00'}</span>
                         </div>
-                        
+
                         {order.includesInspection && (
                           <div className="flex justify-between items-center mt-2">
                             <span className="text-sm">Includes Inspection</span>
@@ -651,7 +907,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                           </div>
                         )}
                       </div>
-                      
+
                       {/* Additional Services */}
                       {hasAdditionalServices() && (
                         <div className="mt-4">
@@ -685,21 +941,21 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                           <span>Main Service Fee</span>
                           <span>${order.service?.price?.toFixed(2) || '0.00'}</span>
                         </div>
-                        
+
                         {order.includesInspection && order.inspection && (
                           <div className="flex justify-between items-center py-2 border-b">
                             <span>Inspection Fee</span>
                             <span>${order.inspection.price?.toFixed(2) || '0.00'}</span>
                           </div>
                         )}
-                        
+
                         {hasAdditionalServices() && (
                           <div className="flex justify-between items-center py-2 border-b">
                             <span>Additional Services</span>
                             <span>${getAdditionalServices().reduce((sum, service) => sum + (service.price || 0), 0).toFixed(2)}</span>
                           </div>
                         )}
-                        
+
                         <div className="flex justify-between items-center pt-2 font-medium">
                           <span>Total Amount</span>
                           <span>${order.totalAmount?.toFixed(2) || calculateTotalAmount().toFixed(2)}</span>
@@ -707,7 +963,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       </div>
                     </div>
                   </TabsContent>
-                  
+
                   {order.includesInspection && order.inspection && (
                     <TabsContent value="inspection" className="space-y-4">
                       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 bg-blue-50 rounded-md">
@@ -727,12 +983,12 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                         </div>
                         <StatusBadge status={order.inspection.status} />
                       </div>
-                      
+
                       <h3 className="text-lg font-medium flex items-center mt-4">
                         <ClipboardCheck className="mr-2 h-5 w-5 text-primary" />
                         Inspection Results
                       </h3>
-                      
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         <div className="p-3 border rounded-md">
                           <p className="text-sm text-muted-foreground">Body Condition</p>
@@ -759,7 +1015,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                           <p className="font-medium">{order.inspection.transmissionCondition || 'Not inspected'}</p>
                         </div>
                       </div>
-                      
+
                       {order.inspection.notes && (
                         <div className="mt-4">
                           <h4 className="font-medium mb-2">Inspection Notes</h4>
@@ -770,21 +1026,32 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       )}
                     </TabsContent>
                   )}
-                  
+
                   <TabsContent value="notes">
                     <div className="p-4 bg-muted/50 rounded-md">
                       <h3 className="font-medium mb-2 flex items-center">
                         <FileText className="mr-2 h-4 w-4" />
                         Order Notes
                       </h3>
-                      <p  className="text-sm">
+                      <p className="text-sm">
                         {order.notes || 'No notes available for this order.'}
                       </p>
                     </div>
                   </TabsContent>
+                  <TabsContent value="appointment" className="space-y-4">
+  <h3 className="text-lg font-medium flex items-center mb-3">
+    <Wrench className="mr-2 h-5 w-5 text-primary" />
+    Mechanic Assignment
+  </h3>
+  <AppointmentSection 
+    appointment={appointment} 
+    loadingAppointment={loadingAppointment} 
+  />
+</TabsContent>
                 </Tabs>
+
               </CardContent>
-              
+
               <CardFooter className="flex justify-between border-t pt-6">
                 <Button variant="outline" onClick={() => router.back()}>
                   Back to Orders
@@ -796,7 +1063,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
               </CardFooter>
             </Card>
           </div>
-          
+
           {/* Customer info sidebar */}
           <div>
             <Card>
@@ -818,7 +1085,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       </p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start">
                     <Mail className="h-5 w-5 text-muted-foreground mr-3 mt-0.5" />
                     <div>
@@ -826,7 +1093,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       <p>{order.user?.email || 'No email provided'}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start">
                     <Phone className="h-5 w-5 text-muted-foreground mr-3 mt-0.5" />
                     <div>
@@ -834,7 +1101,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       <p>{order.user?.phone || 'No phone provided'}</p>
                     </div>
                   </div>
-                  
+
                   {order.user?.address && (
                     <div className="flex items-start">
                       <MapPin className="h-5 w-5 text-muted-foreground mr-3 mt-0.5" />
@@ -845,8 +1112,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                     </div>
                   )}
                 </div>
-                
-                <hr/>                
+
+                <hr />
                 {/* Quick actions */}
                 <div>
                   <h3 className="text-sm font-medium mb-3">Quick Actions</h3>
@@ -857,7 +1124,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                         View Customer Profile
                       </Link>
                     </Button>
-                    
+
                     <Button variant="outline" className="w-full justify-start" asChild>
                       <Link href={`/admin/orders/create?userId=${order.user?.userId}`}>
                         <Plus className="mr-2 h-4 w-4" />
@@ -866,23 +1133,23 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                     </Button>
                   </div>
                 </div>
-                
-                <hr/>                
-                
+
+                <hr />
+
                 {/* Status update */}
                 <div>
                   <h3 className="text-sm font-medium mb-3">Update Status</h3>
                   <div className="grid grid-cols-2 gap-2">
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={() => handleStatusUpdate('in progress')}
                       disabled={order.status === 'in progress'}
                       className="w-full"
                     >
                       In Progress
                     </Button>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={() => handleStatusUpdate('completed')}
                       disabled={order.status === 'completed'}
                       variant="default"
@@ -890,8 +1157,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                     >
                       Completed
                     </Button>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={() => handleStatusUpdate('pending')}
                       disabled={order.status === 'pending'}
                       variant="outline"
@@ -899,8 +1166,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                     >
                       Pending
                     </Button>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={() => handleStatusUpdate('cancelled')}
                       disabled={order.status === 'cancelled'}
                       variant="destructive"
@@ -910,7 +1177,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                     </Button>
                   </div>
                 </div>
-                
+
                 {/* Order timeline */}
                 <div>
                   <h3 className="text-sm font-medium mb-3">Order Timeline</h3>
@@ -921,7 +1188,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       {formatDateTime(order.orderDate)}
                     </p>
                   </div>
-                  
+
                   {order.includesInspection && order.inspection && (
                     <div className="relative border-l-2 pl-4 pb-2 pt-2 border-muted">
                       <div className="absolute w-3 h-3 bg-blue-500 rounded-full -left-[7px] top-0"></div>
@@ -931,7 +1198,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       </p>
                     </div>
                   )}
-                  
+
                   {order.status === 'completed' && (
                     <div className="relative border-l-2 pl-4 pb-2 pt-2 border-muted">
                       <div className="absolute w-3 h-3 bg-green-500 rounded-full -left-[7px] top-0"></div>
@@ -941,7 +1208,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       </p>
                     </div>
                   )}
-                  
+
                   {order.status === 'cancelled' && (
                     <div className="relative border-l-2 pl-4 pb-2 pt-2 border-muted">
                       <div className="absolute w-3 h-3 bg-red-500 rounded-full -left-[7px] top-0"></div>
@@ -955,6 +1222,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
               </CardContent>
             </Card>
           </div>
+          
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center h-64">
@@ -964,6 +1232,16 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
           </Button>
         </div>
       )}
+
+      {order && (
+        <AppointmentDialog
+          isOpen={isAppointmentDialogOpen}
+          onClose={() => setIsAppointmentDialogOpen(false)}
+          order={order}
+          onAppointmentCreated={handleAppointmentCreated}
+        />
+      )}
     </div>
   );
 }
+

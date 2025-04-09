@@ -146,7 +146,7 @@ namespace fyp_motomate.Controllers
         }
 
         // GET: api/Users/Mechanics
-        [HttpGet("Mechanics")]
+        [HttpGet("mechanics")]
         public async Task<ActionResult<IEnumerable<object>>> GetMechanics()
         {
             // Get only mechanics with their performance data

@@ -109,7 +109,7 @@ namespace fyp_motomate.Data
 
             modelBuilder.Entity<User>()
                 .HasMany(u => u.CustomerAppointments)
-                .WithOne(a => a.Customer)
+                .WithOne(a => a.User)
                 .HasForeignKey(a => a.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
