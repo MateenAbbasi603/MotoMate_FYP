@@ -55,6 +55,7 @@ namespace fyp_motomate.Models.DTOs
     public class InspectionDetailsDto
     {
         public int InspectionId { get; set; }
+        public int ServiceId { get; set; }
         public DateTime ScheduledDate { get; set; }
         public string Status { get; set; }
         public string TimeSlot { get; set; }
