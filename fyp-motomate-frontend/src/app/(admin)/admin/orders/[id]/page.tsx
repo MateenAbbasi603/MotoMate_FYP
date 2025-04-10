@@ -171,8 +171,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const { id } = params;
 
 
-  console.log(order,"order");
-  
+  // console.log(order,"order");
+
   // Helper function to normalize additionalServices
   const normalizeAdditionalServices = (orderData: OrderData): ServiceData[] => {
     if (!orderData.additionalServices) {
@@ -217,7 +217,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
           return;
         }
 
-        console.log('Initial order data:', orderData);
+        // console.log('Initial order data:', orderData);
 
         // Initialize order with the data we have
         let enhancedOrder = { ...orderData };
@@ -234,7 +234,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
               `${API_URL}/api/Detail/combined-details?userId=${orderData.userId}&vehicleId=${orderData.vehicleId}${orderData.serviceId ? `&serviceId=${orderData.serviceId}` : ''}`
             );
 
-            console.log('Combined details:', combinedResponse.data);
+            // console.log('Combined details:', combinedResponse.data);
 
             // Update order with combined details
             enhancedOrder = {
@@ -259,7 +259,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                 `${API_URL}/api/Services/${inspectionServiceId}`
               );
 
-              console.log('Inspection service details:', inspectionServiceResponse.data);
+              // console.log('Inspection service details:', inspectionServiceResponse.data);
 
               // Update the inspection with the service price
               enhancedOrder = {
@@ -275,7 +275,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
           }
         }
 
-        console.log('Enhanced order to set:', enhancedOrder);
+        // console.log('Enhanced order to set:', enhancedOrder);
         setOrder(enhancedOrder);
 
         // Process services data
@@ -283,11 +283,11 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         if (servicesResponse.data && servicesResponse.data.$values) {
           // If data is in $values array format
           servicesData = servicesResponse.data.$values;
-          console.log("Services data extracted from $values:", servicesData);
+          // console.log("Services data extracted from $values:", servicesData);
         } else if (Array.isArray(servicesResponse.data)) {
           // If data is directly an array
           servicesData = servicesResponse.data;
-          console.log("Services data is already an array:", servicesData);
+          // console.log("Services data is already an array:", servicesData);
         } else {
           console.error("Invalid services data format:", servicesResponse.data);
           toast.error("Failed to load services data");
@@ -314,33 +314,33 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   useEffect(() => {
     const fetchData = async () => {
       if (!id) return;
-      
+
       try {
         setLoading(true);
         setError(null);
-        
+
         // Call both API requests in parallel
         const [orderData, servicesResponse] = await Promise.all([
           orderService.getOrderById(id),
           axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Services`)
         ]);
-        
+
         // Process order data
         if (!orderData) {
           setError('Order not found');
           setLoading(false);
           return;
         }
-        
-        console.log('Initial order data:', orderData);
-        
+
+        // console.log('Initial order data:', orderData);
+
         // Initialize order with the data we have
         let enhancedOrder = { ...orderData };
-        
+
         // Normalize additionalServices
         const normalizedAdditionalServices = normalizeAdditionalServices(enhancedOrder);
         enhancedOrder.additionalServices = normalizedAdditionalServices;
-        
+
         // If the order details don't include user or vehicle data, fetch it separately
         if ((!enhancedOrder.user || !enhancedOrder.vehicle) && orderData.userId && orderData.vehicleId) {
           try {
@@ -348,9 +348,9 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             const combinedResponse = await axios.get(
               `${API_URL}/api/Detail/combined-details?userId=${orderData.userId}&vehicleId=${orderData.vehicleId}${orderData.serviceId ? `&serviceId=${orderData.serviceId}` : ''}`
             );
-            
-            console.log('Combined details:', combinedResponse.data);
-            
+
+            // console.log('Combined details:', combinedResponse.data);
+
             // Update order with combined details
             enhancedOrder = {
               ...enhancedOrder,
@@ -362,20 +362,20 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             console.error('Failed to fetch combined details:', combinedErr);
           }
         }
-  
+
         // If the order includes an inspection but doesn't have price info, fetch the inspection service details
         if (enhancedOrder.includesInspection && enhancedOrder.inspection && !enhancedOrder.inspection.price) {
           try {
             const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
             const inspectionServiceId = enhancedOrder.inspection.serviceId || orderData.inspection?.serviceId;
-            
+
             if (inspectionServiceId) {
               const inspectionServiceResponse = await axios.get(
                 `${API_URL}/api/Services/${inspectionServiceId}`
               );
-              
-              console.log('Inspection service details:', inspectionServiceResponse.data);
-              
+
+              // console.log('Inspection service details:', inspectionServiceResponse.data);
+
               // Update the inspection with the service price
               enhancedOrder = {
                 ...enhancedOrder,
@@ -389,35 +389,35 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             console.error('Failed to fetch inspection service details:', serviceErr);
           }
         }
-        
-        console.log('Enhanced order to set:', enhancedOrder);
+
+        // console.log('Enhanced order to set:', enhancedOrder);
         setOrder(enhancedOrder);
-        
+
         // Fetch appointment data if the order exists
         if (enhancedOrder.orderId) {
           fetchAppointmentData(enhancedOrder.orderId);
         }
-        
+
         // Process services data
         let servicesData = [];
         if (servicesResponse.data && servicesResponse.data.$values) {
           // If data is in $values array format
           servicesData = servicesResponse.data.$values;
-          console.log("Services data extracted from $values:", servicesData);
+          // console.log("Services data extracted from $values:", servicesData);
         } else if (Array.isArray(servicesResponse.data)) {
           // If data is directly an array
           servicesData = servicesResponse.data;
-          console.log("Services data is already an array:", servicesData);
+          // console.log("Services data is already an array:", servicesData);
         } else {
           console.error("Invalid services data format:", servicesResponse.data);
           toast.error("Failed to load services data");
         }
-        
+
         // Filter out inspection services
         const nonInspectionServices = servicesData.filter(
-          (service:any) => service.category.toLowerCase() !== 'inspection'
+          (service: any) => service.category.toLowerCase() !== 'inspection'
         );
-        
+
         setServices(nonInspectionServices);
       } catch (err) {
         console.error(`Failed to fetch order ${id} or services:`, err);
@@ -427,7 +427,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         setLoading(false);
       }
     };
-  
+
     fetchData();
   }, [id]);
 
@@ -511,7 +511,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       );
 
       // Log response to see what we get
-      console.log('Add service response:', response.data);
+      // console.log('Add service response:', response.data);
 
       // Fetch the full order details after adding the service to ensure we have all data
       const updatedOrderData = await orderService.getOrderById(id);
@@ -521,7 +521,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         return;
       }
 
-      console.log('Updated order data:', updatedOrderData);
+      // console.log('Updated order data:', updatedOrderData);
 
       // Make sure we have the complete user, vehicle, and services data
       let enhancedOrder = { ...updatedOrderData };
@@ -536,7 +536,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             `${API_URL}/api/Detail/combined-details?userId=${updatedOrderData.userId}&vehicleId=${updatedOrderData.vehicleId}${updatedOrderData.serviceId ? `&serviceId=${updatedOrderData.serviceId}` : ''}`
           );
 
-          console.log('Combined details after service add:', combinedResponse.data);
+          // console.log('Combined details after service add:', combinedResponse.data);
 
           // Update order with combined details
           enhancedOrder = {
@@ -575,7 +575,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         }
       }
 
-      console.log('Enhanced order after service add:', enhancedOrder);
+      // console.log('Enhanced order after service add:', enhancedOrder);
       setOrder(enhancedOrder);
 
       // Reset form
@@ -617,18 +617,21 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         console.error('No authentication token found');
         return;
       }
-      
+
       const response = await axios.get(
         `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Orders/${orderId}/appointment`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
       );
-      
+
+      // console.log(response.data,"response.data");
+
+
       if (response.data) {
         setAppointment(response.data);
       }
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Error fetching appointment data:', error);
       // If we get a 404, it means there's no appointment yet - this is normal
       if (error.response && error.response.status !== 404) {
@@ -639,9 +642,9 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
     }
   };
 
-  const handleAppointmentCreated = (newAppointment:any) => {
+  const handleAppointmentCreated = (newAppointment: any) => {
     setAppointment(newAppointment);
-    
+
     // Update the order status if not already updated
     if (order && order.status === 'pending') {
       setOrder({
@@ -649,11 +652,11 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         status: 'in progress'
       });
     }
-    
+
     toast.success('Mechanic assigned successfully');
   };
 
-  const AppointmentSection = ({ appointment, loadingAppointment }:any) => {
+  const AppointmentSection = ({ appointment, loadingAppointment }: any) => {
     if (loadingAppointment) {
       return (
         <div className="flex items-center justify-center p-4 bg-muted/50 rounded-md">
@@ -662,13 +665,13 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         </div>
       );
     }
-    
+
     if (!appointment) {
       return (
         <div className="p-4 bg-muted/50 rounded-md">
           <p className="text-muted-foreground">No mechanic has been assigned to this order yet.</p>
-          <Button 
-            onClick={() => setIsAppointmentDialogOpen(true)} 
+          <Button
+            onClick={() => setIsAppointmentDialogOpen(true)}
             className="mt-3"
             variant="outline"
           >
@@ -678,7 +681,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         </div>
       );
     }
-    
+
     return (
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 bg-blue-50 rounded-md">
@@ -698,7 +701,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
           </div>
           <StatusBadge status={appointment.status} />
         </div>
-        
+
         <div className="bg-muted/50 p-4 rounded-md">
           <h4 className="font-medium mb-3 flex items-center">
             <UserCheck className="mr-2 h-4 w-4 text-primary" />
@@ -721,7 +724,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
           ) : (
             <p className="text-muted-foreground">Mechanic information not available</p>
           )}
-          
+
           {appointment.notes && (
             <div className="mt-3 pt-3 border-t">
               <p className="text-sm text-muted-foreground mb-1">Appointment Notes</p>
@@ -1039,15 +1042,15 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                     </div>
                   </TabsContent>
                   <TabsContent value="appointment" className="space-y-4">
-  <h3 className="text-lg font-medium flex items-center mb-3">
-    <Wrench className="mr-2 h-5 w-5 text-primary" />
-    Mechanic Assignment
-  </h3>
-  <AppointmentSection 
-    appointment={appointment} 
-    loadingAppointment={loadingAppointment} 
-  />
-</TabsContent>
+                    <h3 className="text-lg font-medium flex items-center mb-3">
+                      <Wrench className="mr-2 h-5 w-5 text-primary" />
+                      Mechanic Assignment
+                    </h3>
+                    <AppointmentSection
+                      appointment={appointment}
+                      loadingAppointment={loadingAppointment}
+                    />
+                  </TabsContent>
                 </Tabs>
 
               </CardContent>
@@ -1222,7 +1225,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
               </CardContent>
             </Card>
           </div>
-          
+
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center h-64">

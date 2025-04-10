@@ -38,7 +38,7 @@ export default function AppointmentDialog({
   const [loadingMechanics, setLoadingMechanics] = useState(false);
   
   // Extract date and time slot from the order
-console.log(order,"order");
+// console.log(order,"order");
 
 
   const inspectionDate = order?.inspection?.scheduledDate;
@@ -106,7 +106,8 @@ console.log(order,"order");
       const appointmentData = {
         orderId: order.orderId,
         mechanicId: parseInt(mechanicId),
-        notes: notes
+        notes: notes,
+        TimeSlot: timeSlot,
         // Note: We don't need to send date and time slot as they'll be 
         // taken from the order's inspection in the backend
       };

@@ -22,12 +22,13 @@ namespace fyp_motomate.Controllers
 
         public class CombinedDetailsDto
         {
-            public UserDetailsDto? User { get; set; }
-            public VehicleDetailsDto? Vehicle { get; set; }
-            public ServiceDetailsDto? Service { get; set; }
+            public DetailUserDto? User { get; set; }
+            public DetailVehicleDto? Vehicle { get; set; }
+            public DetailServiceDto? Service { get; set; }
         }
 
-        public class UserDetailsDto
+        // Renamed from UserDetailsDto to DetailUserDto to avoid conflict
+        public class DetailUserDto
         {
             [Required]
             public int UserId { get; set; }
@@ -53,7 +54,7 @@ namespace fyp_motomate.Controllers
             public string? Phone { get; set; }
         }
 
-        public class VehicleDetailsDto
+        public class DetailVehicleDto
         {
             [Required]
             public int VehicleId { get; set; }
@@ -75,7 +76,7 @@ namespace fyp_motomate.Controllers
             public string LicensePlate { get; set; } = string.Empty;
         }
 
-        public class ServiceDetailsDto
+        public class DetailServiceDto
         {
             [Required]
             public int ServiceId { get; set; }
@@ -154,11 +155,11 @@ namespace fyp_motomate.Controllers
             }
         }
 
-        private async Task<UserDetailsDto> FetchUserDetails(int userId)
+        private async Task<DetailUserDto> FetchUserDetails(int userId)
         {
             var user = await _context.Users
                 .Where(u => u.UserId == userId)
-                .Select(u => new UserDetailsDto
+                .Select(u => new DetailUserDto
                 {
                     UserId = u.UserId,
                     Username = u.Username,
@@ -172,11 +173,11 @@ namespace fyp_motomate.Controllers
             return user ?? throw new InvalidOperationException($"User with ID {userId} not found");
         }
 
-        private async Task<VehicleDetailsDto> FetchVehicleDetails(int vehicleId)
+        private async Task<DetailVehicleDto> FetchVehicleDetails(int vehicleId)
         {
             var vehicle = await _context.Vehicles
                 .Where(v => v.VehicleId == vehicleId)
-                .Select(v => new VehicleDetailsDto
+                .Select(v => new DetailVehicleDto
                 {
                     VehicleId = v.VehicleId,
                     Make = v.Make,
@@ -189,11 +190,11 @@ namespace fyp_motomate.Controllers
             return vehicle ?? throw new InvalidOperationException($"Vehicle with ID {vehicleId} not found");
         }
 
-        private async Task<ServiceDetailsDto> FetchServiceDetails(int serviceId)
+        private async Task<DetailServiceDto> FetchServiceDetails(int serviceId)
         {
             var service = await _context.Services
                 .Where(s => s.ServiceId == serviceId)
-                .Select(s => new ServiceDetailsDto
+                .Select(s => new DetailServiceDto
                 {
                     ServiceId = s.ServiceId,
                     ServiceName = s.ServiceName,
