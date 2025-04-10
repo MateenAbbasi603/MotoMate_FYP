@@ -12,6 +12,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ModeToggle } from '../ModeToggle';
 
 const customerNavItems = [
   {
@@ -86,6 +87,9 @@ export default function CustomerNavbar() {
             Logout
           </Button>
         </div>
+
+
+        <ModeToggle/>
       </div>
     </nav>
   );

@@ -14,6 +14,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ModeToggle } from '../ModeToggle';
 
 const adminNavItems = [
   {
@@ -98,6 +99,8 @@ export default function AdminNavbar() {
             Logout
           </Button>
         </div>
+
+        <ModeToggle/>
       </div>
     </nav>
   );
