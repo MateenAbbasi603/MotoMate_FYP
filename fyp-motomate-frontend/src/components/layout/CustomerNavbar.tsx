@@ -10,6 +10,7 @@ import {
   Wrench,
   User,
   LogOut,
+  ShoppingCart,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModeToggle } from '../ModeToggle';
@@ -34,6 +35,11 @@ const customerNavItems = [
     title: 'Profile',
     href: '/profile',
     icon: User,
+  },
+  {
+    title: 'Orders',
+    href: '/orders',
+    icon: ShoppingCart
   },
 ];
 
