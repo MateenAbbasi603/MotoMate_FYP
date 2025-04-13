@@ -98,10 +98,10 @@ export function LoginForm() {
               router.push("/admin/dashboard");
               break;
             case "service_agent":
-              router.push("/admin/services"); // Service agents directly to services page
+              router.push("/admin/service-agent"); // Service agents directly to services page
               break;
             case "mechanic":
-              router.push("/admin/mechanics"); // Mechanics directly to mechanic page
+              router.push("/admin/mechanic"); // Mechanics directly to mechanic page
               break;
             case "finance_officer":
               router.push("/admin/finance"); // Finance officers directly to finance page

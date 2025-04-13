@@ -1,4 +1,3 @@
-// Controllers/InspectionsController.cs
 using fyp_motomate.Data;
 using fyp_motomate.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -39,6 +38,21 @@ namespace fyp_motomate.Controllers
                     .Include(i => i.Vehicle)
                     .ToListAsync();
             }
+            // If user is a mechanic, return inspections for appointments assigned to them
+            else if (userRole == "mechanic")
+            {
+                // Find all orders assigned to this mechanic through appointments
+                var assignments = await _context.Appointments
+                    .Where(a => a.MechanicId == userId)
+                    .Select(a => a.OrderId)
+                    .ToListAsync();
+
+                return await _context.Inspections
+                    .Where(i => i.OrderId.HasValue && assignments.Contains(i.OrderId.Value))
+                    .Include(i => i.User)
+                    .Include(i => i.Vehicle)
+                    .ToListAsync();
+            }
             // If user is staff, return all inspections
             else
             {
@@ -59,6 +73,7 @@ namespace fyp_motomate.Controllers
             var inspection = await _context.Inspections
                 .Include(i => i.User)
                 .Include(i => i.Vehicle)
+                .Include(i => i.Order)
                 .FirstOrDefaultAsync(i => i.InspectionId == id);
 
             if (inspection == null)
@@ -70,6 +85,25 @@ namespace fyp_motomate.Controllers
             if (userRole == "customer" && inspection.UserId != userId)
             {
                 return Forbid();
+            }
+            else if (userRole == "mechanic")
+            {
+                // Mechanic can only access inspections for orders assigned to them
+                if (inspection.OrderId.HasValue)
+                {
+                    var assignment = await _context.Appointments
+                        .AnyAsync(a => a.OrderId == inspection.OrderId && a.MechanicId == userId);
+                    
+                    if (!assignment)
+                    {
+                        return Forbid();
+                    }
+                }
+                else
+                {
+                    // If there's no order associated, mechanic can't access this inspection
+                    return Forbid();
+                }
             }
 
             return inspection;
@@ -117,9 +151,17 @@ namespace fyp_motomate.Controllers
                 UserId = request.UserId,
                 VehicleId = request.VehicleId,
                 ScheduledDate = request.ScheduledDate,
+                TimeSlot = request.TimeSlot ?? "09:00 AM - 11:00 AM", // Default time slot
                 Notes = request.Notes,
                 Status = "pending",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                // Initialize default values for inspection fields
+                EngineCondition = "Not Inspected Yet",
+                TransmissionCondition = "Not Inspected Yet",
+                BrakeCondition = "Not Inspected Yet",
+                ElectricalCondition = "Not Inspected Yet",
+                BodyCondition = "Not Inspected Yet",
+                TireCondition = "Not Inspected Yet"
             };
 
             _context.Inspections.Add(inspection);
@@ -158,7 +200,10 @@ namespace fyp_motomate.Controllers
             int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
             string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
-            var inspection = await _context.Inspections.FindAsync(id);
+            var inspection = await _context.Inspections
+                .Include(i => i.Order)
+                .FirstOrDefaultAsync(i => i.InspectionId == id);
+
             if (inspection == null)
             {
                 return NotFound(new { message = "Inspection not found" });
@@ -183,6 +228,67 @@ namespace fyp_motomate.Controllers
                     inspection.Notes = request.Notes;
                 }
             }
+            else if (userRole == "mechanic")
+            {
+                // Mechanic can only update inspections for orders assigned to them
+                if (inspection.OrderId.HasValue)
+                {
+                    var assignment = await _context.Appointments
+                        .AnyAsync(a => a.OrderId == inspection.OrderId && a.MechanicId == userId);
+                    
+                    if (!assignment)
+                    {
+                        return Forbid();
+                    }
+                }
+                else
+                {
+                    // If there's no order associated, mechanic can't modify this inspection
+                    return Forbid();
+                }
+
+                // Mechanics can update inspection report details and status
+                if (!string.IsNullOrEmpty(request.Status))
+                {
+                    inspection.Status = request.Status;
+                }
+
+                if (!string.IsNullOrEmpty(request.Notes))
+                {
+                    inspection.Notes = request.Notes;
+                }
+
+                // Update inspection report details
+                if (!string.IsNullOrEmpty(request.EngineCondition))
+                    inspection.EngineCondition = request.EngineCondition;
+
+                if (!string.IsNullOrEmpty(request.TransmissionCondition))
+                    inspection.TransmissionCondition = request.TransmissionCondition;
+
+                if (!string.IsNullOrEmpty(request.BrakeCondition))
+                    inspection.BrakeCondition = request.BrakeCondition;
+
+                if (!string.IsNullOrEmpty(request.ElectricalCondition))
+                    inspection.ElectricalCondition = request.ElectricalCondition;
+
+                if (!string.IsNullOrEmpty(request.BodyCondition))
+                    inspection.BodyCondition = request.BodyCondition;
+
+                if (!string.IsNullOrEmpty(request.TireCondition))
+                    inspection.TireCondition = request.TireCondition;
+
+                // If marking as completed, set the completion date
+                if (request.Status == "completed" && !inspection.CompletedAt.HasValue)
+                {
+                    inspection.CompletedAt = DateTime.UtcNow;
+
+                    // Also update the order status if there is an associated order
+                    if (inspection.Order != null)
+                    {
+                        inspection.Order.Status = "in progress";
+                    }
+                }
+            }
             else
             {
                 // Staff can update all fields
@@ -202,24 +308,24 @@ namespace fyp_motomate.Controllers
                     inspection.CompletedAt = DateTime.UtcNow;
                 }
 
-                // Update inspection report details if provided
-                // if (!string.IsNullOrEmpty(request.EngineCondition))
-                //     inspection.EngineCondition = request.EngineCondition;
+                // Update inspection report details
+                if (!string.IsNullOrEmpty(request.EngineCondition))
+                    inspection.EngineCondition = request.EngineCondition;
 
-                // if (!string.IsNullOrEmpty(request.TransmissionCondition))
-                //     inspection.TransmissionCondition = request.TransmissionCondition;
+                if (!string.IsNullOrEmpty(request.TransmissionCondition))
+                    inspection.TransmissionCondition = request.TransmissionCondition;
 
-                // if (!string.IsNullOrEmpty(request.BrakeCondition))
-                //     inspection.BrakeCondition = request.BrakeCondition;
+                if (!string.IsNullOrEmpty(request.BrakeCondition))
+                    inspection.BrakeCondition = request.BrakeCondition;
 
-                // if (!string.IsNullOrEmpty(request.ElectricalCondition))
-                //     inspection.ElectricalCondition = request.ElectricalCondition;
+                if (!string.IsNullOrEmpty(request.ElectricalCondition))
+                    inspection.ElectricalCondition = request.ElectricalCondition;
 
-                // if (!string.IsNullOrEmpty(request.BodyCondition))
-                //     inspection.BodyCondition = request.BodyCondition;
+                if (!string.IsNullOrEmpty(request.BodyCondition))
+                    inspection.BodyCondition = request.BodyCondition;
 
-                // if (!string.IsNullOrEmpty(request.TireCondition))
-                //     inspection.TireCondition = request.TireCondition;
+                if (!string.IsNullOrEmpty(request.TireCondition))
+                    inspection.TireCondition = request.TireCondition;
             }
 
             try
@@ -275,6 +381,101 @@ namespace fyp_motomate.Controllers
             return Ok(new { message = "Inspection deleted successfully" });
         }
 
+        // POST: api/Inspections/5/report
+        [HttpPost("{id}/report")]
+        [Authorize(Roles = "mechanic,admin,service_agent")]
+        public async Task<IActionResult> SubmitInspectionReport(int id, [FromBody] InspectionReportRequest request)
+        {
+            try
+            {
+                int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+                var inspection = await _context.Inspections
+                    .Include(i => i.Order)
+                    .FirstOrDefaultAsync(i => i.InspectionId == id);
+
+                if (inspection == null)
+                {
+                    return NotFound(new { message = "Inspection not found" });
+                }
+
+                // For mechanics, verify they are assigned to this inspection
+                if (userRole == "mechanic" && inspection.OrderId.HasValue)
+                {
+                    var assignment = await _context.Appointments
+                        .AnyAsync(a => a.OrderId == inspection.OrderId && a.MechanicId == userId);
+                    
+                    if (!assignment)
+                    {
+                        return Forbid();
+                    }
+                }
+
+                // Update inspection fields
+                if (!string.IsNullOrEmpty(request.EngineCondition))
+                    inspection.EngineCondition = request.EngineCondition;
+                
+                if (!string.IsNullOrEmpty(request.TransmissionCondition))
+                    inspection.TransmissionCondition = request.TransmissionCondition;
+                
+                if (!string.IsNullOrEmpty(request.BrakeCondition))
+                    inspection.BrakeCondition = request.BrakeCondition;
+                
+                if (!string.IsNullOrEmpty(request.ElectricalCondition))
+                    inspection.ElectricalCondition = request.ElectricalCondition;
+                
+                if (!string.IsNullOrEmpty(request.BodyCondition))
+                    inspection.BodyCondition = request.BodyCondition;
+                
+                if (!string.IsNullOrEmpty(request.TireCondition))
+                    inspection.TireCondition = request.TireCondition;
+                
+                if (!string.IsNullOrEmpty(request.Notes))
+                    inspection.Notes = request.Notes;
+                
+                inspection.Status = "completed";
+                inspection.CompletedAt = DateTime.UtcNow;
+
+                // Update the order status if available
+                if (inspection.Order != null)
+                {
+                    inspection.Order.Status = "in progress";
+                }
+
+                // Update the appointment status if there is one for this order
+                if (inspection.OrderId.HasValue)
+                {
+                    var appointment = await _context.Appointments
+                        .FirstOrDefaultAsync(a => a.OrderId == inspection.OrderId);
+                    
+                    if (appointment != null)
+                    {
+                        appointment.Status = "completed";
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                // Create a notification for the customer
+                var notification = new Notification
+                {
+                    UserId = inspection.UserId,
+                    Message = "Your inspection report is ready",
+                    Status = "unread",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Notifications.Add(notification);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "Inspection report submitted successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An error occurred while submitting the inspection report", error = ex.Message });
+            }
+        }
+
         // POST: api/Inspections/5/convert-to-order
         [HttpPost("{id}/convert-to-order")]
         [Authorize(Roles = "super_admin,admin,service_agent")]
@@ -287,11 +488,10 @@ namespace fyp_motomate.Controllers
             }
 
             // Check if already converted
-          if (inspection.OrderId > 0) // Assuming a valid order ID is greater than 0
-{
-    return BadRequest(new { message = "Inspection already converted to an order" });
-}
-
+            if (inspection.OrderId > 0)
+            {
+                return BadRequest(new { message = "Inspection already converted to an order" });
+            }
 
             // Check if inspection is completed
             if (inspection.Status != "completed")
@@ -356,6 +556,7 @@ namespace fyp_motomate.Controllers
         public int UserId { get; set; }
         public int VehicleId { get; set; }
         public DateTime ScheduledDate { get; set; }
+        public string TimeSlot { get; set; }
         public string Notes { get; set; }
     }
 
@@ -369,6 +570,17 @@ namespace fyp_motomate.Controllers
         public string ElectricalCondition { get; set; }
         public string BodyCondition { get; set; }
         public string TireCondition { get; set; }
+    }
+
+    public class InspectionReportRequest
+    {
+        public string EngineCondition { get; set; }
+        public string TransmissionCondition { get; set; }
+        public string BrakeCondition { get; set; }
+        public string ElectricalCondition { get; set; }
+        public string BodyCondition { get; set; }
+        public string TireCondition { get; set; }
+        public string Notes { get; set; }
     }
 
     public class OrderConversionRequest

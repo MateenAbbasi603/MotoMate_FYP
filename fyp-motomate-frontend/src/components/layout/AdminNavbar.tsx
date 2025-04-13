@@ -12,10 +12,19 @@ import {
   DollarSign,
   ClipboardList,
   LogOut,
+  Calendar,
+  MessageSquare,
+  Car,
+  FileText,
+  CreditCard,
+  PieChart,
+  Receipt,
+  File,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModeToggle } from '../ModeToggle';
 
+// Admin navigation items
 const adminNavItems = [
   {
     title: 'Dashboard',
@@ -49,7 +58,105 @@ const adminNavItems = [
   },
 ];
 
-export default function AdminNavbar() {
+// Mechanic navigation items
+const mechanicNavItems = [
+  {
+    title: 'Dashboard',
+    href: '/admin/mechanic',
+    icon: LayoutDashboard,
+  },
+  {
+    title: 'Appointments',
+    href: '/admin/mechanic/appointments',
+    icon: Calendar,
+  },
+  {
+    title: 'Tasks',
+    href: '/admin/mechanic/tasks',
+    icon: ClipboardList,
+  },
+  {
+    title: 'Service History',
+    href: '/admin/mechanic/history',
+    icon: FileText,
+  },
+  {
+    title: 'Messages',
+    href: '/admin/mechanic/messages',
+    icon: MessageSquare,
+  },
+];
+
+// Service Agent navigation items
+const serviceAgentNavItems = [
+  {
+    title: 'Dashboard',
+    href: '/service-agent/dashboard',
+    icon: LayoutDashboard,
+  },
+  {
+    title: 'Customers',
+    href: '/service-agent/customers',
+    icon: Users,
+  },
+  {
+    title: 'Service Requests',
+    href: '/service-agent/requests',
+    icon: ClipboardList,
+  },
+  {
+    title: 'Vehicles',
+    href: '/service-agent/vehicles',
+    icon: Car,
+  },
+  {
+    title: 'Schedule',
+    href: '/service-agent/schedule',
+    icon: Calendar,
+  },
+  {
+    title: 'Messages',
+    href: '/service-agent/messages',
+    icon: MessageSquare,
+  },
+];
+
+// Finance Officer navigation items
+const financeOfficerNavItems = [
+  {
+    title: 'Dashboard',
+    href: '/finance/dashboard',
+    icon: LayoutDashboard,
+  },
+  {
+    title: 'Transactions',
+    href: '/finance/transactions',
+    icon: CreditCard,
+  },
+  {
+    title: 'Invoices',
+    href: '/finance/invoices',
+    icon: File,
+  },
+  {
+    title: 'Reports',
+    href: '/finance/reports',
+    icon: PieChart,
+  },
+  {
+    title: 'Payments',
+    href: '/finance/payments',
+    icon: DollarSign,
+  },
+  {
+    title: 'Receipts',
+    href: '/finance/receipts',
+    icon: Receipt,
+  },
+];
+
+// Shared Navbar component that accepts navigation items and title
+function Navbar({ title, navItems }: { title: string; navItems: any[] }) {
   const pathname = usePathname();
 
   const handleLogout = () => {
@@ -64,13 +171,13 @@ export default function AdminNavbar() {
     <nav className="fixed top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
         <div className="mr-4 hidden md:flex">
-          <Link href="/admin/dashboard" className="mr-6 flex items-center space-x-2">
+          <Link href={navItems[0].href} className="mr-6 flex items-center space-x-2">
             <span className="hidden font-bold sm:inline-block">
-              Motomate Admin
+              {title}
             </span>
           </Link>
           <nav className="flex items-center space-x-6 text-sm font-medium">
-            {adminNavItems.map((item) => {
+            {navItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
@@ -99,9 +206,44 @@ export default function AdminNavbar() {
             Logout
           </Button>
         </div>
-
-        <ModeToggle/>
+        <ModeToggle />
       </div>
     </nav>
   );
-} 
+}
+
+// Admin Navbar Component
+export function AdminNavbar() {
+  return <Navbar title="Motomate Admin" navItems={adminNavItems} />;
+}
+
+// Mechanic Navbar Component
+export function MechanicNavbar() {
+  return <Navbar title="Motomate Mechanic" navItems={mechanicNavItems} />;
+}
+
+// Service Agent Navbar Component
+export function ServiceAgentNavbar() {
+  return <Navbar title="Motomate Service" navItems={serviceAgentNavItems} />;
+}
+
+// Finance Officer Navbar Component
+export function FinanceNavbar() {
+  return <Navbar title="Motomate Finance" navItems={financeOfficerNavItems} />;
+}
+
+// Main Router Component to determine which navbar to display
+export default function RoleBasedNavbar() {
+  const pathname = usePathname();
+
+  switch (true) {
+    case pathname.startsWith('/admin/mechanic'):
+      return <MechanicNavbar />;
+    case pathname.startsWith('/admin/service-agent'):
+      return <ServiceAgentNavbar />;
+    case pathname.startsWith('/admin/finance'):
+      return <FinanceNavbar />;
+    default:
+      return <AdminNavbar />;
+  }
+}
