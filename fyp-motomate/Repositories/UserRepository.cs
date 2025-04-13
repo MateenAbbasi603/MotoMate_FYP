@@ -77,6 +77,12 @@ namespace fyp_motomate.Repositories
             if (!VerifyPasswordHash(password, user.Password))
                 return null;
 
+   // Ensure imgUrl is not null to prevent SqlNullValueException
+            if (user.imgUrl == null)
+            {
+                user.imgUrl = ""; // Set default empty string
+            }
+
             return user;
         }
 

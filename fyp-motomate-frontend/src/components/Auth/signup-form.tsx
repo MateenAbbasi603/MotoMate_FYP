@@ -6,6 +6,8 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import axios from "axios";
+import { useState, useCallback } from "react";
+import { CldUploadWidget } from "next-cloudinary";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 // Updated schema to match our .NET API requirements
 const formSchema = z.object({
@@ -43,6 +45,7 @@ const formSchema = z.object({
   }),
   phone: z.string().optional(),
   address: z.string().optional(),
+  imgUrl: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
@@ -54,6 +57,7 @@ export function SignupForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadedImage, setUploadedImage] = useState<string>("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -65,13 +69,27 @@ export function SignupForm() {
       confirmPassword: "",
       phone: "",
       address: "",
+      imgUrl: "",
     },
   });
+
+  // Handle successful upload from Cloudinary widget
+  const handleUploadSuccess = useCallback((result: any) => {
+    const imageUrl = result.info.secure_url;
+    setUploadedImage(imageUrl);
+    form.setValue("imgUrl", imageUrl);
+    toast.success("Image uploaded successfully!");
+  }, [form]);
 
   async function onSubmit(values: FormValues) {
     try {
       setIsSubmitting(true);
       setError(null);
+
+      // If image was uploaded, make sure it's in the values
+      if (uploadedImage && !values.imgUrl) {
+        values.imgUrl = uploadedImage;
+      }
 
       // Format data to match our .NET API expectations
       const requestData = {
@@ -83,6 +101,7 @@ export function SignupForm() {
         name: values.name,
         phone: values.phone || "",
         address: values.address || "",
+        imgUrl: values.imgUrl || "",
       };
 
       console.log("Submitting registration:", requestData);
@@ -135,6 +154,43 @@ export function SignupForm() {
             {error}
           </div>
         )}
+
+        {/* Profile Image Upload */}
+        <div className="flex flex-col items-center space-y-4">
+          <div className="text-center">
+            <FormLabel className="block mb-2">Profile Picture</FormLabel>
+            <div className="mb-4">
+              <Avatar className="w-24 h-24 mx-auto">
+                <AvatarImage src={uploadedImage} />
+                <AvatarFallback>{form.watch("name")?.charAt(0) || "U"}</AvatarFallback>
+              </Avatar>
+            </div>
+
+            <CldUploadWidget
+              uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "default_preset"}
+              onSuccess={handleUploadSuccess}
+              options={{
+                maxFiles: 1,
+                resourceType: "image",
+                sources: ["local", "camera"],
+              }}
+            >
+              {({ open }) => (
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => open()}
+                  className="mb-2"
+                >
+                  {uploadedImage ? "Change Image" : "Upload Image"}
+                </Button>
+              )}
+            </CldUploadWidget>
+            {uploadedImage && (
+              <p className="text-sm text-green-600">Image uploaded successfully</p>
+            )}
+          </div>
+        </div>
 
         <FormField
           control={form.control}
@@ -233,6 +289,9 @@ export function SignupForm() {
             </FormItem>
           )}
         />
+
+        {/* Hidden field for image URL */}
+        <input type="hidden" {...form.register("imgUrl")} />
 
         <Button type="submit" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? "Creating Account..." : "Create Account"}

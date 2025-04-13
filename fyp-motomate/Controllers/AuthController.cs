@@ -62,7 +62,8 @@ namespace fyp_motomate.Controllers
                 Phone = registerDto.Phone,
                 Address = registerDto.Address,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
+                imgUrl = registerDto.imgUrl
             };
 
             // Register the user
@@ -91,7 +92,8 @@ namespace fyp_motomate.Controllers
                     Role = createdUser.Role,
                     Name = createdUser.Name,
                     Phone = createdUser.Phone,
-                    Address = createdUser.Address
+                    Address = createdUser.Address,
+                    imgUrl = createdUser.imgUrl ?? "" // Include imgUrl with null check
                 }
             });
         }
@@ -124,7 +126,9 @@ namespace fyp_motomate.Controllers
                     Role = user.Role,
                     Name = user.Name,
                     Phone = user.Phone,
-                    Address = user.Address
+                    Address = user.Address,
+                    imgUrl = user.imgUrl ?? "" // Include imgUrl with null check
+
                 }
             });
         }
@@ -147,7 +151,8 @@ namespace fyp_motomate.Controllers
                 Role = user.Role,
                 Name = user.Name,
                 Phone = user.Phone,
-                Address = user.Address
+                Address = user.Address,
+                imgUrl = user.imgUrl ?? "" // Include imgUrl with null check
             });
         }
 
@@ -201,7 +206,8 @@ namespace fyp_motomate.Controllers
                     Role = user.Role,
                     Name = user.Name,
                     Phone = user.Phone,
-                    Address = user.Address
+                    Address = user.Address,
+                    imgUrl = user.imgUrl ?? "" // Include imgUrl with null check
                 }
             });
         }
@@ -305,7 +311,8 @@ namespace fyp_motomate.Controllers
                     Role = createdUser.Role,
                     Name = createdUser.Name,
                     Phone = createdUser.Phone,
-                    Address = createdUser.Address
+                    Address = createdUser.Address,
+                    imgUrl = createdUser.imgUrl ?? "" // Include imgUrl with null check
                 }
             });
         }

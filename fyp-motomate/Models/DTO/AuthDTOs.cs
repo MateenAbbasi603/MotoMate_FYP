@@ -13,6 +13,11 @@ namespace fyp_motomate.Models.DTOs
         [StringLength(100, MinimumLength = 6)]
         public string Password { get; set; }
 
+          
+        [StringLength(255)]
+        public string imgUrl { get; set; }
+
+
         [Required]
         [Compare("Password")]
         public string ConfirmPassword { get; set; }
@@ -53,6 +58,8 @@ namespace fyp_motomate.Models.DTOs
         public string Name { get; set; }
         public string Phone { get; set; }
         public string Address { get; set; }
+
+        public string imgUrl { get; set; }
     }
 
     public class UpdateProfileDto
@@ -63,6 +70,8 @@ namespace fyp_motomate.Models.DTOs
         public string Name { get; set; }
         public string Phone { get; set; }
         public string Address { get; set; }
+
+        public string imgUrl { get; set; }
     }
 
     public class ResetPasswordDto

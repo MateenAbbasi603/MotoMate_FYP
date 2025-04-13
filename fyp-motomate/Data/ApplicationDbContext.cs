@@ -301,6 +301,7 @@ namespace fyp_motomate.Data
                     Name = "Super Admin",
                     Phone = "+1234567890",
                     Address = "Admin Headquarters",
+                    imgUrl = "https://ui-avatars.com/api/?name=Super+Admin&background=random",
                     CreatedAt = new DateTime(2023, 1, 1),
                     UpdatedAt = new DateTime(2023, 1, 1)
                 }

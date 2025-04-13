@@ -21,6 +21,9 @@ namespace fyp_motomate.Models
         [StringLength(255)]
         public string Password { get; set; }
 
+        [StringLength(255)]
+        public string imgUrl { get; set; }
+
         [Required]
         [EmailAddress]
         [StringLength(100)]
