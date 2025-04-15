@@ -52,7 +52,7 @@ namespace fyp_motomate.Controllers
         public async Task<ActionResult<object>> GetUser(int id)
         {
             var user = await _context.Users
-                .Where(u => u.UserId == id && u.Role != "customer")
+                .Where(u => u.UserId == id)
                 .Select(u => new
                 {
                     u.UserId,

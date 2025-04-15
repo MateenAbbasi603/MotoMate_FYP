@@ -108,7 +108,7 @@ export default function UserManagement() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [selectedRole, setSelectedRole] = useState<string>("all");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  
+
   const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
   const router = useRouter();
 
@@ -184,19 +184,16 @@ export default function UserManagement() {
                 <User className="mr-2 h-4 w-4" />
                 View Details
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => router.push(`/admin/users/${user.userId}/edit`)}
-              >
-                <Edit className="mr-2 h-4 w-4" />
-                Edit User
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleDeleteUser(user.userId)}
-                className="text-red-600"
-              >
-                <Trash className="mr-2 h-4 w-4" />
-                Delete User
-              </DropdownMenuItem>
+
+              {user.role !== "super_admin" ? <>
+                <DropdownMenuItem
+                  onClick={() => handleDeleteUser(user.userId)}
+                  className="text-red-600"
+                >
+                  <Trash className="mr-2 h-4 w-4" />
+                  Delete User
+                </DropdownMenuItem>
+              </> : <></>}
             </DropdownMenuContent>
           </DropdownMenu>
         );
@@ -211,11 +208,11 @@ export default function UserManagement() {
         setLoading(true);
         const response = await axios.get(`${API_URL}/api/Users`);
         console.log('Raw API response:', response.data);
-        
+
         // Extract users from the $values array in the response
         const usersData = response.data.$values || [];
         console.log('Processed users data:', usersData);
-        
+
         setUsers(usersData);
       } catch (error) {
         console.error("Failed to fetch users:", error);
@@ -224,7 +221,7 @@ export default function UserManagement() {
         setLoading(false);
       }
     };
-  
+
     fetchUsers();
   }, [API_URL]);
 
@@ -276,7 +273,7 @@ export default function UserManagement() {
           Create Staff User
         </Button>
       </div>
-      
+
       <div className="flex items-center gap-2 mb-4">
         <Input
           placeholder="Search users..."
@@ -286,7 +283,7 @@ export default function UserManagement() {
           }
           className="max-w-sm"
         />
-        
+
         <Select
           value={selectedRole}
           onValueChange={(value) => setSelectedRole(value)}
@@ -304,7 +301,7 @@ export default function UserManagement() {
           </SelectContent>
         </Select>
       </div>
-      
+
       {loading ? (
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => (
@@ -323,9 +320,9 @@ export default function UserManagement() {
                         {header.isPlaceholder
                           ? null
                           : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -352,7 +349,7 @@ export default function UserManagement() {
               </TableBody>
             </Table>
           </div>
-          
+
           <div className="flex items-center justify-between mt-4">
             <div className="flex items-center gap-2">
               <Button
@@ -377,7 +374,7 @@ export default function UserManagement() {
           </div>
         </>
       )}
-      
+
     </div>
   );
 }

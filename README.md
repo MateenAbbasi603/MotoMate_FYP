@@ -7,13 +7,18 @@
 
  - Customer Able to Recevice Invoice Against the Order or Inspections 
 
- - Vehicle should not be registered twice in a day
- - Mechanic access shoul be limited and push notification for upcoming appointments
- - Mechanic can update the progress of vehicle
+ - Vehicle should not be booked a service twice in a day means same Vehicle Cannot booked Twice a day only Once only for eg booked 9-11 then it show not be able book again on same day. (Customer Side)
+
+ - Mechanic can update the progress of vehicle (Awaiting for parts, in progress, completed) For Mechanic Side
+
  - Inspection only seen as selected 
+
  - Inspection report layout
+
  - Order detail unkwown if service is not selected
+ 
  - Progress cannot be reversable
+
  - Inspection should be prefined from admin side while creating, also customer have dropdown for inspection while odring can select one ,Multiple and Full inspections which include all of them.
 
 

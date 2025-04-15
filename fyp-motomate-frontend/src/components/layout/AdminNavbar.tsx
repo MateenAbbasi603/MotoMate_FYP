@@ -38,7 +38,7 @@ const adminNavItems = [
   },
   {
     title: 'Mechanics',
-    href: '/admin/mechanics',
+    href: '/admin/view-mechanics',
     icon: Wrench,
   },
   {
