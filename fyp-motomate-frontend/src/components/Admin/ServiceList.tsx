@@ -252,7 +252,7 @@ export default function ServiceList() {
             Manage services, pricing, and categories.
           </p>
         </div>
-        <Button onClick={() => router.push("/admin/services/create")}>
+        <Button onClick={() => router.push("/admin/services/new")}>
           <Plus className="h-4 w-4 mr-2" />
           Add New Service
         </Button>
