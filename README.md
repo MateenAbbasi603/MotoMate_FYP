@@ -1,7 +1,10 @@
  ## To Be Changed 
 
- - Current Date and Time Slot should minus if reserverd  and show remaining in it 
- - Customer able to View their Order and Inspection 
+ - Current Date and Time Slot should minus if reserverd  and show remaining in it ✔️
+
+ - Customer able to View their Order and Inspection http://localhost:3000/orders 
+  http://localhost:3000/orders/[id] for details✔️
+
  - Customer Able to Recevice Invoice Against the Order or Inspections 
 
  - Vehicle should not be registered twice in a day
