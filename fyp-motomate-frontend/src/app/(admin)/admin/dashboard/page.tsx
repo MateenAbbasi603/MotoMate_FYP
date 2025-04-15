@@ -8,8 +8,8 @@ import Link from "next/link";
 export default function AdminDashboardPage() {
   return (
     <>
-    <LogoutButton/>
-    <Link href={'/admin/users/create'} className={cn(buttonVariants())}>Create Admins</Link>
+    
+    
     </>
   )
 }

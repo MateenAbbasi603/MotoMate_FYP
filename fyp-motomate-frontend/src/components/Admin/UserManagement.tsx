@@ -17,7 +17,7 @@ import {
 } from "@tanstack/react-table";
 import { User, ArrowUpDown, MoreHorizontal, Plus, Search, Trash, Edit, UserCog } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -62,6 +62,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
+import Link from "next/link";
 
 // Type for user data
 interface UserData {
@@ -107,7 +108,6 @@ export default function UserManagement() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [selectedRole, setSelectedRole] = useState<string>("all");
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
   const router = useRouter();
@@ -268,10 +268,10 @@ export default function UserManagement() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Staff Management</h1>
-        <Button onClick={() => setCreateDialogOpen(true)}>
+        <Link href="/admin/users/create" className={buttonVariants({variant: "default"})}>
           <Plus className="mr-2 h-4 w-4" />
           Create Staff User
-        </Button>
+        </Link>
       </div>
 
       <div className="flex items-center gap-2 mb-4">
