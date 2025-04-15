@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import {
     BadgeCheck,
@@ -8,13 +8,13 @@ import {
     LogOut,
     Sparkles,
     User,
-} from "lucide-react"
+} from "lucide-react";
 
 import {
     Avatar,
     AvatarFallback,
     AvatarImage,
-} from "@/components/ui/avatar"
+} from "@/components/ui/avatar";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -23,23 +23,51 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Button } from "../ui/button"
-import LogoutButton from "./LogoutBtn"
-import Link from "next/link"
+} from "@/components/ui/dropdown-menu";
+import { Button } from "../ui/button";
+import LogoutButton from "./LogoutBtn";
+import Link from "next/link";
 
 export function UserInfo({
     user,
 }: {
     user: {
-        name: string
-        email: string
-        avatar: string
+        name: string;
+        email: string;
+        avatar: string;
+        role?: string;
     }
 }) {
+    // Determine profile link based on user role
+    const getProfileLink = () => {
+        // Check if user and role exist
+        if (!user || !user.role) return "/profile";
+        
+        // For admin roles (admin, super_admin), use admin/profile
+        if (user.role.includes('admin')) {
+            return "/admin/profile";
+        }
+        if (user.role.includes('mechanic')) {
+            return "/admin/mechanic/profile";
+        }
+        if (user.role.includes('service_agent')) {
+            return "/admin/service-agent/profile";
+        }
+        if (user.role.includes('finance_officer')) {
+            return "/admin/finances/profile";
+        }
+
+        
+      
+            
+            
+        // For customer and any other roles, use /profile
+        return "/profile";
+    };
+
+    const profileLink = getProfileLink();
 
     return (
-
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button
@@ -47,12 +75,14 @@ export function UserInfo({
                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground bg-transparent text-black dark:text-white"
                 >
                     <Avatar className="h-8 w-8 rounded-lg">
-                        <AvatarImage src={user.avatar} alt={user.name} />
-                        <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                        <AvatarImage src={user?.avatar} alt={user?.name || "User"} />
+                        <AvatarFallback className="rounded-lg">
+                            {user?.name ? user.name.charAt(0) : "U"}
+                        </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                        <span className="truncate font-semibold">{user.name}</span>
-                        <span className="truncate text-xs">{user.email}</span>
+                        <span className="truncate font-semibold">{user?.name || "User"}</span>
+                        <span className="truncate text-xs">{user?.email || "user@example.com"}</span>
                     </div>
                     <ChevronsUpDown className="ml-auto size-4" />
                 </Button>
@@ -65,39 +95,40 @@ export function UserInfo({
                 <DropdownMenuLabel className="p-0 font-normal">
                     <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                         <Avatar className="h-8 w-8 rounded-lg">
-                            <AvatarImage src={user.avatar} alt={user.name} />
-                            <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                            <AvatarImage src={user?.avatar} alt={user?.name || "User"} />
+                            <AvatarFallback className="rounded-lg">
+                                {user?.name ? user.name.charAt(0) : "U"}
+                            </AvatarFallback>
                         </Avatar>
                         <div className="grid flex-1 text-left text-sm leading-tight">
-                            <span className="truncate font-semibold">{user.name}</span>
-                            <span className="truncate text-xs">{user.email}</span>
+                            <span className="truncate font-semibold">{user?.name || "User"}</span>
+                            <span className="truncate text-xs">{user?.email || "user@example.com"}</span>
                         </div>
                     </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
 
                 <DropdownMenuGroup>
-                    <Link href="/profile">
+                    <Link href={profileLink}>
                         <DropdownMenuItem className="cursor-pointer">
-                            <User />
+                            <User className="mr-2 h-4 w-4" />
                             Profile
                         </DropdownMenuItem>
                     </Link>
                     <DropdownMenuItem className="cursor-pointer">
-                        <CreditCard />
+                        <CreditCard className="mr-2 h-4 w-4" />
                         Billing
                     </DropdownMenuItem>
                     <DropdownMenuItem className="cursor-pointer">
-                        <Bell />
+                        <Bell className="mr-2 h-4 w-4" />
                         Notifications
                     </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                    <LogoutButton className="cursor-pointer" />
+                <DropdownMenuItem className="cursor-pointer">
+                    <LogoutButton />
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
-
-    )
+    );
 }

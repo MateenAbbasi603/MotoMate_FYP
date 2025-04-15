@@ -104,7 +104,7 @@ export function LoginForm() {
               router.push("/admin/mechanic"); // Mechanics directly to mechanic page
               break;
             case "finance_officer":
-              router.push("/admin/finance"); // Finance officers directly to finance page
+              router.push("/admin/finances"); // Finance officers directly to finance page
               break;
             default:
               router.push("/dashboard");

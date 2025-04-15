@@ -1,8 +1,8 @@
 'use client'
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -23,6 +23,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModeToggle } from '../ModeToggle';
+import { UserInfo } from '../User/UserInfo';
+import authService from '../../../services/authService';
+import { toast } from 'sonner';
+import axios from 'axios';
 
 // Admin navigation items
 const adminNavItems = [
@@ -53,7 +57,7 @@ const adminNavItems = [
   },
   {
     title: 'Finance',
-    href: '/admin/finance',
+    href: '/admin/view-finance',
     icon: DollarSign,
   },
 ];
@@ -158,14 +162,44 @@ const financeOfficerNavItems = [
 // Shared Navbar component that accepts navigation items and title
 function Navbar({ title, navItems }: { title: string; navItems: any[] }) {
   const pathname = usePathname();
+  const [user, setUser] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  const handleLogout = () => {
-    // Clear local storage
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    // Redirect to login
-    window.location.href = '/login';
-  };
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        // Check if user is authenticated
+        if (!authService.isAuthenticated()) {
+          router.push("/login");
+          return;
+        }
+
+        const userData = await authService.getCurrentUser();
+        
+        // Make sure userData has an avatar property (using imgUrl as fallback)
+        const userWithAvatar = {
+          ...userData,
+          avatar: userData.imgUrl || '',
+          role: userData.role // Make sure role is included
+        };
+        
+        setUser(userWithAvatar);
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+        toast.error("Failed to load profile. Please try again.");
+        
+        // If unauthorized, redirect to login
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          router.push("/login");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, [router]);
 
   return (
     <nav className="fixed top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -195,18 +229,11 @@ function Navbar({ title, navItems }: { title: string; navItems: any[] }) {
             })}
           </nav>
         </div>
-        <div className="flex flex-1 items-center justify-end space-x-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleLogout}
-            className="flex items-center"
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+        <div className="flex-1"></div>
+        <div className="flex items-center space-x-2">
+          {!loading && user && <UserInfo user={user} />}
+          <ModeToggle />
         </div>
-        <ModeToggle />
       </div>
     </nav>
   );
