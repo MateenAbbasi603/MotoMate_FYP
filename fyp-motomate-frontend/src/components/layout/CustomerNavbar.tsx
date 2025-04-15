@@ -1,19 +1,24 @@
 'use client'
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
   Car,
   Wrench,
-  User,
   LogOut,
   ShoppingCart,
+  UserIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModeToggle } from '../ModeToggle';
+import { UserInfo } from '../User/UserInfo';
+import { User } from '../../../services/orderApi';
+import authService from '../../../services/authService';
+import { toast } from 'sonner';
+import axios from 'axios';
 
 const customerNavItems = [
   {
@@ -34,7 +39,7 @@ const customerNavItems = [
   {
     title: 'Profile',
     href: '/profile',
-    icon: User,
+    icon: UserIcon,
   },
   {
     title: 'Orders',
@@ -45,14 +50,43 @@ const customerNavItems = [
 
 export default function CustomerNavbar() {
   const pathname = usePathname();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  const handleLogout = () => {
-    // Clear local storage
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    // Redirect to login
-    window.location.href = '/login';
-  };
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        // Check if user is authenticated
+        if (!authService.isAuthenticated()) {
+          router.push("/login");
+          return;
+        }
+
+        const userData :any = await authService.getCurrentUser();
+        
+        // Make sure userData has an avatar property (using imgUrl as fallback)
+        const userWithAvatar  = {
+          ...userData,
+          avatar: userData.avatar || userData.imgUrl || ''
+        };
+        
+        setUser(userWithAvatar as any);
+      } catch (error:any) {
+        console.error("Error fetching user profile:", error);
+        toast.error("Failed to load profile. Please try again.");
+        
+        // If unauthorized, redirect to login
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          router.push("/login");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, [router]);
 
   return (
     <nav className="fixed top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -83,20 +117,10 @@ export default function CustomerNavbar() {
           </nav>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleLogout}
-            className="flex items-center"
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+          {!loading && user && <UserInfo user={user as any} />}
+          <ModeToggle />
         </div>
-
-
-        <ModeToggle/>
       </div>
     </nav>
   );
-} 
+}

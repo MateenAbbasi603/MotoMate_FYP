@@ -1,7 +1,5 @@
-﻿// Controllers/AuthController.cs
-using fyp_motomate.Models;
+﻿using fyp_motomate.Models;
 using fyp_motomate.Models.DTOs;
-using fyp_motomate.Models;
 using fyp_motomate.Repositories;
 using fyp_motomate.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -128,7 +126,6 @@ namespace fyp_motomate.Controllers
                     Phone = user.Phone,
                     Address = user.Address,
                     imgUrl = user.imgUrl ?? "" // Include imgUrl with null check
-
                 }
             });
         }
@@ -158,60 +155,134 @@ namespace fyp_motomate.Controllers
 
         [HttpPut("update")]
         [Authorize]
-        public async Task<IActionResult> UpdateProfile(UpdateProfileDto updateProfileDto)
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto updateProfileDto)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            // Get user ID from claims
+            if (!int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out int userId))
+            {
+                return Unauthorized(new { message = "Invalid user credentials" });
+            }
+            
             var user = await _userRepository.GetByIdAsync(userId);
-
+            
             if (user == null)
                 return NotFound(new { message = "User not found" });
-
-            // Check if email is being changed and if it's already taken
-            if (!string.IsNullOrEmpty(updateProfileDto.Email) &&
-                updateProfileDto.Email != user.Email &&
-                await _userRepository.EmailExistsAsync(updateProfileDto.Email))
+            
+            bool anyChanges = false;
+            
+            // Check and update email
+            if (updateProfileDto.Email != null)
             {
-                return BadRequest(new { message = "Email already exists" });
+                // Only validate if email is being changed
+                if (updateProfileDto.Email != user.Email)
+                {
+                    // Email validation
+                    if (string.IsNullOrWhiteSpace(updateProfileDto.Email))
+                    {
+                        return BadRequest(new { message = "Email cannot be empty" });
+                    }
+
+                    // Check if new email is already taken
+                    if (await _userRepository.EmailExistsAsync(updateProfileDto.Email))
+                    {
+                        return BadRequest(new { message = "Email already exists" });
+                    }
+                    
+                    user.Email = updateProfileDto.Email;
+                    anyChanges = true;
+                }
             }
-
-            // Update user properties if provided
-            if (!string.IsNullOrEmpty(updateProfileDto.Email))
-                user.Email = updateProfileDto.Email;
-
-            if (!string.IsNullOrEmpty(updateProfileDto.Name))
-                user.Name = updateProfileDto.Name;
-
-            if (!string.IsNullOrEmpty(updateProfileDto.Phone))
-                user.Phone = updateProfileDto.Phone;
-
-            if (updateProfileDto.Address != null) // Allow clearing address by setting to empty string
-                user.Address = updateProfileDto.Address;
-
+            
+            // Update name if provided
+            if (updateProfileDto.Name != null)
+            {
+                if (updateProfileDto.Name != user.Name)
+                {
+                    // Name validation
+                    if (string.IsNullOrWhiteSpace(updateProfileDto.Name))
+                    {
+                        return BadRequest(new { message = "Name cannot be empty" });
+                    }
+                    
+                    user.Name = updateProfileDto.Name;
+                    anyChanges = true;
+                }
+            }
+            
+            // Update phone if provided (allow empty string)
+            if (updateProfileDto.Phone != null)
+            {
+                if (updateProfileDto.Phone != user.Phone)
+                {
+                    user.Phone = updateProfileDto.Phone;
+                    anyChanges = true;
+                }
+            }
+            
+            // Update address if provided (allow empty string)
+            if (updateProfileDto.Address != null)
+            {
+                if (updateProfileDto.Address != user.Address)
+                {
+                    user.Address = updateProfileDto.Address;
+                    anyChanges = true;
+                }
+            }
+            
+            // Update imgUrl if provided (allow empty string)
+            if (updateProfileDto.imgUrl != null)
+            {
+                if (updateProfileDto.imgUrl != user.imgUrl)
+                {
+                    user.imgUrl = updateProfileDto.imgUrl;
+                    anyChanges = true;
+                }
+            }
+            
+            // Only update if there are changes
+            if (!anyChanges)
+            {
+                return Ok(new
+                {
+                    success = true,
+                    message = "No changes detected",
+                    user = MapToUserDto(user)
+                });
+            }
+            
+            // Update the timestamp
             user.UpdatedAt = DateTime.UtcNow;
-
+            
+            // Save changes
             var result = await _userRepository.UpdateUserAsync(user);
-
+            
             if (!result)
                 return BadRequest(new { message = "Failed to update profile" });
-
+            
             return Ok(new
             {
                 success = true,
                 message = "Profile updated successfully",
-                user = new UserDto
-                {
-                    UserId = user.UserId,
-                    Username = user.Username,
-                    Email = user.Email,
-                    Role = user.Role,
-                    Name = user.Name,
-                    Phone = user.Phone,
-                    Address = user.Address,
-                    imgUrl = user.imgUrl ?? "" // Include imgUrl with null check
-                }
+                user = MapToUserDto(user)
             });
         }
-
+        
+        // Helper method to map User to UserDto
+        private UserDto MapToUserDto(User user)
+        {
+            return new UserDto
+            {
+                UserId = user.UserId,
+                Username = user.Username,
+                Email = user.Email,
+                Role = user.Role,
+                Name = user.Name,
+                Phone = user.Phone ?? "",
+                Address = user.Address ?? "",
+                imgUrl = user.imgUrl ?? "" // Include imgUrl with null check
+            };
+        }
+       
         [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword(ResetPasswordDto resetPasswordDto)
         {

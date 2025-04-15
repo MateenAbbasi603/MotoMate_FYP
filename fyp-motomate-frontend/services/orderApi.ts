@@ -29,6 +29,7 @@ export interface User {
   name: string;
   phone: string | null;
   address: string | null;
+  imgUrl: string | null;
 }
 
 export interface Vehicle {

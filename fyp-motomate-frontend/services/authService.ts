@@ -12,6 +12,7 @@ export interface User {
   name: string;
   phone: string | null;
   address: string | null;
+  imgUrl: string | null;
 }
 
 // Profile update type
@@ -20,6 +21,7 @@ export interface UpdateProfileData {
   email?: string;
   phone?: string;
   address?: string;
+  imgUrl?: string;
 }
 
 // Password change type
@@ -78,6 +80,8 @@ const authService = {
   // Get current user profile
   getCurrentUser: async (): Promise<User> => {
     const response = await apiClient.get('/api/auth/me');
+    console.log(response.data);
+    
     return response.data;
   },
 
