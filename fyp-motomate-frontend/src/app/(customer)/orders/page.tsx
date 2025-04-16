@@ -23,7 +23,6 @@ import {
   Plus,
   Car,
   Wrench,
-  Loader2,
   FileText,
   AlertTriangle,
 } from 'lucide-react';
@@ -142,7 +141,11 @@ export default function OrdersPage() {
         // Enrich each order with vehicle and service details
         const enrichedOrders: EnrichedOrderData[] = await Promise.all(
           basicOrders.map(async (order) => {
-            let enrichedOrder: any = { ...order } ;
+            const enrichedOrder: any = { ...order } ;
+            console.log('Enriching order:', order.orderId );
+            console.log(enrichedOrder);
+            
+            
 
             try {
               // Try to fetch combined details first (more efficient)
@@ -190,6 +193,7 @@ export default function OrdersPage() {
     try {
       return format(new Date(dateString), 'MMM dd, yyyy');
     } catch (e) {
+      console.error('Error formatting date:', e);
       return 'Invalid date';
     }
   };
@@ -300,7 +304,7 @@ export default function OrdersPage() {
               <CardHeader>
                 <CardTitle>No Orders Found</CardTitle>
                 <CardDescription>
-                  You haven't placed any orders yet.
+                  You havent placed any orders yet.
                 </CardDescription>
               </CardHeader>
               <CardContent>

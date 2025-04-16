@@ -92,6 +92,10 @@ export default function AddVehicleForm() {
           }
         }
       );
+      if (response.status !== 201) {
+        throw new Error("Failed to add vehicle");
+      }
+      // Show success message and redirect
 
       toast.success("Vehicle added successfully!");
       router.push("/vehicles");
@@ -203,7 +207,7 @@ export default function AddVehicleForm() {
                       <Input placeholder="ABC-123" {...field} />
                     </FormControl>
                     <FormDescription>
-                      Your vehicle's license plate number
+                      Your vehicle license plate number
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

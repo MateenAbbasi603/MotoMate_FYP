@@ -2,8 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { ChevronDown, Car, Phone, Star, Calendar, Clock, MessageSquare, ArrowRight, Wrench, CheckCircle, LogIn } from 'lucide-react';
+import { ChevronDown, Car, Phone, Star, Calendar, Clock, MessageSquare, ArrowRight, Wrench, LogIn } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -335,7 +334,7 @@ const LandingPage: React.FC = () => {
                                 automotive service management.
                             </p>
                             <p className="text-lg text-gray-600">
-                                We're committed to continuously improving our platform based on user feedback and industry trends,
+                                We are committed to continuously improving our platform based on user feedback and industry trends,
                                 ensuring that MotoMate remains at the cutting edge of automotive service technology.
                             </p>
 
@@ -419,7 +418,7 @@ const LandingPage: React.FC = () => {
                                                 />
                                             ))}
                                         </div>
-                                        <p className="text-gray-700 text-lg italic mb-6">"{testimonial.comment}"</p>
+                                        <p className="text-gray-700 text-lg italic mb-6">&quot;{testimonial.comment}&quot;</p>
                                         <div className="flex items-center">
                                             <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-red-700 font-bold text-xl mr-4">
                                                 {testimonial.name.charAt(0)}
@@ -503,7 +502,7 @@ const LandingPage: React.FC = () => {
                             <h2 className="text-4xl font-bold mb-6 text-red-800">Get In Touch</h2>
                             <p className="text-lg text-gray-600 mb-8">
                                 Have questions about MotoMate or want to schedule a demo?
-                                Reach out to our team and we'll get back to you as soon as possible.
+                                Reach out to our team and we will get back to you as soon as possible.
                             </p>
 
                             <div className="space-y-6">

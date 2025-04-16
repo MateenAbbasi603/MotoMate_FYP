@@ -10,7 +10,6 @@ import {
   Calendar, 
   Car, 
   ClipboardCheck,
-  Info,
   ArrowLeft,
   Loader2 
 } from "lucide-react";
@@ -32,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Card, 
@@ -154,6 +152,9 @@ export default function InspectionRequestForm() {
         scheduledDate: values.scheduledDate.toISOString(),
         notes: values.notes || "",
       };
+
+      console.log("Request data:", requestData);
+      // If adding a service, include in request data
 
       // If adding a service, include in order creation
       if (values.addService && values.serviceId) {
@@ -312,7 +313,7 @@ export default function InspectionRequestForm() {
                     />
                   </FormControl>
                   <FormDescription>
-                    Any specific issues you'd like us to check?
+                    Any specific issues you would like us to check?
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

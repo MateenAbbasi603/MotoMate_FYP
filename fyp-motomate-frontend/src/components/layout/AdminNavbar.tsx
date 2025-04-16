@@ -11,7 +11,6 @@ import {
   Settings,
   DollarSign,
   ClipboardList,
-  LogOut,
   Calendar,
   MessageSquare,
   Car,
@@ -21,7 +20,6 @@ import {
   Receipt,
   File,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { ModeToggle } from '../ModeToggle';
 import { UserInfo } from '../User/UserInfo';
 import authService from '../../../services/authService';

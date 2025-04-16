@@ -221,7 +221,7 @@ export default function ServiceList() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete the service "{service.serviceName}". 
+                  This will permanently delete the service &quot;{service.serviceName}&quot;. 
                   This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>

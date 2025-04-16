@@ -1,8 +1,4 @@
-import { LoginForm } from "@/components/Auth/login-form";
 import { SignupForm } from "@/components/Auth/signup-form";
-import { buttonVariants } from "@/components/ui/button";
-import Image from "next/image";
-import Link from "next/link";
 
 export default function Login() {
   return (

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, use } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -27,8 +27,6 @@ import {
   Phone,
   UserCheck,
   Loader2,
-  Check,
-  X
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -49,7 +47,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import axios from 'axios';
@@ -158,24 +155,25 @@ const conditionOptions = [
   { value: 'Not Inspected', label: 'Not Inspected' },
 ];
 
-interface PageProps {
-  params: {
+type PageProps = {
+  params: Promise<{
     id: string;
-  };
-}
+  }>;
+};
 
 export default function MechanicAppointmentDetail({ 
   params 
 }: PageProps) {
   const router = useRouter();
-  const id = params.id;
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
+  
   
   const [appointment, setAppointment] = useState<AppointmentData | null>(null);
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   
   const [reportFormData, setReportFormData] = useState<InspectionReportFormData>({
@@ -264,6 +262,8 @@ console.log(appointmentResponse.data.orderId);
     try {
       return format(new Date(dateString), 'MMMM dd, yyyy');
     } catch (e) {
+      console.error('Error formatting date:', e);
+      // Fallback to a default format or message
       return 'Invalid date';
     }
   };
@@ -294,47 +294,6 @@ console.log(appointmentResponse.data.orderId);
     }));
   };
 
-  // Handle update appointment status
-  const handleUpdateStatus = async (newStatus: string) => {
-    try {
-      setIsUpdatingStatus(true);
-      
-      const token = localStorage.getItem('token');
-      if (!token) {
-        toast.error('Authentication token not found. Please log in again.');
-        return;
-      }
-
-      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-      
-      await axios.put(
-        `${API_URL}/api/Appointments/${id}`,
-        {
-          status: newStatus
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-
-      // Update local state
-      if (appointment) {
-        setAppointment({
-          ...appointment,
-          status: newStatus
-        });
-      }
-
-      toast.success(`Appointment status updated to ${newStatus}`);
-    } catch (err: any) {
-      console.error('Failed to update appointment status:', err);
-      toast.error(err.response?.data?.message || 'Failed to update status. Please try again.');
-    } finally {
-      setIsUpdatingStatus(false);
-    }
-  };
 
   // Handle submit inspection report
   const handleSubmitReport = async () => {

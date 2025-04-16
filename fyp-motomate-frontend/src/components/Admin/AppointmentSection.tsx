@@ -1,3 +1,4 @@
+import { Calendar, Clock, Loader2, UserCheck, Wrench } from "lucide-react";
 import { Button } from "react-day-picker";
 
 
@@ -16,9 +17,9 @@ export const AppointmentSection = ({ appointment, loadingAppointment }:any) => {
         <div className="p-4 bg-muted/50 rounded-md">
           <p className="text-muted-foreground">No mechanic has been assigned to this order yet.</p>
           <Button 
-            onClick={() => setIsAppointmentDialogOpen(true)} 
+            // onClick={() => setIsAppointmentDialogOpen(true)} 
             className="mt-3"
-            variant="outline"
+       
           >
             <Wrench className="mr-2 h-4 w-4" />
             Assign Mechanic
@@ -34,7 +35,7 @@ export const AppointmentSection = ({ appointment, loadingAppointment }:any) => {
             <Calendar className="h-5 w-5 text-blue-600 mr-2" />
             <div>
               <p className="text-sm text-blue-600">Appointment Date</p>
-              <p className="font-medium">{formatDate(appointment.appointmentDate)}</p>
+              {/* <p className="font-medium">{formatDate(appointment.appointmentDate)}</p> */}
             </div>
           </div>
           <div className="flex items-center">
@@ -44,7 +45,7 @@ export const AppointmentSection = ({ appointment, loadingAppointment }:any) => {
               <p className="font-medium">{appointment.timeSlot}</p>
             </div>
           </div>
-          <StatusBadge status={appointment.status} />
+          {/* <StatusBadge status={appointment.status} /> */}
         </div>
         
         <div className="bg-muted/50 p-4 rounded-md">

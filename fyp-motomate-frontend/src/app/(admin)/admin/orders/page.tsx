@@ -50,7 +50,6 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import apiClient from '../../../../../services/apiClient';
 import orderApi from '../../../../../services/orderApi';
 
 // Define TypeScript interfaces for our data
@@ -160,6 +159,8 @@ export default function OrdersPage() {
             try {
               const [userId, vehicleId, serviceId] = detailQuery.split('&').map(param => {
                 const [key, value] = param.split('=');
+                console.log(key);
+                
                 return parseInt(value);
               });
 
@@ -236,6 +237,7 @@ export default function OrdersPage() {
         throw new Error('Invalid data format received');
       }
     } catch (err) {
+      console.error('Failed to refresh orders:', err);
       toast.error('Failed to refresh orders');
       setError('Failed to refresh orders. Please try again.');
     } finally {

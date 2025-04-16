@@ -122,7 +122,7 @@ export default function VehiclesList() {
         <CardHeader>
           <CardTitle>No Vehicles Found</CardTitle>
           <CardDescription>
-            You haven't added any vehicles yet.
+            You have not added any vehicles yet.
           </CardDescription>
         </CardHeader>
         <CardContent>

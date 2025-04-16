@@ -93,14 +93,6 @@ interface Service {
   description: string;
 }
 
-// All possible time slots
-const ALL_TIME_SLOTS = [
-  "09:00 AM - 11:00 AM",
-  "11:00 AM - 01:00 PM",
-  "01:00 PM - 03:00 PM",
-  "03:00 PM - 05:00 PM",
-  "05:00 PM - 07:00 PM"
-];
 
 // Form schema for order with mandatory inspection
 const orderFormSchema = z.object({
@@ -470,12 +462,6 @@ useEffect(() => {
     return timeSlotInfos.filter(slot => slot.availableSlots > 0);
   };
 
-  // Helper to get badge color based on availability
-  const getAvailabilityBadgeColor = (availableSlots: number, totalSlots: number) => {
-    if (availableSlots === 0) return "bg-red-500";
-    if (availableSlots === 1) return "bg-yellow-500";
-    return "bg-green-500";
-  };
 
   if (loading) {
     return (

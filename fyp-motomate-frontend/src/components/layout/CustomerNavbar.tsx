@@ -8,11 +8,9 @@ import {
   LayoutDashboard,
   Car,
   Wrench,
-  LogOut,
   ShoppingCart,
   UserIcon,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { ModeToggle } from '../ModeToggle';
 import { UserInfo } from '../User/UserInfo';
 import { User } from '../../../services/orderApi';

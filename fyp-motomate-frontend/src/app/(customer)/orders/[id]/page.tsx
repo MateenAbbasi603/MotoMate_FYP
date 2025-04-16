@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
   Card,
   CardContent,
@@ -33,12 +32,6 @@ import {
 import { format } from 'date-fns';
 import apiClient from '../../../../../services/apiClient';
 
-interface OrderDetailProps {
-  params: {
-    id: string;
-  };
-}
-
 interface OrderData {
   orderId: number;
   userId: number;
@@ -56,12 +49,23 @@ interface OrderData {
   additionalServices?: any[];
 }
 
-export default function OrderDetailPage({ params }: OrderDetailProps) {
+type PageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+export default function OrderDetailPage({ 
+  params 
+}: PageProps) {
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
+  const router = useRouter();
+
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
-  const { id } = params;
+
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
@@ -95,6 +99,7 @@ export default function OrderDetailPage({ params }: OrderDetailProps) {
     try {
       return format(new Date(dateString), 'MMMM dd, yyyy');
     } catch (e) {
+      console.error('Error formatting date:', e);
       return 'Invalid date';
     }
   };

@@ -135,6 +135,10 @@ export default function ProfileForm({ user, setUser }: ProfileFormProps) {
 
       // Call the API to update profile
       const response = await authService.updateProfile(updateData);
+
+      if (response.status !== 200) {
+        throw new Error("Failed to update profile");
+      }
       
       // Update the user state with new values
       setUser(prev => prev ? {...prev, ...updateData} : null);

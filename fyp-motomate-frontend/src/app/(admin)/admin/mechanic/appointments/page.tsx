@@ -18,10 +18,8 @@ import {
   Clock,
   Car,
   User,
-  FileText,
   ClipboardCheck,
   ChevronRight,
-  Loader2,
   AlertTriangle
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +27,6 @@ import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import axios from 'axios';
-import { toast } from 'sonner';
 
 interface AppointmentData {
   appointmentId: number;
@@ -117,6 +114,7 @@ export default function MechanicDashboard() {
     try {
       return format(new Date(dateString), 'MMMM dd, yyyy');
     } catch (e) {
+      console.error('Error formatting date:', e);
       return 'Invalid date';
     }
   };
@@ -279,7 +277,7 @@ export default function MechanicDashboard() {
               <Calendar className="h-10 w-10 text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-1">No upcoming appointments</h3>
               <p className="text-muted-foreground text-center max-w-md">
-                You don't have any upcoming appointments scheduled at the moment.
+                You dont have any upcoming appointments scheduled at the moment.
               </p>
             </div>
           )}
@@ -379,7 +377,7 @@ export default function MechanicDashboard() {
               <ClipboardCheck className="h-10 w-10 text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-1">No completed appointments</h3>
               <p className="text-muted-foreground text-center max-w-md">
-                You don't have any completed appointments yet.
+                You dont have any completed appointments yet.
               </p>
             </div>
           )}
@@ -479,7 +477,7 @@ export default function MechanicDashboard() {
               <Calendar className="h-10 w-10 text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-1">No appointments found</h3>
               <p className="text-muted-foreground text-center max-w-md">
-                You don't have any appointments assigned to you yet.
+                You dont have any appointments assigned to you yet.
               </p>
             </div>
           )}

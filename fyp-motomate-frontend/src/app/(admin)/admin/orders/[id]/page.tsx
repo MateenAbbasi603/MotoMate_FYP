@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -62,7 +62,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -122,12 +121,6 @@ interface OrderData {
   additionalServices?: ServiceData[] | { $values?: ServiceData[] };
 }
 
-interface OrderDetailPageProps {
-  params: {
-    id: string;
-  };
-}
-
 // Status badge component
 const StatusBadge = ({ status }: { status: string }) => {
   const getStatusStyles = (status: string) => {
@@ -153,8 +146,20 @@ const StatusBadge = ({ status }: { status: string }) => {
     </Badge>
   );
 };
+type PageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
-export default function OrderDetailPage({ params }: OrderDetailPageProps) {
+export default function OrderDetailPage({ 
+  params 
+}: PageProps) {
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
+  const router = useRouter();
+
+  
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -167,8 +172,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const [appointment, setAppointment] = useState(null);
   const [loadingAppointment, setLoadingAppointment] = useState(false);
 
-  const router = useRouter();
-  const { id } = params;
+
 
 
   // console.log(order,"order");
@@ -437,6 +441,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
     try {
       return format(new Date(dateString), 'MMMM dd, yyyy');
     } catch (e) {
+      console.error('Error formatting date:', e);
       return 'Invalid date';
     }
   };
@@ -446,6 +451,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
     try {
       return format(new Date(dateString), 'MMMM dd, yyyy h:mm a');
     } catch (e) {
+      console.error('Error formatting date:', e);
       return 'Invalid date';
     }
   };
@@ -459,6 +465,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       setOrder({ ...order, status: newStatus });
       toast.success(`Order status updated to ${newStatus}`);
     } catch (err) {
+      console.error('Failed to update order status:', err);
       toast.error('Failed to update order status');
     }
   };
@@ -557,6 +564,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         // Remove any $id property if present (just to be safe)
         if (addedService.$id) {
           const { $id, ...serviceData } = addedService;
+          console.log($id);
+          
           addedService = serviceData;
         }
 

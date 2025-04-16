@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { 
   Card, 
   CardContent, 
   CardDescription, 
-  CardFooter, 
   CardHeader, 
   CardTitle 
 } from '@/components/ui/card';
@@ -16,14 +15,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  User, 
   Mail, 
   Phone, 
   MapPin, 
   Calendar, 
   ShieldCheck, 
   ArrowLeft, 
-  Edit, 
   Trash, 
   Loader2
 } from 'lucide-react';
@@ -55,14 +52,21 @@ interface UserDetails {
   updatedAt?: string;
 }
 
-interface Props {
-  params: {
-    id: string;
-  };
-}
 
-export default function UserDetailsPage({ params }: Props) {
+
+type PageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+export default function UserDetailPage({ 
+  params 
+}: PageProps) {
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
   const router = useRouter();
+
   const [user, setUser] = useState<UserDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +89,7 @@ export default function UserDetailsPage({ params }: Props) {
     try {
       return format(new Date(dateString), 'PPP');
     } catch (error) {
+      console.error("Error formatting date:", error);
       return 'Invalid date';
     }
   };
@@ -105,7 +110,7 @@ export default function UserDetailsPage({ params }: Props) {
         
         // Fetch user data from the Users API endpoint
         const response = await axios.get(
-          `${API_URL}/api/Users/${params.id}`,
+          `${API_URL}/api/Users/${id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`
@@ -128,7 +133,7 @@ export default function UserDetailsPage({ params }: Props) {
     };
 
     fetchUserDetails();
-  }, [params.id, router]);
+  }, [id, router]);
 
   const handleDeleteUser = async () => {
     try {
@@ -143,7 +148,7 @@ export default function UserDetailsPage({ params }: Props) {
       const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
       
       await axios.delete(
-        `${API_URL}/api/Users/${params.id}`,
+        `${API_URL}/api/Users/${id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`
