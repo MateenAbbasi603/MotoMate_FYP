@@ -169,5 +169,55 @@ namespace fyp_motomate.Controllers
 
             return Ok(mechanics);
         }
+
+        // DELETE: api/Users/5
+        [HttpDelete("{id}")]
+        // [Authorize(Roles = "super_admin,admin")]
+        public async Task<IActionResult> DeleteUser(int id)
+        {
+            try
+            {
+                // First, check if the user exists
+                var user = await _context.Users.FindAsync(id);
+                if (user == null)
+                {
+                    return NotFound(new { success = false, message = "User not found" });
+                }
+
+                // Check if trying to delete super_admin
+                if (user.Role == "super_admin")
+                {
+                    return BadRequest(new { success = false, message = "Cannot delete super admin account" });
+                }
+
+                // Check if user has associated data that should prevent deletion
+                // 1. Check if mechanic has active appointments
+                if (user.Role == "mechanic")
+                {
+                    var hasActiveAppointments = await _context.Appointments
+                        .AnyAsync(a => a.MechanicId == id && a.Status != "completed" && a.Status != "cancelled");
+                    
+                    if (hasActiveAppointments)
+                    {
+                        return BadRequest(new { 
+                            success = false, 
+                            message = "Cannot delete mechanic with active appointments. Reassign or complete these appointments first." 
+                        });
+                    }
+                }
+
+                // Proceed with deletion
+                _context.Users.Remove(user);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "User deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                // Log the error (in a real app you would use a proper logging system)
+                Console.WriteLine($"Error deleting user: {ex.Message}");
+                return StatusCode(500, new { success = false, message = "An error occurred while deleting the user.", error = ex.Message });
+            }
+        }
     }
 }

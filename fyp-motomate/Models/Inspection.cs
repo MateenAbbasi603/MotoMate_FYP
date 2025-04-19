@@ -16,6 +16,8 @@ namespace fyp_motomate.Models
         public int ServiceId { get; set; }
         
         public int? OrderId { get; set; }
+
+        public int MechanicId {get;set;}
         
         [Required]
         public DateTime ScheduledDate { get; set; }

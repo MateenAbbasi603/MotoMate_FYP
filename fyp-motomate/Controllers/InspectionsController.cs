@@ -381,101 +381,106 @@ namespace fyp_motomate.Controllers
             return Ok(new { message = "Inspection deleted successfully" });
         }
 
-        // POST: api/Inspections/5/report
-        [HttpPost("{id}/report")]
-        [Authorize(Roles = "mechanic,admin,service_agent")]
-        public async Task<IActionResult> SubmitInspectionReport(int id, [FromBody] InspectionReportRequest request)
+// POST: api/Inspections/5/report
+[HttpPost("{id}/report")]
+[Authorize(Roles = "mechanic,admin,service_agent")]
+public async Task<IActionResult> SubmitInspectionReport(int id, [FromBody] InspectionReportRequest request)
+{
+    try
+    {
+        int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+        string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        var inspection = await _context.Inspections
+            .Include(i => i.Order)
+            .FirstOrDefaultAsync(i => i.InspectionId == id);
+
+        if (inspection == null)
         {
-            try
+            return NotFound(new { message = "Inspection not found" });
+        }
+
+        // For mechanics, verify they are assigned to this inspection
+        if (userRole == "mechanic" && inspection.OrderId.HasValue)
+        {
+            var assignment = await _context.Appointments
+                .AnyAsync(a => a.OrderId == inspection.OrderId && a.MechanicId == userId);
+            
+            if (!assignment)
             {
-                int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-                string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-
-                var inspection = await _context.Inspections
-                    .Include(i => i.Order)
-                    .FirstOrDefaultAsync(i => i.InspectionId == id);
-
-                if (inspection == null)
-                {
-                    return NotFound(new { message = "Inspection not found" });
-                }
-
-                // For mechanics, verify they are assigned to this inspection
-                if (userRole == "mechanic" && inspection.OrderId.HasValue)
-                {
-                    var assignment = await _context.Appointments
-                        .AnyAsync(a => a.OrderId == inspection.OrderId && a.MechanicId == userId);
-                    
-                    if (!assignment)
-                    {
-                        return Forbid();
-                    }
-                }
-
-                // Update inspection fields
-                if (!string.IsNullOrEmpty(request.EngineCondition))
-                    inspection.EngineCondition = request.EngineCondition;
-                
-                if (!string.IsNullOrEmpty(request.TransmissionCondition))
-                    inspection.TransmissionCondition = request.TransmissionCondition;
-                
-                if (!string.IsNullOrEmpty(request.BrakeCondition))
-                    inspection.BrakeCondition = request.BrakeCondition;
-                
-                if (!string.IsNullOrEmpty(request.ElectricalCondition))
-                    inspection.ElectricalCondition = request.ElectricalCondition;
-                
-                if (!string.IsNullOrEmpty(request.BodyCondition))
-                    inspection.BodyCondition = request.BodyCondition;
-                
-                if (!string.IsNullOrEmpty(request.TireCondition))
-                    inspection.TireCondition = request.TireCondition;
-                
-                if (!string.IsNullOrEmpty(request.Notes))
-                    inspection.Notes = request.Notes;
-                
-                inspection.Status = "completed";
-                inspection.CompletedAt = DateTime.UtcNow;
-
-                // Update the order status if available
-                if (inspection.Order != null)
-                {
-                    inspection.Order.Status = "in progress";
-                }
-
-                // Update the appointment status if there is one for this order
-                if (inspection.OrderId.HasValue)
-                {
-                    var appointment = await _context.Appointments
-                        .FirstOrDefaultAsync(a => a.OrderId == inspection.OrderId);
-                    
-                    if (appointment != null)
-                    {
-                        appointment.Status = "completed";
-                    }
-                }
-
-                await _context.SaveChangesAsync();
-
-                // Create a notification for the customer
-                var notification = new Notification
-                {
-                    UserId = inspection.UserId,
-                    Message = "Your inspection report is ready",
-                    Status = "unread",
-                    CreatedAt = DateTime.UtcNow
-                };
-                _context.Notifications.Add(notification);
-                await _context.SaveChangesAsync();
-
-                return Ok(new { message = "Inspection report submitted successfully" });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "An error occurred while submitting the inspection report", error = ex.Message });
+                return Forbid();
             }
         }
 
+        // Update inspection fields
+        if (!string.IsNullOrEmpty(request.EngineCondition))
+            inspection.EngineCondition = request.EngineCondition;
+        
+        if (!string.IsNullOrEmpty(request.TransmissionCondition))
+            inspection.TransmissionCondition = request.TransmissionCondition;
+        
+        if (!string.IsNullOrEmpty(request.BrakeCondition))
+            inspection.BrakeCondition = request.BrakeCondition;
+        
+        if (!string.IsNullOrEmpty(request.ElectricalCondition))
+            inspection.ElectricalCondition = request.ElectricalCondition;
+        
+        if (!string.IsNullOrEmpty(request.BodyCondition))
+            inspection.BodyCondition = request.BodyCondition;
+        
+        if (!string.IsNullOrEmpty(request.TireCondition))
+            inspection.TireCondition = request.TireCondition;
+        
+        if (!string.IsNullOrEmpty(request.Notes))
+            inspection.Notes = request.Notes;
+        
+        // Add this line to update the MechanicId in the Inspection table
+        if (request.MechanicId > 0)  // Make sure it's a valid ID
+        {
+            inspection.MechanicId = request.MechanicId;  // You'll need to add this field to your Inspection model
+        }
+        
+        inspection.Status = "completed";
+        inspection.CompletedAt = DateTime.UtcNow;
+
+        // Update the order status if available
+        if (inspection.Order != null)
+        {
+            inspection.Order.Status = "in progress";
+        }
+
+        // Update the appointment status if there is one for this order
+        if (inspection.OrderId.HasValue)
+        {
+            var appointment = await _context.Appointments
+                .FirstOrDefaultAsync(a => a.OrderId == inspection.OrderId);
+            
+            if (appointment != null)
+            {
+                appointment.Status = "completed";
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        // Create a notification for the customer
+        var notification = new Notification
+        {
+            UserId = inspection.UserId,
+            Message = "Your inspection report is ready",
+            Status = "unread",
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Notifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Inspection report submitted successfully" });
+    }
+    catch (Exception ex)
+    {
+        return StatusCode(500, new { message = "An error occurred while submitting the inspection report", error = ex.Message });
+    }
+}
         // POST: api/Inspections/5/convert-to-order
         [HttpPost("{id}/convert-to-order")]
         [Authorize(Roles = "super_admin,admin,service_agent")]
@@ -555,6 +560,8 @@ namespace fyp_motomate.Controllers
     {
         public int UserId { get; set; }
         public int VehicleId { get; set; }
+
+
         public DateTime ScheduledDate { get; set; }
         public string TimeSlot { get; set; }
         public string Notes { get; set; }
@@ -581,6 +588,8 @@ namespace fyp_motomate.Controllers
         public string BodyCondition { get; set; }
         public string TireCondition { get; set; }
         public string Notes { get; set; }
+            public int MechanicId { get; set; } // Add this property
+
     }
 
     public class OrderConversionRequest

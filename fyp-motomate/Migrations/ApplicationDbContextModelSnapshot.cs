@@ -115,6 +115,9 @@ namespace fyp_motomate.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int>("MechanicId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Notes")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -576,7 +579,7 @@ namespace fyp_motomate.Migrations
                             CreatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "superadmin@example.com",
                             Name = "Super Admin",
-                            Password = "$2a$11$ovAj7kOeMBoNCX.jHca1iuw7JMVv829Y4z1/XyVSYSs7OYKK4D1Ya",
+                            Password = "$2a$11$QHYRuOWFb6h5JAvISvTy1eSwNaCfpcxXTvI5nQZCiIx/OPmT4zHcK",
                             Phone = "+1234567890",
                             Role = "super_admin",
                             UpdatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),

@@ -16,7 +16,7 @@ namespace fyp_motomate.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize]
+    // [Authorize]
     public class AppointmentsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -395,141 +395,150 @@ namespace fyp_motomate.Controllers
                 return StatusCode(500, new { message = "An error occurred while creating the appointment", error = ex.Message });
             }
         }
-        // PUT: api/Appointments/5
-        [HttpPut("{id}")]
-        [Authorize(Roles = "super_admin,admin,service_agent,mechanic")]
-        public async Task<IActionResult> UpdateAppointment(int id, [FromBody] AppointmentUpdateRequest request)
+    
+    // PUT: api/Appointments/5
+[HttpPut("{id}")]
+[Authorize(Roles = "super_admin,admin,service_agent,mechanic")]
+public async Task<IActionResult> UpdateAppointment(int id, [FromBody] AppointmentUpdateRequest request)
+{
+    try
+    {
+        var appointment = await _context.Set<Appointment>().FindAsync(id);
+        if (appointment == null)
         {
-            try
+            return NotFound(new { message = "Appointment not found" });
+        }
+
+        // Check permissions
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+        string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (userIdClaim != null && !string.IsNullOrEmpty(userIdClaim.Value))
+        {
+            if (int.TryParse(userIdClaim.Value, out int userId))
             {
-                var appointment = await _context.Set<Appointment>().FindAsync(id);
-                if (appointment == null)
+                // Mechanics can only update status and notes
+                if (userRole.ToLower() == "mechanic")
                 {
-                    return NotFound(new { message = "Appointment not found" });
-                }
-
-                // Check permissions
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-                string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-
-                if (userIdClaim != null && !string.IsNullOrEmpty(userIdClaim.Value))
-                {
-                    if (int.TryParse(userIdClaim.Value, out int userId))
+                    if (appointment.MechanicId != userId)
                     {
-                        // Mechanics can only update status and notes
-                        if (userRole.ToLower() == "mechanic")
-                        {
-                            if (appointment.MechanicId != userId)
-                            {
-                                return Forbid();
-                            }
-
-                            // Mechanics can only update status and notes
-                            if (request.MechanicId.HasValue || request.AppointmentDate.HasValue || !string.IsNullOrEmpty(request.TimeSlot))
-                            {
-                                return BadRequest(new { message = "Mechanics can only update status and notes" });
-                            }
-                        }
-                    }
-                }
-
-                // If changing mechanic, validate availability
-                if (request.MechanicId.HasValue && request.MechanicId.Value != appointment.MechanicId)
-                {
-                    var date = request.AppointmentDate ?? appointment.AppointmentDate;
-                    var timeSlot = request.TimeSlot ?? appointment.TimeSlot;
-
-                    bool isMechanicAvailable = await _appointmentService.IsMechanicAvailableAsync(
-                        request.MechanicId.Value, date, timeSlot);
-
-                    if (!isMechanicAvailable)
-                    {
-                        return BadRequest(new
-                        {
-                            message = "New mechanic is not available for the selected date and time slot"
-                        });
+                        return Forbid();
                     }
 
-                    appointment.MechanicId = request.MechanicId.Value;
+                    // // Mechanics can only update status and notes
+                    // if ((request.MechanicId.HasValue && request.MechanicId.Value != appointment.MechanicId) || 
+                    //     request.AppointmentDate.HasValue || 
+                    //     !string.IsNullOrEmpty(request.TimeSlot))
+                    // {
+                    //     return BadRequest(new { message = "Mechanics can only update status and notes" });
+                    // }
+                    
+                    // Skip mechanic ID handling for mechanics
+                    goto UpdateStatusAndNotes;
                 }
-
-                // If changing date or time slot, validate mechanic availability
-                if ((request.AppointmentDate.HasValue && request.AppointmentDate.Value != appointment.AppointmentDate) ||
-                    (!string.IsNullOrEmpty(request.TimeSlot) && request.TimeSlot != appointment.TimeSlot))
-                {
-                    var mechanicId = appointment.MechanicId;
-                    var date = request.AppointmentDate ?? appointment.AppointmentDate;
-                    var timeSlot = request.TimeSlot ?? appointment.TimeSlot;
-
-                    bool isMechanicAvailable = await _appointmentService.IsMechanicAvailableAsync(
-                        mechanicId, date, timeSlot);
-
-                    if (!isMechanicAvailable)
-                    {
-                        return BadRequest(new
-                        {
-                            message = "Mechanic is not available for the new date and time slot"
-                        });
-                    }
-
-                    if (request.AppointmentDate.HasValue)
-                    {
-                        appointment.AppointmentDate = request.AppointmentDate.Value;
-                    }
-
-                    if (!string.IsNullOrEmpty(request.TimeSlot))
-                    {
-                        appointment.TimeSlot = request.TimeSlot;
-                    }
-                }
-
-                // Update status if provided
-                if (!string.IsNullOrEmpty(request.Status))
-                {
-                    appointment.Status = request.Status;
-
-                    // If status is completed, update order status
-                    if (request.Status.ToLower() == "completed")
-                    {
-                        var order = await _context.Orders.FindAsync(appointment.OrderId);
-                        if (order != null)
-                        {
-                            order.Status = "completed";
-
-                            // Create notification for customer
-                            var notification = new Notification
-                            {
-                                UserId = appointment.UserId,
-                                Message = $"Your service has been completed by the mechanic",
-                                Status = "unread",
-                                CreatedAt = DateTime.UtcNow
-                            };
-
-                            _context.Notifications.Add(notification);
-                        }
-                    }
-                }
-
-                // Update notes if provided
-                if (!string.IsNullOrEmpty(request.Notes))
-                {
-                    appointment.Notes = request.Notes;
-                }
-
-                await _context.SaveChangesAsync();
-
-                return Ok(new
-                {
-                    message = "Appointment updated successfully",
-                    appointmentId = appointment.AppointmentId
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating appointment {AppointmentId}", id);
-                return StatusCode(500, new { message = "An error occurred while updating the appointment", error = ex.Message });
             }
         }
+
+        // If changing mechanic, validate availability
+        if (request.MechanicId.HasValue && request.MechanicId.Value != appointment.MechanicId)
+        {
+            var date = request.AppointmentDate ?? appointment.AppointmentDate;
+            var timeSlot = request.TimeSlot ?? appointment.TimeSlot;
+
+            bool isMechanicAvailable = await _appointmentService.IsMechanicAvailableAsync(
+                request.MechanicId.Value, date, timeSlot);
+
+            if (!isMechanicAvailable)
+            {
+                return BadRequest(new
+                {
+                    message = "New mechanic is not available for the selected date and time slot"
+                });
+            }
+
+            appointment.MechanicId = request.MechanicId.Value;
+        }
+
+        // If changing date or time slot, validate mechanic availability
+        if ((request.AppointmentDate.HasValue && request.AppointmentDate.Value != appointment.AppointmentDate) ||
+            (!string.IsNullOrEmpty(request.TimeSlot) && request.TimeSlot != appointment.TimeSlot))
+        {
+            var mechanicId = appointment.MechanicId;
+            var date = request.AppointmentDate ?? appointment.AppointmentDate;
+            var timeSlot = request.TimeSlot ?? appointment.TimeSlot;
+
+            bool isMechanicAvailable = await _appointmentService.IsMechanicAvailableAsync(
+                mechanicId, date, timeSlot);
+
+            if (!isMechanicAvailable)
+            {
+                return BadRequest(new
+                {
+                    message = "Mechanic is not available for the new date and time slot"
+                });
+            }
+
+            if (request.AppointmentDate.HasValue)
+            {
+                appointment.AppointmentDate = request.AppointmentDate.Value;
+            }
+
+            if (!string.IsNullOrEmpty(request.TimeSlot))
+            {
+                appointment.TimeSlot = request.TimeSlot;
+            }
+        }
+
+    UpdateStatusAndNotes:
+        // Update status if provided
+        if (!string.IsNullOrEmpty(request.Status))
+        {
+            appointment.Status = request.Status;
+
+            // If status is completed, update order status
+            if (request.Status.ToLower() == "completed")
+            {
+                var order = await _context.Orders.FindAsync(appointment.OrderId);
+                if (order != null)
+                {
+                    order.Status = "completed";
+
+                    // Create notification for customer
+                    var notification = new Notification
+                    {
+                        UserId = appointment.UserId,
+                        Message = $"Your service has been completed by the mechanic",
+                        Status = "unread",
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.Notifications.Add(notification);
+                }
+            }
+        }
+
+        // Update notes if provided
+        if (!string.IsNullOrEmpty(request.Notes))
+        {
+            appointment.Notes = request.Notes;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Appointment updated successfully",
+            appointmentId = appointment.AppointmentId
+        });
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error updating appointment {AppointmentId}", id);
+        return StatusCode(500, new { message = "An error occurred while updating the appointment", error = ex.Message });
+    }
+}
+
+
 
         // DELETE: api/Appointments/5
         [HttpDelete("{id}")]

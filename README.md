@@ -33,3 +33,8 @@
  ALTER TABLE [motomateDb].[dbo].[Users]
 ADD [imgurl] VARCHAR(255) NULL; -- or NVARCHAR(255) if you need Unicode support
  ```
+
+ ```sql
+ALTER TABLE [dbo].[Inspections]
+ADD MechanicId INT;
+ ```

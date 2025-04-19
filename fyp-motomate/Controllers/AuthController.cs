@@ -355,7 +355,8 @@ namespace fyp_motomate.Controllers
                 Phone = createStaffDto.Phone,
                 Address = createStaffDto.Address,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
+                imgUrl = $"https://ui-avatars.com/api/?name={createStaffDto.Name}&background=random"
             };
 
             // Register the user

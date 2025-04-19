@@ -32,9 +32,9 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { 
-  Dialog, 
-  DialogContent, 
+import {
+  Dialog,
+  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -51,6 +51,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import axios from 'axios';
 import { toast } from 'sonner';
+import authService from '../../../../../../../services/authService';
 
 interface AppointmentData {
   appointmentId: number;
@@ -59,6 +60,7 @@ interface AppointmentData {
   timeSlot: string;
   status: string;
   notes: string;
+  mechanicId: string
   user: {
     userId: number;
     name: string;
@@ -144,6 +146,7 @@ interface InspectionReportFormData {
   brakeCondition: string;
   transmissionCondition: string;
   notes: string;
+  mechanicId:number
 }
 
 const conditionOptions = [
@@ -161,21 +164,21 @@ type PageProps = {
   }>;
 };
 
-export default function MechanicAppointmentDetail({ 
-  params 
+export default function MechanicAppointmentDetail({
+  params
 }: PageProps) {
   const router = useRouter();
   const resolvedParams = use(params);
   const id = resolvedParams.id;
-  
-  
+
+
   const [appointment, setAppointment] = useState<AppointmentData | null>(null);
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
-  
+
   const [reportFormData, setReportFormData] = useState<InspectionReportFormData>({
     bodyCondition: '',
     engineCondition: '',
@@ -184,6 +187,7 @@ export default function MechanicAppointmentDetail({
     brakeCondition: '',
     transmissionCondition: '',
     notes: '',
+    mechanicId:0
   });
 
   useEffect(() => {
@@ -191,7 +195,7 @@ export default function MechanicAppointmentDetail({
       try {
         setLoading(true);
         setError(null);
-        
+
         // Get the authentication token from localStorage
         const token = localStorage.getItem('token');
         if (!token) {
@@ -211,11 +215,15 @@ export default function MechanicAppointmentDetail({
             }
           }
         );
-console.log(appointmentResponse.data.orderId);
+        console.log(appointmentResponse.data);
 
         if (appointmentResponse.data) {
+
+
           setAppointment(appointmentResponse.data);
         }
+
+        const user = await authService.getCurrentUser();
 
         // Fetch order details if orderId is available
         if (id) {
@@ -230,7 +238,7 @@ console.log(appointmentResponse.data.orderId);
 
           if (orderResponse.data) {
             setOrder(orderResponse.data);
-            
+
             // Initialize report form data if inspection exists
             if (orderResponse.data.inspection) {
               setReportFormData({
@@ -241,6 +249,7 @@ console.log(appointmentResponse.data.orderId);
                 brakeCondition: orderResponse.data.inspection.brakeCondition || '',
                 transmissionCondition: orderResponse.data.inspection.transmissionCondition || '',
                 notes: orderResponse.data.inspection.notes || '',
+                mechanicId: user.userId // Set mechanic ID from the logged-in user
               });
             }
           }
@@ -295,79 +304,87 @@ console.log(appointmentResponse.data.orderId);
   };
 
 
-  // Handle submit inspection report
-  const handleSubmitReport = async () => {
-    try {
-      setIsSubmittingReport(true);
-      
-      const token = localStorage.getItem('token');
-      if (!token) {
-        toast.error('Authentication token not found. Please log in again.');
-        return;
-      }
+// Handle submit inspection report
+const handleSubmitReport = async () => {
+  try {
+    setIsSubmittingReport(true);
 
-      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-      
-      // Find the inspection ID from the order data
-      const inspectionId = order?.inspection?.inspectionId;
-      
-      if (!inspectionId) {
-        toast.error('Inspection ID not found. Cannot submit report.');
-        return;
-      }
-
-      // Submit the inspection report update
-      await axios.post(
-        `${API_URL}/api/Inspections/${inspectionId}/report`,
-        reportFormData,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-
-      // Update appointment status to completed
-      await axios.put(
-        `${API_URL}/api/Appointments/${id}`,
-        {
-          status: 'completed'
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-
-      // Update local state
-      if (appointment) {
-        setAppointment({
-          ...appointment,
-          status: 'completed'
-        });
-      }
-
-      if (order && order.inspection) {
-        setOrder({
-          ...order,
-          inspection: {
-            ...order.inspection,
-            ...reportFormData,
-            status: 'completed'
-          }
-        });
-      }
-
-      toast.success('Inspection report submitted successfully');
-      setIsReportDialogOpen(false);
-    } catch (err: any) {
-      console.error('Failed to submit inspection report:', err);
-      toast.error(err.response?.data?.message || 'Failed to submit report. Please try again.');
-    } finally {
-      setIsSubmittingReport(false);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error('Authentication token not found. Please log in again.');
+      return;
     }
-  };
+
+    const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+
+    // Find the inspection ID from the order data
+    const inspectionId = order?.inspection?.inspectionId;
+
+    if (!inspectionId) {
+      toast.error('Inspection ID not found. Cannot submit report.');
+      return;
+    }
+
+    console.log(reportFormData,"FORM DATA FOR INSPECTION REPORT ");
+    
+
+    // Submit the inspection report update
+    await axios.post(
+      `${API_URL}/api/Inspections/${inspectionId}/report`,
+      reportFormData,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+
+    // Update appointment status to completed
+    await axios.put(
+      `${API_URL}/api/Appointments/${id}`,
+      {
+        status: 'completed',
+        notes: "Done Job",
+        // Remove the mechanicId field as it's causing issues
+        // Only include these fields if you're actually updating them
+        timeSlot: appointment?.timeSlot,
+        // appointmentDate: appointment?.appointmentDate
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+
+    // Update local state
+    if (appointment) {
+      setAppointment({
+        ...appointment,
+        status: 'completed'
+      });
+    }
+
+    if (order && order.inspection) {
+      setOrder({
+        ...order,
+        inspection: {
+          ...order.inspection,
+          ...reportFormData,
+          status: 'completed'
+        }
+      });
+    }
+
+    toast.success('Inspection report submitted successfully');
+    setIsReportDialogOpen(false);
+  } catch (err: any) {
+    console.error('Failed to submit inspection report:', err);
+    toast.error(err.response?.data?.message || 'Failed to submit report. Please try again.');
+  } finally {
+    setIsSubmittingReport(false);
+  }
+};
 
   return (
     <div className="container mx-auto py-6">
@@ -561,8 +578,8 @@ console.log(appointmentResponse.data.orderId);
                       )}
 
                       {order.inspection.status !== 'completed' && appointment.status !== 'completed' && (
-                        <Button 
-                          className="mt-4" 
+                        <Button
+                          className="mt-4"
                           onClick={() => setIsReportDialogOpen(true)}
                         >
                           <FileText className="mr-2 h-4 w-4" />
@@ -597,13 +614,13 @@ console.log(appointmentResponse.data.orderId);
               </CardContent>
 
               <CardFooter className="flex justify-between border-t pt-6">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => router.push('/mechanic/dashboard')}
                 >
                   Back to Dashboard
                 </Button>
-           
+
               </CardFooter>
             </Card>
           </div>
@@ -724,8 +741,8 @@ console.log(appointmentResponse.data.orderId);
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="bodyCondition">Body Condition</Label>
-                <Select 
-                  value={reportFormData.bodyCondition} 
+                <Select
+                  value={reportFormData.bodyCondition}
                   onValueChange={(value) => handleInputChange('bodyCondition', value)}
                 >
                   <SelectTrigger>
@@ -742,8 +759,8 @@ console.log(appointmentResponse.data.orderId);
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="engineCondition">Engine Condition</Label>
-                <Select 
-                  value={reportFormData.engineCondition} 
+                <Select
+                  value={reportFormData.engineCondition}
                   onValueChange={(value) => handleInputChange('engineCondition', value)}
                 >
                   <SelectTrigger>
@@ -760,8 +777,8 @@ console.log(appointmentResponse.data.orderId);
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="electricalCondition">Electrical Condition</Label>
-                <Select 
-                  value={reportFormData.electricalCondition} 
+                <Select
+                  value={reportFormData.electricalCondition}
                   onValueChange={(value) => handleInputChange('electricalCondition', value)}
                 >
                   <SelectTrigger>
@@ -778,8 +795,8 @@ console.log(appointmentResponse.data.orderId);
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="tireCondition">Tire Condition</Label>
-                <Select 
-                  value={reportFormData.tireCondition} 
+                <Select
+                  value={reportFormData.tireCondition}
                   onValueChange={(value) => handleInputChange('tireCondition', value)}
                 >
                   <SelectTrigger>
@@ -796,8 +813,8 @@ console.log(appointmentResponse.data.orderId);
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="brakeCondition">Brake Condition</Label>
-                <Select 
-                  value={reportFormData.brakeCondition} 
+                <Select
+                  value={reportFormData.brakeCondition}
                   onValueChange={(value) => handleInputChange('brakeCondition', value)}
                 >
                   <SelectTrigger>
@@ -814,8 +831,8 @@ console.log(appointmentResponse.data.orderId);
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="transmissionCondition">Transmission Condition</Label>
-                <Select 
-                  value={reportFormData.transmissionCondition} 
+                <Select
+                  value={reportFormData.transmissionCondition}
                   onValueChange={(value) => handleInputChange('transmissionCondition', value)}
                 >
                   <SelectTrigger>
@@ -833,8 +850,8 @@ console.log(appointmentResponse.data.orderId);
             </div>
             <div className="grid gap-2">
               <Label htmlFor="notes">Inspection Notes</Label>
-              <Textarea 
-                id="notes" 
+              <Textarea
+                id="notes"
                 value={reportFormData.notes}
                 onChange={(e) => handleInputChange('notes', e.target.value)}
                 placeholder="Provide detailed notes about the inspection findings"
@@ -844,7 +861,7 @@ console.log(appointmentResponse.data.orderId);
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsReportDialogOpen(false)}>Cancel</Button>
-            <Button 
+            <Button
               onClick={handleSubmitReport}
               disabled={isSubmittingReport}
             >
