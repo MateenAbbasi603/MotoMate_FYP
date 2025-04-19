@@ -56,7 +56,7 @@ namespace fyp_motomate.Models
         public ICollection<Notification> Notifications { get; set; }
         public ICollection<ServiceHistory> ServiceHistories { get; set; }
         public MechanicsPerformance MechanicPerformance { get; set; }
-                public virtual ICollection<Inspection> Inspections { get; set; }
+        public virtual ICollection<Inspection> Inspections { get; set; }
 
     }
 
@@ -125,68 +125,68 @@ namespace fyp_motomate.Models
     // }
 
     public class Appointment
-{
-    [Key]
-    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int AppointmentId { get; set; }
-    
-    [Required]
-    public int OrderId { get; set; }
-    
-    [Required]
-    public int UserId { get; set; }
-    
-    [Required]
-    public int VehicleId { get; set; }
-    
-    public int? ServiceId { get; set; }
-    
-    [Required]
-    public int MechanicId { get; set; }
-    
-    [Required]
-    public DateTime AppointmentDate { get; set; }
-    
-    [Required]
-    [StringLength(20)]
-    public string TimeSlot { get; set; }
-    
-    [Required]
-    [StringLength(20)]
-    public string Status { get; set; } = "scheduled"; // scheduled, in_progress, completed, cancelled
-    
-    public string Notes { get; set; }
-    
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    
-    // Foreign key relationships
-    [ForeignKey("OrderId")]
-    [JsonIgnore]
-    public virtual Order Order { get; set; }
-    
-    [ForeignKey("UserId")]
-    [JsonIgnore]
-    public virtual User User { get; set; } // Renamed from User to Customer for DbContext compatibility
-    
-    [ForeignKey("VehicleId")]
-    [JsonIgnore]
-    public virtual Vehicle Vehicle { get; set; }
-    
-    [ForeignKey("ServiceId")]
-    [JsonIgnore]
-    public virtual Service Service { get; set; }
-    
-    [ForeignKey("MechanicId")]
-    [JsonIgnore]
-    public virtual User Mechanic { get; set; }
-    
-    // Navigation properties
-    [JsonIgnore]
-    public virtual Invoice Invoice { get; set; } // Added this
-    
-    [JsonIgnore]
-    public virtual ICollection<Review> Reviews { get; set; } = new List<Review>(); // Added this
-}
+    {
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int AppointmentId { get; set; }
+
+        [Required]
+        public int OrderId { get; set; }
+
+        [Required]
+        public int UserId { get; set; }
+
+        [Required]
+        public int VehicleId { get; set; }
+
+        public int? ServiceId { get; set; }
+
+        [Required]
+        public int MechanicId { get; set; }
+
+        [Required]
+        public DateTime AppointmentDate { get; set; }
+
+        [Required]
+        [StringLength(20)]
+        public string TimeSlot { get; set; }
+
+        [Required]
+        [StringLength(20)]
+        public string Status { get; set; } = "scheduled"; // scheduled, in_progress, completed, cancelled
+
+        public string Notes { get; set; }
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        // Foreign key relationships
+        [ForeignKey("OrderId")]
+        [JsonIgnore]
+        public virtual Order Order { get; set; }
+
+        [ForeignKey("UserId")]
+        [JsonIgnore]
+        public virtual User User { get; set; } // Renamed from User to Customer for DbContext compatibility
+
+        [ForeignKey("VehicleId")]
+        [JsonIgnore]
+        public virtual Vehicle Vehicle { get; set; }
+
+        [ForeignKey("ServiceId")]
+        [JsonIgnore]
+        public virtual Service Service { get; set; }
+
+        [ForeignKey("MechanicId")]
+        [JsonIgnore]
+        public virtual User Mechanic { get; set; }
+
+        // Navigation properties
+        [JsonIgnore]
+        public virtual Invoice Invoice { get; set; } // Added this
+
+        [JsonIgnore]
+        public virtual ICollection<Review> Reviews { get; set; } = new List<Review>(); // Added this
+    }
 
     // public class Order
     // {
@@ -247,7 +247,12 @@ namespace fyp_motomate.Models
         [Required]
         [StringLength(20)]
         public string Condition { get; set; }
+
+        public int Price { get; set; }
+
+           public string VendorName { get; set; }
     }
+
 
     public class Review
     {

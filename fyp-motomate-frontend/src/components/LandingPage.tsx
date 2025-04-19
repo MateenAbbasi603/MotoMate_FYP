@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 
 
 interface TestimonialType {
@@ -186,7 +187,7 @@ const LandingPage: React.FC = () => {
                             transition={{ duration: 0.8, delay: 1 }}
                             
                         >
-                            <img src="https://moto-mate.com/wp-content/themes/motomate/images/logo-moto-mate-white2.png" alt="Logo" />
+                            <Image width={500} height={500} src="/logo.png" alt="Logo" className='h-full w-full' />
                         </motion.div>
 
                         {/* Background with parallax effect */}
@@ -221,7 +222,7 @@ const LandingPage: React.FC = () => {
                             transition={{ duration: 0.8, delay: 1 }}
                             className="absolute right-0.5 bottom-10 lg:bottom-10 w-3/4 lg:w-1/3 z-10"
                         >
-                            <img src="https://file.aiquickdraw.com/imgcompressed/img/compressed_e854c39e4aa1f8d41cf38154842fdde6.webp" alt="Luxury Sports Car" className="w-full h-auto" />
+                            <Image width={1000} height={1000} src="/hero.webp" alt="Luxury Sports Car" className="w-full h-auto" />
                         </motion.div>
 
 

@@ -57,6 +57,10 @@ const adminNavItems = [
     title: 'Finance',
     href: '/admin/view-finance',
     icon: DollarSign,
+  },  {
+    title: 'Manage Inventory',
+    href: '/admin/manage-inventory',
+    icon: DollarSign,
   },
 ];
 
@@ -155,6 +159,7 @@ const financeOfficerNavItems = [
     href: '/finance/receipts',
     icon: Receipt,
   },
+  
 ];
 
 // Shared Navbar component that accepts navigation items and title

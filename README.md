@@ -38,5 +38,8 @@ ADD [imgurl] VARCHAR(255) NULL; -- or NVARCHAR(255) if you need Unicode support
 ALTER TABLE [dbo].[Inspections]
 ADD MechanicId INT;
  ```
+ - INVENTORY TO BE DONE TONIGHT
  - Order table should have ordertype field in the table of orders (Walk in, Online)
  - seperate API for walk in customers
+ - Service will be on estimated time
+ - admin button for transfer to order
