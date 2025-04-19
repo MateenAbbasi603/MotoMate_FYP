@@ -1,6 +1,7 @@
 'use client'
 
 
+import { MechanicRatingDialog } from "@/components/MechanicRatingDialog";
 import LogoutButton from "@/components/User/LogoutBtn";
 
 // app/dashboard/page.tsx
@@ -10,7 +11,7 @@ export default function DashboardPage() {
       <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
 
 <LogoutButton/>     
-
+<MechanicRatingDialog />
 
     </div>
   );
