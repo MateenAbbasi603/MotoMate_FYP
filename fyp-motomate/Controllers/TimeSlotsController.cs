@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace fyp_motomate.Controllers
 {
@@ -13,10 +14,13 @@ namespace fyp_motomate.Controllers
     public class TimeSlotsController : ControllerBase
     {
         private readonly ITimeSlotService _timeSlotService;
+        private readonly ILogger<TimeSlotsController> _logger;
 
-        public TimeSlotsController(ITimeSlotService timeSlotService)
+        // Keep only one constructor to avoid the multiple constructor issue
+        public TimeSlotsController(ITimeSlotService timeSlotService, ILogger<TimeSlotsController> logger)
         {
             _timeSlotService = timeSlotService;
+            _logger = logger;
         }
 
         // GET: api/TimeSlots/Available?date=2023-07-15
@@ -25,22 +29,26 @@ namespace fyp_motomate.Controllers
         {
             try
             {
-                // Don't allow past dates
+                // Log the date received for debugging
+                _logger.LogInformation("Received date for time slots: {Date}", date);
+                
+                // Don't allow past dates - Using date part only to avoid time component issues
                 if (date.Date < DateTime.Now.Date)
                 {
                     return BadRequest(new { success = false, message = "Cannot check availability for past dates" });
                 }
 
-                var availableSlots = await _timeSlotService.GetAvailableTimeSlotsAsync(date);
+                var availableSlots = await _timeSlotService.GetAvailableTimeSlotsAsync(date.Date);
 
-                return Ok(new { 
-                    success = true, 
+                return Ok(new {
+                    success = true,
                     date = date.ToString("yyyy-MM-dd"),
                     availableSlots
                 });
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error getting available time slots for date {Date}", date);
                 return StatusCode(500, new { success = false, message = "An error occurred", error = ex.Message });
             }
         }
@@ -51,22 +59,26 @@ namespace fyp_motomate.Controllers
         {
             try
             {
-                // Don't allow past dates
+                // Log the date received for debugging
+                _logger.LogInformation("Received date for time slots info: {Date}", date);
+                
+                // Don't allow past dates - Using date part only to avoid time component issues
                 if (date.Date < DateTime.Now.Date)
                 {
                     return BadRequest(new { success = false, message = "Cannot check availability for past dates" });
                 }
 
-                var timeSlotInfos = await _timeSlotService.GetAvailableTimeSlotsInfoAsync(date);
+                var timeSlotInfos = await _timeSlotService.GetAvailableTimeSlotsInfoAsync(date.Date);
 
-                return Ok(new { 
-                    success = true, 
+                return Ok(new {
+                    success = true,
                     date = date.ToString("yyyy-MM-dd"),
                     timeSlotInfos
                 });
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error getting time slot info for date {Date}", date);
                 return StatusCode(500, new { success = false, message = "An error occurred", error = ex.Message });
             }
         }
@@ -77,17 +89,20 @@ namespace fyp_motomate.Controllers
         {
             try
             {
-                // Don't allow past dates
+                // Log the inputs received for debugging
+                _logger.LogInformation("Checking availability for date {Date}, time slot {TimeSlot}", date, timeSlot);
+                
+                // Don't allow past dates - Using date part only to avoid time component issues
                 if (date.Date < DateTime.Now.Date)
                 {
                     return BadRequest(new { success = false, message = "Cannot check availability for past dates" });
                 }
 
-                var availableCount = await _timeSlotService.GetTimeSlotAvailableCountAsync(date, timeSlot);
+                var availableCount = await _timeSlotService.GetTimeSlotAvailableCountAsync(date.Date, timeSlot);
                 var isAvailable = availableCount > 0;
 
-                return Ok(new { 
-                    success = true, 
+                return Ok(new {
+                    success = true,
                     date = date.ToString("yyyy-MM-dd"),
                     timeSlot,
                     isAvailable,
@@ -97,6 +112,7 @@ namespace fyp_motomate.Controllers
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error checking time slot availability for date {Date} and time slot {TimeSlot}", date, timeSlot);
                 return StatusCode(500, new { success = false, message = "An error occurred", error = ex.Message });
             }
         }

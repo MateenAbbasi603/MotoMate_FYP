@@ -27,6 +27,7 @@ export interface Service {
   category: 'repair' | 'maintenance' | 'inspection';
   price: number;
   description: string;
+  subCategory:string;
 }
 
 // Service creation/update type
@@ -35,6 +36,7 @@ export interface ServiceFormData {
   category: 'repair' | 'maintenance' | 'inspection';
   price: number;
   description: string;
+  subCategory:string | undefined
 }
 
 const serviceApi = {

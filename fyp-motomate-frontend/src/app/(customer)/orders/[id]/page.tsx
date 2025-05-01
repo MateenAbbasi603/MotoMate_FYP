@@ -75,8 +75,11 @@ export default function OrderDetailPage({
 
         const response = await apiClient.get(`/api/orders/${id}`);
         
+                  console.log(response.data);
+
         if (response.data) {
           setOrder(response.data);
+          
         } else {
           setError('Order not found');
         }

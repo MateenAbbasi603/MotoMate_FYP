@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { 
-  Wrench, 
-  Plus, 
-  Pencil, 
-  Trash, 
+import {
+  Wrench,
+  Plus,
+  Pencil,
+  Trash,
   Search,
   FilterX,
   Loader2
@@ -54,7 +54,7 @@ export default function ServiceList() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+
   const router = useRouter();
 
   // Fetch services on component mount
@@ -72,7 +72,7 @@ export default function ServiceList() {
       setLoading(true);
       const data = await serviceApi.getAllServices();
       console.log(data);
-      
+
       setServices(data);
     } catch (error) {
       console.error("Failed to fetch services:", error);
@@ -84,38 +84,38 @@ export default function ServiceList() {
 
   const filterServices = () => {
     let filtered = [...services];
-    
+
     // Apply category filter
     if (categoryFilter !== "all") {
-      filtered = filtered.filter(service => 
+      filtered = filtered.filter(service =>
         service.category.toLowerCase() === categoryFilter.toLowerCase()
       );
     }
-    
+
     // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(service => 
+      filtered = filtered.filter(service =>
         service.serviceName.toLowerCase().includes(query) ||
         service.description.toLowerCase().includes(query)
       );
     }
-    
+
     setFilteredServices(filtered);
   };
 
   const handleDeleteService = async () => {
     if (!serviceToDelete) return;
-    
+
     try {
       setIsDeleting(true);
       await serviceApi.deleteService(serviceToDelete.serviceId);
-      
+
       // Update local state to remove the deleted service
       setServices(services.filter(s => s.serviceId !== serviceToDelete.serviceId));
       toast.success("Service deleted successfully");
     } catch (error: any) {
-      console.error("Error deleting service:", error); 
+      console.error("Error deleting service:", error);
       const errorMessage = error.response?.data?.message || "Failed to delete service";
       toast.error(errorMessage);
     } finally {
@@ -165,9 +165,9 @@ export default function ServiceList() {
           <Wrench className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium">No services found</h3>
           {(searchQuery || categoryFilter !== "all") && (
-            <Button 
-              variant="outline" 
-              className="mt-2" 
+            <Button
+              variant="outline"
+              className="mt-2"
               onClick={resetFilters}
             >
               <FilterX className="h-4 w-4 mr-2" />
@@ -189,6 +189,11 @@ export default function ServiceList() {
           </div>
           <CardDescription>
             Service ID: {service.serviceId}
+            {service.subCategory && (
+              <span className="ml-2 text-sm">
+                | Subcategory: <Badge variant="outline">{service.subCategory}</Badge>
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -198,9 +203,9 @@ export default function ServiceList() {
           <p className="text-xl font-bold">{(service.price)}</p>
         </CardContent>
         <CardFooter className="border-t p-4 bg-muted/50 flex justify-end gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => router.push(`/admin/services/edit/${service.serviceId}`)}
           >
             <Pencil className="h-4 w-4 mr-1" />
@@ -208,8 +213,8 @@ export default function ServiceList() {
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button 
-                variant="destructive" 
+              <Button
+                variant="destructive"
                 size="sm"
                 onClick={() => setServiceToDelete(service)}
               >
@@ -221,13 +226,13 @@ export default function ServiceList() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete the service &quot;{service.serviceName}&quot;. 
+                  This will permanently delete the service &quot;{service.serviceName}&quot;.
                   This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction 
+                <AlertDialogAction
                   onClick={handleDeleteService}
                   disabled={isDeleting}
                   className="bg-red-600 text-white hover:bg-red-700"

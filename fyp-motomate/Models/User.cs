@@ -43,9 +43,9 @@ namespace fyp_motomate.Models
         [StringLength(255)]
         public string Address { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } =DateTime.Now;
 
-        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } =DateTime.Now;
 
         // Navigation properties
         public ICollection<Vehicle> Vehicles { get; set; }
@@ -84,9 +84,9 @@ namespace fyp_motomate.Models
         [StringLength(20)]
         public string LicensePlate { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } =DateTime.Now;
 
-        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } =DateTime.Now;
 
         // Foreign key relationship
         [ForeignKey("UserId")]
@@ -157,7 +157,7 @@ namespace fyp_motomate.Models
 
         public string Notes { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } =DateTime.Now;
 
         // Foreign key relationships
         [ForeignKey("OrderId")]
@@ -204,7 +204,7 @@ namespace fyp_motomate.Models
     //     public int ServiceId { get; set; }
 
     //     [Required]
-    //     public DateTime OrderDate { get; set; } = DateTime.UtcNow;
+    //     public DateTime OrderDate { get; set; } =DateTime.Now;
 
     //     [Required]
     //     [StringLength(20)]
@@ -272,7 +272,7 @@ namespace fyp_motomate.Models
 
         public string Comments { get; set; }
 
-        public DateTime ReviewDate { get; set; } = DateTime.UtcNow;
+        public DateTime ReviewDate { get; set; } =DateTime.Now;
 
         // Foreign key relationships
         [ForeignKey("AppointmentId")]
@@ -298,7 +298,7 @@ namespace fyp_motomate.Models
         [StringLength(20)]
         public string Status { get; set; } = "unread";
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } =DateTime.Now;
 
         // Foreign key relationship
         [ForeignKey("UserId")]
@@ -373,7 +373,7 @@ namespace fyp_motomate.Models
         public decimal TotalAmount { get; set; }
 
         [Required]
-        public DateTime InvoiceDate { get; set; } = DateTime.UtcNow;
+        public DateTime InvoiceDate { get; set; } =DateTime.Now;
 
         // Foreign key relationship
         [ForeignKey("AppointmentId")]
@@ -393,7 +393,7 @@ namespace fyp_motomate.Models
         public int InvoiceId { get; set; }
 
         [Required]
-        public DateTime PaymentDate { get; set; } = DateTime.UtcNow;
+        public DateTime PaymentDate { get; set; } =DateTime.Now;
 
         [Required]
         [Column(TypeName = "decimal(10,2)")]

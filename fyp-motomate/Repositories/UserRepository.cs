@@ -123,7 +123,7 @@ namespace fyp_motomate.Repositories
 
             // Update with new password hash
             user.Password = BCrypt.Net.BCrypt.HashPassword(newPassword);
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt =DateTime.Now;
 
             return await _context.SaveChangesAsync() > 0;
         }

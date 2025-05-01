@@ -1,3 +1,5 @@
+// src/components/User/OrderForm.tsx (updated)
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -7,16 +9,17 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
 import axios from "axios";
-import { 
-  Calendar, 
-  Car, 
+import {
+  Calendar,
+  Car,
   ClipboardCheck,
   Wrench,
   ArrowLeft,
   Loader2,
   Clock,
   PlusCircle,
-  MinusCircle
+  MinusCircle,
+  Info
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -37,13 +40,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
@@ -83,6 +86,7 @@ interface InspectionType {
   category: string;
   price: number;
   description: string;
+  subCategory?: string;
 }
 
 interface Service {
@@ -91,8 +95,8 @@ interface Service {
   category: string;
   price: number;
   description: string;
+  subCategory?: string;
 }
-
 
 // Form schema for order with mandatory inspection
 const orderFormSchema = z.object({
@@ -102,12 +106,10 @@ const orderFormSchema = z.object({
   inspectionTypeId: z.string().min(1, {
     message: "Please select an inspection type",
   }),
+  inspectionSubcategory: z.string().optional(),
   inspectionDate: z.date({
     required_error: "Inspection date is required",
-  }).refine(
-    (date) => date > new Date(), 
-    { message: "Inspection date must be in the future" }
-  ),
+  }),
   timeSlot: z.string().min(1, {
     message: "Please select a time slot",
   }),
@@ -132,6 +134,7 @@ export default function OrderForm() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
+  const [inspectionSubcategories, setInspectionSubcategories] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,9 +142,12 @@ export default function OrderForm() {
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedAdditionalServices, setSelectedAdditionalServices] = useState<Service[]>([]);
   const [timeSlotInfos, setTimeSlotInfos] = useState<TimeSlotInfo[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const router = useRouter();
   const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+  // Set default date to today
+  const today = new Date();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(orderFormSchema),
@@ -149,6 +155,8 @@ export default function OrderForm() {
       includeService: false,
       additionalServiceIds: [],
       notes: "",
+      inspectionDate: today,
+      inspectionSubcategory: "",
     },
   });
 
@@ -157,6 +165,7 @@ export default function OrderForm() {
   const serviceId = form.watch("serviceId");
   const additionalServiceIds = form.watch("additionalServiceIds");
   const inspectionTypeId = form.watch("inspectionTypeId");
+  const inspectionSubcategory = form.watch("inspectionSubcategory");
   const inspectionDate = form.watch("inspectionDate");
 
   // Helper to get auth token from local storage
@@ -167,77 +176,86 @@ export default function OrderForm() {
     return null;
   };
 
- // Fetch vehicles, services and inspection types when component mounts
-useEffect(() => {
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      
-      const token = getAuthToken();
-      if (!token) {
-        router.push("/login");
-        return;
-      }
+  // Fetch vehicles, services and inspection types when component mounts
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
 
-      // Fetch user's vehicles
-      const vehiclesResponse = await axios.get(`${API_URL}/api/vehicles`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      // Handle the nested data structure with $values array
-      let vehiclesData = [];
-      if (vehiclesResponse.data && vehiclesResponse.data.$values) {
-        // If data is in $values array format
-        vehiclesData = vehiclesResponse.data.$values;
-        console.log("Vehicles data extracted from $values:", vehiclesData);
-      } else if (Array.isArray(vehiclesResponse.data)) {
-        // If data is directly an array
-        vehiclesData = vehiclesResponse.data;
-        console.log("Vehicles data is already an array:", vehiclesData);
-      } else {
-        console.error("Invalid vehicles data format:", vehiclesResponse.data);
-        toast.error("Failed to load vehicles data");
-      }
-      
-      setVehicles(vehiclesData);
-      
-      // Fetch available services (excluding inspection category)
-      const servicesResponse = await axios.get(`${API_URL}/api/services`);
-      
-      // Handle potential nested data structure for services too
-      let servicesData = [];
-      if (servicesResponse.data && servicesResponse.data.$values) {
-        servicesData = servicesResponse.data.$values;
-      } else if (Array.isArray(servicesResponse.data)) {
-        servicesData = servicesResponse.data;
-      }
-      
-      const filteredServices = servicesData.filter(
-        (service: Service) => service.category.toLowerCase() !== 'inspection'
-      );
-      
-      // Get inspection types from services API (where category = inspection)
-      const inspectionTypes = servicesData.filter(
-        (service: Service) => service.category.toLowerCase() === 'inspection'
-      );
-      
-      setServices(filteredServices);
-      setInspectionTypes(inspectionTypes);
-    } catch (error) {
-      console.error("Error loading data:", error);
-      toast.error("Failed to load necessary data");
-      
-      // If unauthorized, redirect to login
-      if (axios.isAxiosError(error) && error.response?.status === 401) {
-        router.push("/login");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+        const token = getAuthToken();
+        if (!token) {
+          router.push("/login");
+          return;
+        }
 
-  loadData();
-}, [router, API_URL]);
+        // Fetch user's vehicles
+        const vehiclesResponse = await axios.get(`${API_URL}/api/vehicles`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        // Handle the nested data structure with $values array
+        let vehiclesData = [];
+        if (vehiclesResponse.data && vehiclesResponse.data.$values) {
+          // If data is in $values array format
+          vehiclesData = vehiclesResponse.data.$values;
+          console.log("Vehicles data extracted from $values:", vehiclesData);
+        } else if (Array.isArray(vehiclesResponse.data)) {
+          // If data is directly an array
+          vehiclesData = vehiclesResponse.data;
+          console.log("Vehicles data is already an array:", vehiclesData);
+        } else {
+          console.error("Invalid vehicles data format:", vehiclesResponse.data);
+          toast.error("Failed to load vehicles data");
+        }
+
+        setVehicles(vehiclesData);
+
+        // Fetch available services (excluding inspection category)
+        const servicesResponse = await axios.get(`${API_URL}/api/services`);
+
+        // Handle potential nested data structure for services too
+        let servicesData = [];
+        if (servicesResponse.data && servicesResponse.data.$values) {
+          servicesData = servicesResponse.data.$values;
+        } else if (Array.isArray(servicesResponse.data)) {
+          servicesData = servicesResponse.data;
+        }
+
+        const filteredServices = servicesData.filter(
+          (service: Service) => service.category.toLowerCase() !== 'inspection'
+        );
+
+        // Get inspection types from services API (where category = inspection)
+        const inspectionTypes = servicesData.filter(
+          (service: Service) => service.category.toLowerCase() === 'inspection' && (!service.subCategory || service.subCategory === "")
+        );
+
+        // Get inspection subcategories
+        const subcategories = servicesData.filter(
+          (service: Service) => service.category.toLowerCase() === 'inspection' && service.subCategory && service.subCategory !== ""
+        );
+
+        setServices(filteredServices);
+        setInspectionTypes(inspectionTypes);
+        setInspectionSubcategories(subcategories);
+
+        // Load initial time slots for today
+        fetchAvailableTimeSlotsForDate(today);
+      } catch (error) {
+        console.error("Error loading data:", error);
+        toast.error("Failed to load necessary data");
+
+        // If unauthorized, redirect to login
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          router.push("/login");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [router, API_URL]);
 
   // Update selected service when serviceId changes
   useEffect(() => {
@@ -252,7 +270,7 @@ useEffect(() => {
   // Update selected additional services when additionalServiceIds changes
   useEffect(() => {
     if (additionalServiceIds && additionalServiceIds.length > 0) {
-      const selectedServices = additionalServiceIds.map(id => 
+      const selectedServices = additionalServiceIds.map(id =>
         services.find(s => s.serviceId.toString() === id)
       ).filter(Boolean) as Service[];
       setSelectedAdditionalServices(selectedServices);
@@ -261,49 +279,59 @@ useEffect(() => {
     }
   }, [additionalServiceIds, services]);
 
-  // Update selected inspection type when inspectionTypeId changes
+  // Update selected inspection type when inspectionTypeId changes and filter relevant subcategories
   useEffect(() => {
     if (inspectionTypeId) {
       const inspType = inspectionTypes.find(it => it.serviceId.toString() === inspectionTypeId);
       setSelectedInspectionType(inspType || null);
+
+      // Filter subcategories for this inspection type
+      if (inspType) {
+        const relevantSubcategories = inspectionSubcategories.filter(
+          sub => sub.subCategory?.startsWith(inspType.serviceName)
+        );
+        setInspectionSubcategories(relevantSubcategories);
+
+        // Reset selected subcategory when inspection type changes
+        form.setValue("inspectionSubcategory", "");
+      }
     } else {
       setSelectedInspectionType(null);
     }
-  }, [inspectionTypeId, inspectionTypes]);
-  
+  }, [inspectionTypeId, inspectionTypes, inspectionSubcategories, form]);
+
+  // Function to fetch available time slots for a specific date
+  const fetchAvailableTimeSlotsForDate = async (date: Date) => {
+    if (!date) return;
+
+    try {
+      // Instead of just getting available slots, get full info including counts
+      const slots = await timeSlotService.getTimeSlotsInfo(date);
+      console.log("Fetched time slots for date:", date, slots);
+      setTimeSlotInfos(slots);
+
+      // If current selected time slot is no longer available, clear it
+      const currentTimeSlot = form.getValues("timeSlot");
+      const isCurrentSlotAvailable = slots.some(
+        slot => slot.timeSlot === currentTimeSlot && slot.availableSlots > 0
+      );
+
+      if (currentTimeSlot && !isCurrentSlotAvailable) {
+        form.setValue("timeSlot", "");
+      }
+    } catch (error) {
+      console.error("Error fetching time slot info for date:", date, error);
+      toast.error("Could not load available time slots");
+    }
+  };
+
   // Fetch available time slots when inspection date changes
   useEffect(() => {
-    const fetchAvailableTimeSlots = async () => {
-      if (!inspectionDate) return;
-      
-      try {
-        // Instead of just getting available slots, get full info including counts
-        const slots = await timeSlotService.getTimeSlotsInfo(inspectionDate);
-        setTimeSlotInfos(slots);
-        
-        // If current selected time slot is no longer available, clear it
-        const currentTimeSlot = form.getValues("timeSlot");
-        const isCurrentSlotAvailable = slots.some(
-          slot => slot.timeSlot === currentTimeSlot && slot.availableSlots > 0
-        );
-        
-        if (currentTimeSlot && !isCurrentSlotAvailable) {
-          form.setValue("timeSlot", "");
-        }
-      } catch (error) {
-        console.error("Error fetching time slot info:", error);
-        toast.error("Could not load available time slots");
-      }
-    };
-
-    setSelectedDate(inspectionDate);
-    
     if (inspectionDate) {
-      fetchAvailableTimeSlots();
-    } else {
-      setTimeSlotInfos([]);
+      setSelectedDate(inspectionDate);
+      fetchAvailableTimeSlotsForDate(inspectionDate);
     }
-  }, [inspectionDate, form]);
+  }, [inspectionDate]);
 
   // Updated onSubmit function with better error handling
   const onSubmit = async (values: FormValues) => {
@@ -327,33 +355,36 @@ useEffect(() => {
         setError("The selected time slot is no longer available. Please choose another time.");
         toast.error("Time slot is no longer available");
         // Refresh available time slots
-        const updatedSlots = await timeSlotService.getTimeSlotsInfo(values.inspectionDate);
-        setTimeSlotInfos(updatedSlots);
+        fetchAvailableTimeSlotsForDate(values.inspectionDate);
         form.setValue("timeSlot", "");
         return;
       }
 
-      // Prepare data for API request
+      // Prepare data for API request - use noon time to avoid timezone issues
+      const inspectionDateWithNoon = new Date(
+        values.inspectionDate.getFullYear(),
+        values.inspectionDate.getMonth(),
+        values.inspectionDate.getDate(),
+        12, 0, 0
+      );
+
       const orderData = {
         vehicleId: parseInt(values.vehicleId),
-        inspectionTypeId: parseInt(values.inspectionTypeId), // This is a serviceId of category 'inspection'
+        inspectionTypeId: parseInt(values.inspectionTypeId),
+        subCategory: values.inspectionSubcategory || "", // Include subcategory
         serviceId: values.includeService && values.serviceId ? parseInt(values.serviceId) : null,
         additionalServiceIds: values.additionalServiceIds.map(id => parseInt(id)),
-        inspectionDate: values.inspectionDate.toISOString(),
+        inspectionDate: inspectionDateWithNoon.toISOString(),
         timeSlot: values.timeSlot,
         notes: values.notes || "",
       };
 
       console.log("Creating order with data:", orderData);
 
-      // Add additional logging to help diagnose the issue
-      console.log("Token present:", !!token);
-      console.log("API URL:", `${API_URL}/api/orders/CreateWithInspection`);
-
       try {
         // Call API to create order with inspection
         const response = await axios.post(
-          `${API_URL}/api/orders/CreateWithInspection`, 
+          `${API_URL}/api/orders/CreateWithInspection`,
           orderData,
           {
             headers: {
@@ -364,7 +395,6 @@ useEffect(() => {
         );
 
         console.log("API Response:", response.data);
-        console.log("Order payload:", JSON.stringify(orderData, null, 2));
 
         if (response.data.success) {
           toast.success("Your order has been placed successfully!");
@@ -375,12 +405,12 @@ useEffect(() => {
         }
       } catch (apiError) {
         console.error("API error details:", apiError);
-        
+
         if (axios.isAxiosError(apiError)) {
           if (apiError.response) {
             // The server responded with a status code outside the 2xx range
             console.error("API error response:", apiError.response.data);
-            
+
             // Handle specific backend errors based on their structure
             if (apiError.response.data.error && apiError.response.data.error.includes("entity changes")) {
               // The error is related to entity framework saving changes
@@ -397,7 +427,7 @@ useEffect(() => {
             console.error("Request setup error:", apiError.message);
             setError(`Error setting up the request: ${apiError.message}`);
           }
-          
+
           toast.error("Failed to create order. See details for more information.");
         } else {
           // Generic error handling for non-Axios errors
@@ -417,19 +447,19 @@ useEffect(() => {
   // Add a service to the additional services list
   const addAdditionalService = (serviceId: string) => {
     const currentIds = form.getValues("additionalServiceIds");
-    
+
     // Check if service is already in the list
     if (currentIds.includes(serviceId)) {
       toast.error("This service is already added");
       return;
     }
-    
+
     // Check if it's the same as the main service
     if (form.getValues("serviceId") === serviceId) {
       toast.error("This service is already selected as your main service");
       return;
     }
-    
+
     form.setValue("additionalServiceIds", [...currentIds, serviceId]);
   };
 
@@ -444,16 +474,16 @@ useEffect(() => {
   // Calculate total based on inspection fee and selected service
   const calculateTotal = () => {
     let total = selectedInspectionType ? selectedInspectionType.price : 0;
-    
+
     if (includeService && selectedService) {
       total += selectedService.price;
     }
-    
+
     // Add prices of all additional services
     if (selectedAdditionalServices.length > 0) {
       total += selectedAdditionalServices.reduce((sum, service) => sum + service.price, 0);
     }
-    
+
     return total.toFixed(2);
   };
 
@@ -462,6 +492,21 @@ useEffect(() => {
     return timeSlotInfos.filter(slot => slot.availableSlots > 0);
   };
 
+  // Helper to get badge color based on availability
+  const getAvailabilityBadgeColor = (availableSlots: number, totalSlots: number) => {
+    if (availableSlots === 0) return "bg-red-500";
+    if (availableSlots === 1) return "bg-yellow-500";
+    return "bg-green-500";
+  };
+
+  // Get filtered subcategories based on selected inspection type
+  const getFilteredSubcategories = () => {
+    if (!selectedInspectionType) return [];
+
+    return inspectionSubcategories.filter(
+      sub => sub.subCategory?.startsWith(selectedInspectionType.serviceName)
+    );
+  };
 
   if (loading) {
     return (
@@ -533,8 +578,8 @@ useEffect(() => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Select Vehicle</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
+                  <Select
+                    onValueChange={field.onChange}
                     defaultValue={field.value}
                   >
                     <FormControl>
@@ -544,8 +589,8 @@ useEffect(() => {
                     </FormControl>
                     <SelectContent>
                       {vehicles.map((vehicle) => (
-                        <SelectItem 
-                          key={vehicle.vehicleId.toString()} 
+                        <SelectItem
+                          key={vehicle.vehicleId.toString()}
                           value={vehicle.vehicleId.toString()}
                         >
                           {vehicle.year} {vehicle.make} {vehicle.model} ({vehicle.licensePlate})
@@ -568,8 +613,8 @@ useEffect(() => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Inspection Type</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
+                  <Select
+                    onValueChange={field.onChange}
                     defaultValue={field.value}
                   >
                     <FormControl>
@@ -579,8 +624,8 @@ useEffect(() => {
                     </FormControl>
                     <SelectContent>
                       {inspectionTypes.map((type) => (
-                        <SelectItem 
-                          key={type.serviceId} 
+                        <SelectItem
+                          key={type.serviceId}
                           value={type.serviceId.toString()}
                         >
                           {type.serviceName} - ${type.price.toFixed(2)}
@@ -596,6 +641,45 @@ useEffect(() => {
                 </FormItem>
               )}
             />
+
+            {/* Add subcategory field when inspection type is selected */}
+            {selectedInspectionType && getFilteredSubcategories().length > 0 && (
+              <FormField
+                control={form.control}
+                name="inspectionSubcategory"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Inspection Subcategory</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a subcategory (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">None - Standard Inspection</SelectItem>
+                        {getFilteredSubcategories().map((sub) => (
+                          <SelectItem
+                            key={sub.serviceId}
+                            value={sub.subCategory || ""}
+                          >
+                            {sub.subCategory}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="flex items-center">
+                      <Info className="mr-1 h-3 w-3" />
+                      Select a specific inspection area (optional)
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
@@ -627,8 +711,15 @@ useEffect(() => {
                         <CalendarComponent
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) => date < addDays(new Date(), 1)}
+                          onSelect={(date) => {
+                            field.onChange(date);
+                            // This ensures we fetch time slots immediately when a date is selected
+                            if (date) {
+                              fetchAvailableTimeSlotsForDate(date);
+                            }
+                          }}
+                          // Allow selection from today onwards, no disabled dates
+                          disabled={(date) => date < today}
                           initialFocus
                         />
                       </PopoverContent>
@@ -648,8 +739,8 @@ useEffect(() => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Time Slot</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
+                    <Select
+                      onValueChange={field.onChange}
                       defaultValue={field.value}
                     >
                       <FormControl>
@@ -658,44 +749,45 @@ useEffect(() => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {timeSlotInfos.map((slot) => (
-                          <SelectItem 
-                            key={slot.timeSlot} 
-                            value={slot.timeSlot}
-                            disabled={slot.availableSlots <= 0}
-                            className="flex items-center justify-between"
-                          >
-                            <div className="flex items-center justify-between w-full">
-                              <span>{slot.timeSlot}</span>
-                              <Badge 
-                                className={cn(
-                                  "ml-2",
-                                  slot.availableSlots === 0 ? "bg-red-500" :
-                                  slot.availableSlots === 1 ? "bg-yellow-500" : 
-                                  "bg-green-500"
-                                )}
-                              >
-                                {slot.availableSlots}/{slot.totalSlots}
-                              </Badge>
-                            </div>
-                          </SelectItem>
-                        ))}
-                        {(!timeSlotInfos || timeSlotInfos.length === 0) && (
-                          <SelectItem 
-                            value="no-slots" 
+                        {timeSlotInfos.length > 0 ? (
+                          timeSlotInfos.map((slot) => (
+                            <SelectItem
+                              key={slot.timeSlot}
+                              value={slot.timeSlot}
+                              disabled={slot.availableSlots <= 0}
+                              className="flex items-center justify-between"
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span>{slot.timeSlot}</span>
+                                <Badge
+                                  className={cn(
+                                    "ml-2",
+                                    slot.availableSlots === 0 ? "bg-red-500" :
+                                      slot.availableSlots === 1 ? "bg-yellow-500" :
+                                        "bg-green-500"
+                                  )}
+                                >
+                                  {slot.availableSlots}/{slot.totalSlots}
+                                </Badge>
+                              </div>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem
+                            value="no-slots"
                             disabled
                           >
-                            No available slots for this date
+                            {selectedDate ? "No available slots for this date" : "Select a date first"}
                           </SelectItem>
                         )}
                       </SelectContent>
                     </Select>
                     <FormDescription className="flex items-center">
                       <Clock className="mr-1 h-3 w-3" />
-                      {selectedDate 
-                        ? getAvailableTimeSlots().length > 0 
-                          ? `${getAvailableTimeSlots().length} time slot(s) available` 
-                          : "No available slots for this date" 
+                      {selectedDate
+                        ? getAvailableTimeSlots().length > 0
+                          ? `${getAvailableTimeSlots().length} time slot(s) available`
+                          : "No available slots for this date"
                         : "Select a date first"}
                     </FormDescription>
                     <FormMessage />
@@ -734,8 +826,8 @@ useEffect(() => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Select Service</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
+                    <Select
+                      onValueChange={field.onChange}
                       defaultValue={field.value}
                     >
                       <FormControl>
@@ -745,8 +837,8 @@ useEffect(() => {
                       </FormControl>
                       <SelectContent>
                         {services.map((service) => (
-                          <SelectItem 
-                            key={service.serviceId} 
+                          <SelectItem
+                            key={service.serviceId}
                             value={service.serviceId.toString()}
                           >
                             {service.serviceName} - ${service.price.toFixed(2)}
@@ -771,9 +863,9 @@ useEffect(() => {
                   <FormLabel>Additional Services</FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
+                      <Button
+                        type="button"
+                        variant="outline"
                         size="sm"
                         className="h-8 px-2"
                       >
@@ -807,8 +899,8 @@ useEffect(() => {
                 {selectedAdditionalServices.length > 0 ? (
                   <div className="space-y-2 border rounded-md p-3">
                     {selectedAdditionalServices.map((service, index) => (
-                      <div 
-                        key={service.serviceId} 
+                      <div
+                        key={service.serviceId}
                         className="flex justify-between items-center p-2 rounded-md bg-muted/50"
                       >
                         <div>
@@ -856,18 +948,25 @@ useEffect(() => {
               <div className="space-y-2">
                 {selectedInspectionType && (
                   <div className="flex justify-between text-sm">
-                    <span>{selectedInspectionType.serviceName}:</span>
+                    <span>
+                      {selectedInspectionType.serviceName}
+                      {inspectionSubcategory && (
+                        <span className="text-muted-foreground ml-1">
+                          ({inspectionSubcategory})
+                        </span>
+                      )}:
+                    </span>
                     <span>${selectedInspectionType.price.toFixed(2)}</span>
                   </div>
                 )}
-                
+
                 {includeService && selectedService && (
                   <div className="flex justify-between text-sm">
                     <span>{selectedService.serviceName}:</span>
                     <span>${selectedService.price.toFixed(2)}</span>
                   </div>
                 )}
-                
+
                 {selectedAdditionalServices.length > 0 && (
                   <>
                     <div className="flex justify-between text-sm font-medium">
@@ -875,39 +974,40 @@ useEffect(() => {
                       <span></span>
                     </div>
                     {selectedAdditionalServices.map(service => (
-                      <div key={service.serviceId} className="flex justify-between text-sm pl-2"><span>- {service.serviceName}</span>
-                      <span>${service.price.toFixed(2)}</span>
-                    </div>
-                  ))}
-                </>
-              )}
-              
-              <div className="flex justify-between font-medium pt-2 border-t mt-2">
-                <span>Total:</span>
-                <span>${calculateTotal()}</span>
+                      <div key={service.serviceId} className="flex justify-between text-sm pl-2">
+                        <span>- {service.serviceName}</span>
+                        <span>${service.price.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                <div className="flex justify-between font-medium pt-2 border-t mt-2">
+                  <span>Total:</span>
+                  <span>${calculateTotal()}</span>
+                </div>
               </div>
             </div>
-          </div>
-        </form>
-      </Form>
-    </CardContent>
-    <CardFooter className="flex justify-between">
-      <Button
-        variant="outline"
-        onClick={() => router.back()}
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Back
-      </Button>
-      <Button
-        type="submit"
-        onClick={form.handleSubmit(onSubmit)}
-        disabled={submitting}
-      >
-        {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Place Order
-      </Button>
-    </CardFooter>
-  </Card>
-);
+          </form>
+        </Form>
+      </CardContent>
+      <CardFooter className="flex justify-between">
+        <Button
+          variant="outline"
+          onClick={() => router.back()}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+        <Button
+          type="submit"
+          onClick={form.handleSubmit(onSubmit)}
+          disabled={submitting}
+        >
+          {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Place Order
+        </Button>
+      </CardFooter>
+    </Card>
+  );
 }

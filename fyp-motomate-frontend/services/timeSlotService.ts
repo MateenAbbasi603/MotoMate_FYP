@@ -10,7 +10,7 @@ export interface TimeSlotInfo {
 export const timeSlotService = {
   getAvailableTimeSlots: async (date: Date): Promise<string[]> => {
     const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-    
+
     const response = await apiClient.get('/api/TimeSlots/Available', {
       params: { date: formattedDate }
     });
@@ -23,16 +23,36 @@ export const timeSlotService = {
   },
 
   getTimeSlotsInfo: async (date: Date): Promise<TimeSlotInfo[]> => {
-    const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-    
-    const response = await apiClient.get('/api/TimeSlots/Info', {
-      params: { date: formattedDate }
-    });
+    try {
+      // Make sure we're only passing the date portion to avoid timezone issues
+      const dateISO = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        12, 0, 0 // Set to noon to avoid timezone issues
+      ).toISOString();
+      
+      console.log("Fetching time slots for date ISO:", dateISO);
+      console.log("Date object being used:", date);
 
-    if (response.data.success) {
-      return response.data.timeSlotInfos;
-    } else {
-      throw new Error(response.data.message || 'Failed to fetch time slot information');
+      const formattedDate = dateISO.split('T')[0]; // Format as YYYY-MM-DD
+
+      console.log(`Requesting time slots for date: ${formattedDate}`);
+      
+      const response = await apiClient.get('/api/TimeSlots/Info', {
+        params: { date: formattedDate }
+      });
+
+      if (response.data.success) {
+        // Add extra logging to inspect the response
+        console.log("Time slots data received:", response.data);
+        return response.data.timeSlotInfos;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch time slot information');
+      }
+    } catch (error) {
+      console.error("Error in getTimeSlotsInfo:", error);
+      return []; // Return empty array instead of throwing to avoid disrupting the UI
     }
   },
 
@@ -43,10 +63,18 @@ export const timeSlotService = {
         throw new Error('Authentication required');
       }
 
-      const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      // Make sure we're only passing the date portion to avoid timezone issues
+      const dateISO = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        12, 0, 0 // Set to noon to avoid timezone issues
+      ).toISOString();
       
+      const formattedDate = dateISO.split('T')[0]; // Format as YYYY-MM-DD
+
       const response = await apiClient.get('/api/TimeSlots/IsAvailable', {
-        params: { 
+        params: {
           date: formattedDate,
           timeSlot
         },
@@ -63,7 +91,7 @@ export const timeSlotService = {
       throw error;
     }
   },
-  
+
   getTimeSlotAvailableCount: async (date: Date, timeSlot: string): Promise<number> => {
     try {
       const token = localStorage.getItem('token');
@@ -71,10 +99,18 @@ export const timeSlotService = {
         throw new Error('Authentication required');
       }
 
-      const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      // Make sure we're only passing the date portion to avoid timezone issues
+      const dateISO = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        12, 0, 0 // Set to noon to avoid timezone issues
+      ).toISOString();
       
+      const formattedDate = dateISO.split('T')[0]; // Format as YYYY-MM-DD
+
       const response = await apiClient.get('/api/TimeSlots/IsAvailable', {
-        params: { 
+        params: {
           date: formattedDate,
           timeSlot
         },

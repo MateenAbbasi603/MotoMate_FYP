@@ -117,7 +117,7 @@ namespace fyp_motomate.Controllers
             string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
             // Validate request
-            if (request.ScheduledDate < DateTime.UtcNow.Date)
+            if (request.ScheduledDate <DateTime.Now.Date)
             {
                 return BadRequest(new { message = "Scheduled date must be in the future" });
             }
@@ -154,7 +154,7 @@ namespace fyp_motomate.Controllers
                 TimeSlot = request.TimeSlot ?? "09:00 AM - 11:00 AM", // Default time slot
                 Notes = request.Notes,
                 Status = "pending",
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt =DateTime.Now,
                 // Initialize default values for inspection fields
                 EngineCondition = "Not Inspected Yet",
                 TransmissionCondition = "Not Inspected Yet",
@@ -173,7 +173,7 @@ namespace fyp_motomate.Controllers
                 UserId = inspection.UserId,
                 Message = $"Inspection scheduled for {inspection.ScheduledDate.ToString("MMM dd, yyyy")}",
                 Status = "unread",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt =DateTime.Now
             };
             _context.Notifications.Add(notification);
 
@@ -184,7 +184,7 @@ namespace fyp_motomate.Controllers
                 UserId = 1,
                 Message = $"New inspection requested for {inspection.ScheduledDate.ToString("MMM dd, yyyy")}",
                 Status = "unread",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt =DateTime.Now
             };
             _context.Notifications.Add(staffNotification);
 
@@ -280,7 +280,7 @@ namespace fyp_motomate.Controllers
                 // If marking as completed, set the completion date
                 if (request.Status == "completed" && !inspection.CompletedAt.HasValue)
                 {
-                    inspection.CompletedAt = DateTime.UtcNow;
+                    inspection.CompletedAt =DateTime.Now;
 
                     // Also update the order status if there is an associated order
                     if (inspection.Order != null)
@@ -305,7 +305,7 @@ namespace fyp_motomate.Controllers
                 // If marking as completed, set the completion date
                 if (request.Status == "completed" && !inspection.CompletedAt.HasValue)
                 {
-                    inspection.CompletedAt = DateTime.UtcNow;
+                    inspection.CompletedAt =DateTime.Now;
                 }
 
                 // Update inspection report details
@@ -350,7 +350,7 @@ namespace fyp_motomate.Controllers
                 UserId = inspection.UserId,
                 Message = $"Your inspection status has been updated to {inspection.Status}",
                 Status = "unread",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt =DateTime.Now
             };
             _context.Notifications.Add(notification);
             await _context.SaveChangesAsync();
@@ -441,7 +441,7 @@ public async Task<IActionResult> SubmitInspectionReport(int id, [FromBody] Inspe
         }
         
         inspection.Status = "completed";
-        inspection.CompletedAt = DateTime.UtcNow;
+        inspection.CompletedAt =DateTime.Now;
 
         // Update the order status if available
         if (inspection.Order != null)
@@ -469,7 +469,7 @@ public async Task<IActionResult> SubmitInspectionReport(int id, [FromBody] Inspe
             UserId = inspection.UserId,
             Message = "Your inspection report is ready",
             Status = "unread",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt =DateTime.Now
         };
         _context.Notifications.Add(notification);
         await _context.SaveChangesAsync();
@@ -522,7 +522,7 @@ public async Task<IActionResult> SubmitInspectionReport(int id, [FromBody] Inspe
                 VehicleId = inspection.VehicleId,
                 ServiceId = request.ServiceId,
                 IncludesInspection = true,
-                OrderDate = DateTime.UtcNow,
+                OrderDate =DateTime.Now,
                 Status = "pending",
                 TotalAmount = request.TotalAmount,
                 Notes = request.Notes ?? inspection.Notes
@@ -541,7 +541,7 @@ public async Task<IActionResult> SubmitInspectionReport(int id, [FromBody] Inspe
                 UserId = inspection.UserId,
                 Message = "Your inspection has been converted to an order",
                 Status = "unread",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt =DateTime.Now
             };
             _context.Notifications.Add(notification);
             await _context.SaveChangesAsync();

@@ -92,8 +92,8 @@ namespace fyp_motomate.Controllers
                 Model = request.Model,
                 Year = request.Year,
                 LicensePlate = request.LicensePlate,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt =DateTime.Now,
+                UpdatedAt =DateTime.Now
             };
 
             // If customer is creating a vehicle, set the UserId to their own ID
@@ -156,7 +156,7 @@ namespace fyp_motomate.Controllers
             vehicle.Model = request.Model;
             vehicle.Year = request.Year;
             vehicle.LicensePlate = request.LicensePlate;
-            vehicle.UpdatedAt = DateTime.UtcNow;
+            vehicle.UpdatedAt =DateTime.Now;
 
             // If staff is updating the owner of the vehicle
             if (userRole != "customer" && request.UserId.HasValue && vehicle.UserId != request.UserId.Value)

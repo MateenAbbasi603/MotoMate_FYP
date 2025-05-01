@@ -12,28 +12,34 @@ namespace fyp_motomate.Models
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int ServiceId { get; set; }
-        
+
         [Required]
         [StringLength(100)]
         public string ServiceName { get; set; }
-        
+
         [Required]
         [StringLength(20)]
         public string Category { get; set; }
-        
+
+
+        // New field for subcategory
+        [StringLength(100)]
+        public string SubCategory { get; set; }
+
+
         [Required]
         [Column(TypeName = "decimal(10,2)")]
         public decimal Price { get; set; }
-        
+
         public string Description { get; set; }
-        
+
         // Navigation properties - using JsonIgnore to prevent serialization issues
         [JsonIgnore]
         public virtual ICollection<Appointment> Appointments { get; set; }
-        
+
         [JsonIgnore]
         public virtual ICollection<Order> Orders { get; set; }
-        
+
         [JsonIgnore]
         public virtual ICollection<ServiceHistory> ServiceHistories { get; set; }
     }

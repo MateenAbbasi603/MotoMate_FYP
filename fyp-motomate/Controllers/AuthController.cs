@@ -59,8 +59,8 @@ namespace fyp_motomate.Controllers
                 Name = registerDto.Name,
                 Phone = registerDto.Phone,
                 Address = registerDto.Address,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
+                CreatedAt =DateTime.Now,
+                UpdatedAt =DateTime.Now,
                 imgUrl = registerDto.imgUrl
             };
 
@@ -251,7 +251,7 @@ namespace fyp_motomate.Controllers
             }
             
             // Update the timestamp
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt =DateTime.Now;
             
             // Save changes
             var result = await _userRepository.UpdateUserAsync(user);
@@ -354,8 +354,8 @@ namespace fyp_motomate.Controllers
                 Name = createStaffDto.Name,
                 Phone = createStaffDto.Phone,
                 Address = createStaffDto.Address,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
+                CreatedAt =DateTime.Now,
+                UpdatedAt =DateTime.Now,
                 imgUrl = $"https://ui-avatars.com/api/?name={createStaffDto.Name}&background=random"
             };
 

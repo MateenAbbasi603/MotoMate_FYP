@@ -43,3 +43,9 @@ ADD MechanicId INT;
  - seperate API for walk in customers
  - Service will be on estimated time
  - admin button for transfer to order
+
+
+ ```sql
+ ALTER TABLE [motomateDb].[dbo].[Services]
+ADD [SubCategory] NVARCHAR(100) NULL;
+ ```

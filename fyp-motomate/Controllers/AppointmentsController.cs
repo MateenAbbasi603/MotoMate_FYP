@@ -302,7 +302,7 @@ namespace fyp_motomate.Controllers
                     TimeSlot = timeSlot,
                     Status = "scheduled",
                     Notes = request.Notes ?? "",
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt =DateTime.Now
                 };
 
                 _context.Appointments.Add(appointment);
@@ -318,7 +318,7 @@ namespace fyp_motomate.Controllers
                     UserId = order.UserId,
                     Message = $"A mechanic has been assigned to your order. Appointment scheduled for {appointmentDate.ToString("yyyy-MM-dd")} at {timeSlot}",
                     Status = "unread",
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt =DateTime.Now
                 };
 
                 var mechanicNotification = new Notification
@@ -326,7 +326,7 @@ namespace fyp_motomate.Controllers
                     UserId = request.MechanicId,
                     Message = $"You have been assigned to Order #{order.OrderId}. Appointment scheduled for {appointmentDate.ToString("yyyy-MM-dd")} at {timeSlot}",
                     Status = "unread",
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt =DateTime.Now
                 };
 
                 _context.Notifications.AddRange(customerNotification, mechanicNotification);
@@ -509,7 +509,7 @@ public async Task<IActionResult> UpdateAppointment(int id, [FromBody] Appointmen
                         UserId = appointment.UserId,
                         Message = $"Your service has been completed by the mechanic",
                         Status = "unread",
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt =DateTime.Now
                     };
 
                     _context.Notifications.Add(notification);
@@ -663,7 +663,7 @@ public async Task<IActionResult> UpdateAppointment(int id, [FromBody] Appointmen
                 }
 
                 // Set default date range if not provided
-                DateTime start = startDate ?? DateTime.UtcNow.Date;
+                DateTime start = startDate ??DateTime.Now.Date;
                 DateTime end = endDate ?? start.AddDays(30);
 
                 // Validate date range

@@ -43,10 +43,9 @@ namespace fyp_motomate.Controllers
             return service;
         }
 
-        // POST: api/Services
         [HttpPost]
         [Authorize(Roles = "super_admin,admin")]
-        public async Task<ActionResult<Service>> CreateService([FromBody] ServiceRequest request)  // Changed method name and parameter type
+        public async Task<ActionResult<Service>> CreateService([FromBody] ServiceRequest request)
         {
             if (string.IsNullOrEmpty(request.ServiceName))
             {
@@ -67,6 +66,7 @@ namespace fyp_motomate.Controllers
             {
                 ServiceName = request.ServiceName,
                 Category = request.Category,
+                SubCategory = request.SubCategory ?? "", // Add this field
                 Price = request.Price,
                 Description = request.Description ?? ""
             };
@@ -76,6 +76,7 @@ namespace fyp_motomate.Controllers
 
             return CreatedAtAction(nameof(GetService), new { id = service.ServiceId }, service);
         }
+
 
         // PUT: api/Services/5
         [HttpPut("{id}")]
@@ -105,8 +106,11 @@ namespace fyp_motomate.Controllers
 
             service.ServiceName = request.ServiceName;
             service.Category = request.Category;
+            service.SubCategory = request.SubCategory ?? service.SubCategory; // Update subcategory
+
             service.Price = request.Price;
             service.Description = request.Description ?? service.Description;
+
 
             try
             {
@@ -180,5 +184,7 @@ namespace fyp_motomate.Controllers
         public string Category { get; set; }
         public decimal Price { get; set; }
         public string Description { get; set; }
+
+        public string SubCategory { get; set; }
     }
 }

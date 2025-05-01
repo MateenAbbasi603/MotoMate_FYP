@@ -288,7 +288,7 @@ namespace fyp_motomate.Controllers
                 VehicleId = request.VehicleId,
                 ServiceId = request.ServiceId,
                 IncludesInspection = request.IncludesInspection,
-                OrderDate = DateTime.UtcNow,
+                OrderDate = DateTime.Now,
                 Status = "pending",
                 TotalAmount = request.TotalAmount,
                 Notes = request.Notes
@@ -308,7 +308,7 @@ namespace fyp_motomate.Controllers
                     ScheduledDate = request.InspectionDate.Value,
                     Status = "pending",
                     Notes = request.Notes ?? "",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.Now,
                     OrderId = order.OrderId,
                     TimeSlot = "09:00 AM - 11:00 AM",
                     EngineCondition = "Not Inspected Yet",
@@ -332,7 +332,7 @@ namespace fyp_motomate.Controllers
                 UserId = order.UserId,
                 Message = "Your order has been placed successfully",
                 Status = "unread",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
             _context.Notifications.Add(notification);
 
@@ -343,7 +343,7 @@ namespace fyp_motomate.Controllers
                 UserId = 1,
                 Message = $"New order received from user ID {order.UserId}",
                 Status = "unread",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
             _context.Notifications.Add(staffNotification);
 
@@ -490,7 +490,7 @@ namespace fyp_motomate.Controllers
                         VehicleId = request.VehicleId,
                         ServiceId = request.ServiceId,
                         IncludesInspection = true,
-                        OrderDate = DateTime.UtcNow,
+                        OrderDate = DateTime.Now,
                         Status = "pending",
                         TotalAmount = totalAmount,
                         Notes = request.Notes ?? ""
@@ -512,7 +512,7 @@ namespace fyp_motomate.Controllers
                             {
                                 OrderId = orderId,
                                 ServiceId = service.ServiceId,
-                                AddedAt = DateTime.UtcNow,
+                                AddedAt = DateTime.Now,
                                 Notes = "Added during order creation"
                             };
                             _context.OrderServices.Add(orderService);
@@ -527,12 +527,14 @@ namespace fyp_motomate.Controllers
                         UserId = userId,
                         VehicleId = request.VehicleId,
                         ServiceId = request.InspectionTypeId,
+                                    SubCategory = request.SubCategory, // Add this line
+
                         OrderId = orderId, // Use the orderId directly
-                        ScheduledDate = request.InspectionDate,
+                        ScheduledDate = request.InspectionDate.Date, // Use .Date to strip the time component
                         TimeSlot = request.TimeSlot ?? "09:00 AM - 11:00 AM",
                         Status = "pending",
                         Notes = request.Notes ?? "",
-                        CreatedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.Now,
                         EngineCondition = "Not Inspected Yet",
                         TransmissionCondition = "Not Inspected Yet",
                         BrakeCondition = "Not Inspected Yet",
@@ -557,7 +559,7 @@ namespace fyp_motomate.Controllers
                         UserId = userId,
                         Message = $"Your inspection appointment has been scheduled for {request.InspectionDate.ToString("yyyy-MM-dd")} at {request.TimeSlot}",
                         Status = "unread",
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.Now
                     };
 
                     var staffNotification = new Notification
@@ -565,7 +567,7 @@ namespace fyp_motomate.Controllers
                         UserId = 1, // Admin or service manager
                         Message = $"New inspection scheduled for vehicle {vehicle.Make} {vehicle.Model} on {request.InspectionDate.ToString("yyyy-MM-dd")} at {request.TimeSlot}",
                         Status = "unread",
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.Now
                     };
 
                     _context.Notifications.AddRange(userNotification, staffNotification);
@@ -645,7 +647,7 @@ namespace fyp_motomate.Controllers
                     VehicleId = request.VehicleId,
                     ServiceId = request.ServiceId,
                     IncludesInspection = true,
-                    OrderDate = DateTime.UtcNow,
+                    OrderDate = DateTime.Now,
                     Status = "pending",
                     TotalAmount = 100.00m, // Set appropriate amount
                     Notes = request.Notes ?? ""
@@ -682,7 +684,7 @@ namespace fyp_motomate.Controllers
                     new SqlParameter("@TimeSlot", request.TimeSlot ?? "09:00 AM - 11:00 AM"),
                     new SqlParameter("@Status", "pending"),
                     new SqlParameter("@Notes", request.Notes ?? ""),
-                    new SqlParameter("@CreatedAt", DateTime.UtcNow),
+                    new SqlParameter("@CreatedAt",DateTime.Now),
                     new SqlParameter("@EngineCondition", "Not Inspected Yet"),
                     new SqlParameter("@TransmissionCondition", "Not Inspected Yet"),
                     new SqlParameter("@BrakeCondition", "Not Inspected Yet"),
@@ -799,7 +801,7 @@ namespace fyp_motomate.Controllers
                 UserId = order.UserId,
                 Message = $"Your order status has been updated to {order.Status}",
                 Status = "unread",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
             _context.Notifications.Add(notification);
             await _context.SaveChangesAsync();
@@ -988,7 +990,7 @@ namespace fyp_motomate.Controllers
             {
                 OrderId = order.OrderId,
                 ServiceId = request.ServiceId,
-                AddedAt = DateTime.UtcNow,
+                AddedAt = DateTime.Now,
                 Notes = request.Notes
             };
 
@@ -1033,7 +1035,7 @@ namespace fyp_motomate.Controllers
                 UserId = order.UserId,
                 Message = $"Additional service '{service.ServiceName}' has been added to your order",
                 Status = "unread",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
             _context.Notifications.Add(notification);
             await _context.SaveChangesAsync();
@@ -1151,6 +1153,9 @@ namespace fyp_motomate.Controllers
         public int InspectionTypeId { get; set; }
 
         public int? ServiceId { get; set; }
+
+        public string SubCategory { get; set; } // Add this field
+
 
         public List<int> AdditionalServiceIds { get; set; } = new List<int>();
 

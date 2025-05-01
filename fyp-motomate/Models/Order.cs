@@ -27,7 +27,7 @@ namespace fyp_motomate.Models
         public bool IncludesInspection { get; set; } = true;
         
         [Required]
-        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
+        public DateTime OrderDate { get; set; } =DateTime.Now;
         
         [Required]
         [StringLength(20)]

@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
-import { ArrowLeft, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -39,7 +39,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import serviceApi, { ServiceFormData } from "../../../services/serviceApi";
 
-
 // Service form schema
 const serviceFormSchema = z.object({
   serviceName: z.string().min(3, {
@@ -50,6 +49,7 @@ const serviceFormSchema = z.object({
   category: z.enum(["repair", "maintenance", "inspection"], {
     message: "Please select a valid category.",
   }),
+  subCategory: z.string().optional(),
   price: z.preprocess(
     (val) => (val === "" ? 0 : Number(val)),
     z.number().positive({
@@ -73,6 +73,9 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showSubcategory, setShowSubcategory] = useState(false);
+  const [useCustomSubcategory, setUseCustomSubcategory] = useState(false);
+
   const router = useRouter();
   const isEditMode = !!serviceId;
 
@@ -82,27 +85,54 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
     defaultValues: {
       serviceName: "",
       category: "maintenance",
+      subCategory: "",
       price: 0,
       description: "",
     },
   });
 
+  const category = form.watch("category");
+  const subCategory = form.watch("subCategory");
+
+  // Update useEffect to show/hide subcategory field based on category
+  useEffect(() => {
+    if (category === "inspection") {
+      setShowSubcategory(true);
+    } else {
+      setShowSubcategory(false);
+      form.setValue("subCategory", "");
+      setUseCustomSubcategory(false);
+    }
+  }, [category, form]);
+
   // Fetch service data if in edit mode
   useEffect(() => {
     const fetchServiceData = async () => {
       if (!serviceId) return;
-      
+
       try {
         setIsLoading(true);
         const service = await serviceApi.getServiceById(serviceId);
-        
+
         // Populate form with service data
         form.reset({
           serviceName: service.serviceName,
           category: service.category,
+          subCategory: service.subCategory || "",
           price: service.price,
           description: service.description,
         });
+
+        if (service.category === "inspection" && service.subCategory) {
+          setShowSubcategory(true);
+          // Check if subCategory is one of the predefined ones
+          const predefinedSubcategories = [
+            "EngineInspection", "TransmissionInspection", "BrakeInspection",
+            "ElectricalInspection", "BodyInspection", "TireInspection",
+            "InteriorInspection", "SuspensionInspection", "TiresInspection"
+          ];
+          setUseCustomSubcategory(!predefinedSubcategories.includes(service.subCategory));
+        }
       } catch (error) {
         console.error("Error fetching service:", error);
         toast.error("Failed to load service data");
@@ -123,6 +153,7 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
       const serviceData: ServiceFormData = {
         serviceName: values.serviceName,
         category: values.category,
+        subCategory: showSubcategory ? values.subCategory : "",
         price: values.price,
         description: values.description,
       };
@@ -175,8 +206,8 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
       <CardHeader>
         <CardTitle>{isEditMode ? "Edit Service" : "Create New Service"}</CardTitle>
         <CardDescription>
-          {isEditMode 
-            ? "Update service details and pricing information." 
+          {isEditMode
+            ? "Update service details and pricing information."
             : "Fill in the details to create a new service."}
         </CardDescription>
       </CardHeader>
@@ -235,6 +266,86 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
                 </FormItem>
               )}
             />
+
+            {showSubcategory && (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Button
+                    type="button"
+                    variant={useCustomSubcategory ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setUseCustomSubcategory(true)}
+                  >
+                    Custom
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={useCustomSubcategory ? "outline" : "default"}
+                    size="sm"
+                    onClick={() => setUseCustomSubcategory(false)}
+                  >
+                    Predefined
+                  </Button>
+                </div>
+
+                {useCustomSubcategory ? (
+                  <FormField
+                    control={form.control}
+                    name="subCategory"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Custom Subcategory</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Enter custom subcategory"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Enter a custom subcategory for this inspection service.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="subCategory"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Subcategory</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a subcategory" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="EngineInspection">Engine Inspection</SelectItem>
+                            <SelectItem value="TransmissionInspection">Transmission Inspection</SelectItem>
+                            <SelectItem value="BrakeInspection">Brake Inspection</SelectItem>
+                            <SelectItem value="ElectricalInspection">Electrical Inspection</SelectItem>
+                            <SelectItem value="BodyInspection">Body Inspection</SelectItem>
+                            <SelectItem value="TireInspection">Tire Inspection</SelectItem>
+                            <SelectItem value="InteriorInspection">Interior Inspection</SelectItem>
+                            <SelectItem value="SuspensionInspection">Suspension Inspection</SelectItem>
+                            <SelectItem value="TiresInspection">Tires Inspection</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Select a predefined subcategory for this inspection service.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+            )}
 
             <FormField
               control={form.control}
