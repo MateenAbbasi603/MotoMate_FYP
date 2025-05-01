@@ -194,6 +194,8 @@ namespace fyp_motomate.Controllers
                     {
                         InspectionId = order.Inspection.InspectionId,
                         ServiceId = order.Inspection.ServiceId,
+                        ServiceName = order.Inspection.Service.ServiceName,
+                        SubCategory = order.Inspection.Service.SubCategory,
                         ScheduledDate = order.Inspection.ScheduledDate,
                         Status = order.Inspection.Status,
                         TimeSlot = order.Inspection.TimeSlot,

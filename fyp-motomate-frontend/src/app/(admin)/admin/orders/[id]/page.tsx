@@ -76,9 +76,13 @@ interface InspectionData {
   tireCondition: string;
   brakeCondition: string;
   transmissionCondition?: string;
+  interiorCondition: string
+  suspensionCondition: string
   notes?: string;
   price?: number;
   serviceId?: number;
+  subCategory: string;
+  serviceName: string;
 }
 
 interface VehicleData {
@@ -154,14 +158,14 @@ type PageProps = {
   }>;
 };
 
-export default function OrderDetailPage({ 
-  params 
+export default function OrderDetailPage({
+  params
 }: PageProps) {
   const resolvedParams = use(params);
   const id = resolvedParams.id;
   const router = useRouter();
 
-  
+
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -472,6 +476,9 @@ export default function OrderDetailPage({
     }
   };
 
+
+
+
   // Calculate total amount including inspection fee
   const calculateTotalAmount = () => {
     const servicePrice = order?.service?.price || 0;
@@ -567,7 +574,7 @@ export default function OrderDetailPage({
         if (addedService.$id) {
           const { $id, ...serviceData } = addedService;
           console.log($id);
-          
+
           addedService = serviceData;
         }
 
@@ -913,13 +920,30 @@ export default function OrderDetailPage({
                         </div>
 
                         {order.includesInspection && (
-                          <div className="flex justify-between items-center mt-2">
-                            <span className="text-sm">Includes Inspection</span>
-                            <Badge variant="outline" className="bg-blue-50 text-blue-800">
-                              Yes
-                            </Badge>
-                          </div>
+
+                          <>
+                            <div className="flex justify-between items-center mt-2">
+                              <span className="text-sm">Includes Inspection</span>
+                              <Badge variant="outline" className="bg-blue-50 text-blue-800">
+                                Yes
+                              </Badge>
+                            </div>
+
+                            <div>
+                              <div className=''>
+                                <p className='text-primary font-semibold'>Inspection Type : </p>
+                                <h4 className='text-black'>{order?.inspection?.subCategory}</h4>
+                              </div>
+                              <div className=''>
+                                <p className='text-primary font-semibold'>Inspection SubCategory : </p>
+                                <h4 className=''>{order?.inspection?.serviceName}</h4>
+                              </div>
+
+                            </div>
+                          </>
                         )}
+
+
                       </div>
 
                       {/* Additional Services */}
@@ -979,6 +1003,7 @@ export default function OrderDetailPage({
                   </TabsContent>
 
                   {order.includesInspection && order.inspection && (
+                    // Modified Inspection TabsContent section with conditional rendering based on subCategory
                     <TabsContent value="inspection" className="space-y-4">
                       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 bg-blue-50 rounded-md">
                         <div className="flex items-center">
@@ -1003,31 +1028,147 @@ export default function OrderDetailPage({
                         Inspection Results
                       </h3>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Body Condition</p>
-                          <p className="font-medium">{order.inspection.bodyCondition || 'Not inspected'}</p>
-                        </div>
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Engine Condition</p>
-                          <p className="font-medium">{order.inspection.engineCondition || 'Not inspected'}</p>
-                        </div>
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Electrical Condition</p>
-                          <p className="font-medium">{order.inspection.electricalCondition || 'Not inspected'}</p>
-                        </div>
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Tire Condition</p>
-                          <p className="font-medium">{order.inspection.tireCondition || 'Not inspected'}</p>
-                        </div>
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Brake Condition</p>
-                          <p className="font-medium">{order.inspection.brakeCondition || 'Not inspected'}</p>
-                        </div>
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Transmission Condition</p>
-                          <p className="font-medium">{order.inspection.transmissionCondition || 'Not inspected'}</p>
-                        </div>
+                      {/* Dynamic rendering of condition fields based on subCategory */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3">
+                        {(() => {
+                          const subCategory = order.inspection.subCategory?.toLowerCase();
+
+                          // Specific conditions based on subCategory
+                          switch (subCategory) {
+                            case 'bodyinspection':
+                              return (
+                                <>
+
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Body Condition</p>
+                                    <p className="font-medium">{order.inspection.bodyCondition || 'Not inspected'}</p>
+                                  </div>
+
+                                </>
+                              );
+                            case 'transmissioninspection':
+                              return (
+                                <>
+
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Transmission Condition</p>
+                                    <p className="font-medium">{order.inspection.transmissionCondition || 'Not inspected'}</p>
+                                  </div>
+
+                                </>
+                              );
+                            case 'suspensioninspection':
+                              return (
+                                <> 
+                                <div className="p-3 border rounded-md">
+                                  <p className="text-sm text-muted-foreground">Suspension Condition</p>
+                                  <p className="font-medium">{order.inspection.suspensionCondition || 'Not inspected'}</p>
+                                </div>
+                                </>
+                              )
+                            case 'brakeinspection':
+                              return (
+                                <>
+
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Brake Condition</p>
+                                    <p className="font-medium">{order.inspection.brakeCondition || 'Not inspected'}</p>
+                                  </div>
+                                 
+                                </>
+                              );
+                              case 'tireinspection':
+                                return (
+                                  <>
+                                    <div className="p-3 border rounded-md">
+                                      <p className="text-sm text-muted-foreground">Tire Condition</p>
+                                      <p className="font-medium">{order.inspection.tireCondition || 'Not inspected'}</p>
+                                    </div>
+                                  </>
+                                );
+                                case 'electricalinspection':
+                                return (
+                                  <>
+                                    <div className="p-3 border rounded-md">
+                                      <p className="text-sm text-muted-foreground">Electrical Condition</p>
+                                      <p className="font-medium">{order.inspection.electricalCondition || 'Not inspected'}</p>
+                                    </div>
+                                  </>
+                                );
+                                case 'interiorinspection':
+                                  return (
+                                    <>
+                                      <div className="p-3 border rounded-md">
+                                        <p className="text-sm text-muted-foreground">Interior Condition</p>
+                                        <p className="font-medium">{order.inspection.interiorCondition || 'Not inspected'}</p>
+                                      </div>
+                                    </>
+                                  );
+                            case 'fullvehicleinspection':
+                              return (
+                                <>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Body Condition</p>
+                                    <p className="font-medium">{order.inspection.bodyCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Engine Condition</p>
+                                    <p className="font-medium">{order.inspection.engineCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Electrical Condition</p>
+                                    <p className="font-medium">{order.inspection.electricalCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Tire Condition</p>
+                                    <p className="font-medium">{order.inspection.tireCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Brake Condition</p>
+                                    <p className="font-medium">{order.inspection.brakeCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Transmission Condition</p>
+                                    <p className="font-medium">{order.inspection.transmissionCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Interior Condition</p>
+                                    <p className="font-medium">{order.inspection.interiorCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Suspension Condition</p>
+                                    <p className="font-medium">{order.inspection.suspensionCondition || 'Not inspected'}</p>
+                                  </div>
+                                </>
+                              );
+                            default:
+                              // Default case when subCategory doesn't match or is undefined
+                              return (
+                                <>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Body Condition</p>
+                                    <p className="font-medium">{order.inspection.bodyCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Engine Condition</p>
+                                    <p className="font-medium">{order.inspection.engineCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Electrical Condition</p>
+                                    <p className="font-medium">{order.inspection.electricalCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Tire Condition</p>
+                                    <p className="font-medium">{order.inspection.tireCondition || 'Not inspected'}</p>
+                                  </div>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Brake Condition</p>
+                                    <p className="font-medium">{order.inspection.brakeCondition || 'Not inspected'}</p>
+                                  </div>
+                                </>
+                              );
+                          }
+                        })()}
                       </div>
 
                       {order.inspection.notes && (

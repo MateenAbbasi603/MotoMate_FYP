@@ -51,7 +51,7 @@ namespace fyp_motomate.Models.DTOs
         public decimal Price { get; set; }
         public string Description { get; set; }
 
-    public string SubCategory { get; set; }
+        public string SubCategory { get; set; }
 
     }
 
@@ -61,6 +61,10 @@ namespace fyp_motomate.Models.DTOs
         public int ServiceId { get; set; }
         public DateTime ScheduledDate { get; set; }
         public string Status { get; set; }
+
+        public string ServiceName { get; set; }
+        public string SubCategory { get; set; }
+
         public string TimeSlot { get; set; }
         public string BodyCondition { get; set; }
         public string EngineCondition { get; set; }
