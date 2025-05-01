@@ -23,7 +23,7 @@ namespace fyp_motomate.Models.DTOs
         public decimal TotalAmount { get; set; }
         public string Notes { get; set; }
     }
-    
+
     // Response DTOs
     public class UserDetailsDto
     {
@@ -33,7 +33,7 @@ namespace fyp_motomate.Models.DTOs
         public string Phone { get; set; }
         public string Address { get; set; }
     }
-    
+
     public class VehicleDetailsDto
     {
         public int VehicleId { get; set; }
@@ -42,7 +42,7 @@ namespace fyp_motomate.Models.DTOs
         public int Year { get; set; }
         public string LicensePlate { get; set; }
     }
-    
+
     public class ServiceDto
     {
         public int ServiceId { get; set; }
@@ -50,8 +50,11 @@ namespace fyp_motomate.Models.DTOs
         public string Category { get; set; }
         public decimal Price { get; set; }
         public string Description { get; set; }
+
+    public string SubCategory { get; set; }
+
     }
-    
+
     public class InspectionDetailsDto
     {
         public int InspectionId { get; set; }
@@ -68,7 +71,7 @@ namespace fyp_motomate.Models.DTOs
         public string Notes { get; set; }
         public decimal? Price { get; set; }
     }
-    
+
     public class OrderResponseDto
     {
         public int OrderId { get; set; }
@@ -80,7 +83,7 @@ namespace fyp_motomate.Models.DTOs
         public string Status { get; set; }
         public decimal TotalAmount { get; set; }
         public string Notes { get; set; }
-        
+
         // Related entities
         public UserDetailsDto User { get; set; }
         public VehicleDetailsDto Vehicle { get; set; }
@@ -88,4 +91,4 @@ namespace fyp_motomate.Models.DTOs
         public InspectionDetailsDto Inspection { get; set; }
         public List<ServiceDto> AdditionalServices { get; set; } = new List<ServiceDto>();
     }
-} 
+}

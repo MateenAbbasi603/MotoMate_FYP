@@ -21,7 +21,9 @@ namespace fyp_motomate.Migrations
                     ToolType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     Quantity = table.Column<int>(type: "int", nullable: false),
                     PurchaseDate = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    Condition = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false)
+                    Condition = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Price = table.Column<int>(type: "int", nullable: false),
+                    VendorName = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -37,7 +39,8 @@ namespace fyp_motomate.Migrations
                     ServiceName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Category = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     Price = table.Column<decimal>(type: "decimal(10,2)", nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SubCategory = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -267,7 +270,9 @@ namespace fyp_motomate.Migrations
                     UserId = table.Column<int>(type: "int", nullable: false),
                     VehicleId = table.Column<int>(type: "int", nullable: false),
                     ServiceId = table.Column<int>(type: "int", nullable: false),
+                    SubCategory = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     OrderId = table.Column<int>(type: "int", nullable: true),
+                    MechanicId = table.Column<int>(type: "int", nullable: false),
                     ScheduledDate = table.Column<DateTime>(type: "datetime2", nullable: false),
                     TimeSlot = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
@@ -416,7 +421,7 @@ namespace fyp_motomate.Migrations
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "UserId", "Address", "CreatedAt", "Email", "Name", "Password", "Phone", "Role", "UpdatedAt", "Username", "imgUrl" },
-                values: new object[] { 1, "Admin Headquarters", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin@example.com", "Super Admin", "$2a$11$0pB5mXEmEERwpizF/x0LdunrENqpgPPYBjOlbTTF5lLmsaa3o.nxC", "+1234567890", "super_admin", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin", "https://ui-avatars.com/api/?name=Super+Admin&background=random" });
+                values: new object[] { 1, "Admin Headquarters", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin@example.com", "Super Admin", "$2a$11$4Z03ts31qhc336CLgcJyVOvoo6aCNMASWRZ5WaZa9PvywzhQouKZ2", "+1234567890", "super_admin", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin", "https://ui-avatars.com/api/?name=Super+Admin&background=random" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Appointments_MechanicId",

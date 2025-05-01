@@ -136,6 +136,10 @@ namespace fyp_motomate.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("SubCategory")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("SuspensionCondition")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -475,8 +479,7 @@ namespace fyp_motomate.Migrations
 
                     b.Property<string>("SubCategory")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("ServiceId");
 
@@ -591,7 +594,7 @@ namespace fyp_motomate.Migrations
                             CreatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "superadmin@example.com",
                             Name = "Super Admin",
-                            Password = "$2a$11$fNiWIbP7Ghs/RVPIx0dqiekkYuFtrD3ghbvdoiH1d/l93BZPXgx.m",
+                            Password = "$2a$11$4Z03ts31qhc336CLgcJyVOvoo6aCNMASWRZ5WaZa9PvywzhQouKZ2",
                             Phone = "+1234567890",
                             Role = "super_admin",
                             UpdatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),

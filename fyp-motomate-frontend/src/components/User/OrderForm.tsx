@@ -134,7 +134,8 @@ export default function OrderForm() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
-  const [inspectionSubcategories, setInspectionSubcategories] = useState<Service[]>([]);
+  const [inspectionSubcategories, setInspectionSubcategories] = useState<string[]>([]);
+  const [availableSubcategoryServices, setAvailableSubcategoryServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +144,7 @@ export default function OrderForm() {
   const [selectedAdditionalServices, setSelectedAdditionalServices] = useState<Service[]>([]);
   const [timeSlotInfos, setTimeSlotInfos] = useState<TimeSlotInfo[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [allServices, setAllServices] = useState<Service[]>([]);
   const router = useRouter();
   const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -210,7 +212,7 @@ export default function OrderForm() {
 
         setVehicles(vehiclesData);
 
-        // Fetch available services (excluding inspection category)
+        // Fetch available services
         const servicesResponse = await axios.get(`${API_URL}/api/services`);
 
         // Handle potential nested data structure for services too
@@ -221,23 +223,34 @@ export default function OrderForm() {
           servicesData = servicesResponse.data;
         }
 
+        // Store all services for reference
+        setAllServices(servicesData);
+
+        // Filter services by category
         const filteredServices = servicesData.filter(
           (service: Service) => service.category.toLowerCase() !== 'inspection'
         );
 
-        // Get inspection types from services API (where category = inspection)
+        // Get inspection types from services API (where category = inspection and no subcategory)
         const inspectionTypes = servicesData.filter(
-          (service: Service) => service.category.toLowerCase() === 'inspection' && (!service.subCategory || service.subCategory === "")
+          (service: Service) => service.subCategory?.toLowerCase()
         );
+        // Extract unique subcategories
+        const subcategories = [...new Set(
+          servicesData
+            .filter((service: Service) =>
+              service.category.toLowerCase() === 'inspection' &&
+              service.subCategory &&
+              service.subCategory !== ""
+            )
+            .map((service: Service) => service.serviceName || "")
+        )];
+        console.log(subcategories, "SUB CATEGORIES");
 
-        // Get inspection subcategories
-        const subcategories = servicesData.filter(
-          (service: Service) => service.category.toLowerCase() === 'inspection' && service.subCategory && service.subCategory !== ""
-        );
 
         setServices(filteredServices);
         setInspectionTypes(inspectionTypes);
-        setInspectionSubcategories(subcategories);
+        setInspectionSubcategories(subcategories as any);
 
         // Load initial time slots for today
         fetchAvailableTimeSlotsForDate(today);
@@ -279,26 +292,48 @@ export default function OrderForm() {
     }
   }, [additionalServiceIds, services]);
 
-  // Update selected inspection type when inspectionTypeId changes and filter relevant subcategories
   useEffect(() => {
     if (inspectionTypeId) {
-      const inspType = inspectionTypes.find(it => it.serviceId.toString() === inspectionTypeId);
-      setSelectedInspectionType(inspType || null);
+      // Get the selected inspection type object
+      const selectedType = inspectionTypes.find(it => it.serviceId.toString() === inspectionTypeId);
 
-      // Filter subcategories for this inspection type
-      if (inspType) {
-        const relevantSubcategories = inspectionSubcategories.filter(
-          sub => sub.subCategory?.startsWith(inspType.serviceName)
+      if (selectedType) {
+        // Filter services that match the selected inspection type's subcategory
+        const relatedServices = allServices.filter(
+          (service: Service) =>
+            service.category.toLowerCase() === 'inspection' &&
+            service.subCategory === selectedType.subCategory
         );
-        setInspectionSubcategories(relevantSubcategories);
 
-        // Reset selected subcategory when inspection type changes
-        form.setValue("inspectionSubcategory", "");
+        // Extract unique service names
+        const serviceNames = [...new Set(
+          relatedServices.map((service: Service) => service.serviceName)
+        )];
+
+        setInspectionSubcategories(serviceNames);
+      } else {
+        setInspectionSubcategories([]);
       }
-    } else {
-      setSelectedInspectionType(null);
+
+      // Reset selected subcategory
+      form.setValue("inspectionSubcategory", "standard");
     }
-  }, [inspectionTypeId, inspectionTypes, inspectionSubcategories, form]);
+  }, [inspectionTypeId, inspectionTypes, allServices, form]);
+  // Update available subcategory services when inspectionSubcategory changes
+  useEffect(() => {
+    if (inspectionSubcategory) {
+      // Filter services based on the selected subcategory
+      const subcategoryServices = allServices.filter(
+        (service: Service) =>
+          service.category.toLowerCase() === 'inspection' &&
+          service.subCategory === inspectionSubcategory
+      );
+
+      setAvailableSubcategoryServices(subcategoryServices);
+    } else {
+      setAvailableSubcategoryServices([]);
+    }
+  }, [inspectionSubcategory, allServices]);
 
   // Function to fetch available time slots for a specific date
   const fetchAvailableTimeSlotsForDate = async (date: Date) => {
@@ -475,6 +510,11 @@ export default function OrderForm() {
   const calculateTotal = () => {
     let total = selectedInspectionType ? selectedInspectionType.price : 0;
 
+    // Add subcategory service price if applicable
+    if (inspectionSubcategory && availableSubcategoryServices.length > 0) {
+      total += availableSubcategoryServices.reduce((sum, service) => sum + service.price, 0);
+    }
+
     if (includeService && selectedService) {
       total += selectedService.price;
     }
@@ -497,15 +537,6 @@ export default function OrderForm() {
     if (availableSlots === 0) return "bg-red-500";
     if (availableSlots === 1) return "bg-yellow-500";
     return "bg-green-500";
-  };
-
-  // Get filtered subcategories based on selected inspection type
-  const getFilteredSubcategories = () => {
-    if (!selectedInspectionType) return [];
-
-    return inspectionSubcategories.filter(
-      sub => sub.subCategory?.startsWith(selectedInspectionType.serviceName)
-    );
   };
 
   if (loading) {
@@ -607,6 +638,7 @@ export default function OrderForm() {
               )}
             />
 
+            {/* Inspection Type Selection */}
             <FormField
               control={form.control}
               name="inspectionTypeId"
@@ -628,7 +660,7 @@ export default function OrderForm() {
                           key={type.serviceId}
                           value={type.serviceId.toString()}
                         >
-                          {type.serviceName} - ${type.price.toFixed(2)}
+                          {type.subCategory}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -642,43 +674,60 @@ export default function OrderForm() {
               )}
             />
 
-            {/* Add subcategory field when inspection type is selected */}
-            {selectedInspectionType && getFilteredSubcategories().length > 0 && (
-              <FormField
-                control={form.control}
-                name="inspectionSubcategory"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Inspection Subcategory</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || ""}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a subcategory (optional)" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="">None - Standard Inspection</SelectItem>
-                        {getFilteredSubcategories().map((sub) => (
-                          <SelectItem
-                            key={sub.serviceId}
-                            value={sub.subCategory || ""}
-                          >
-                            {sub.subCategory}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription className="flex items-center">
-                      <Info className="mr-1 h-3 w-3" />
-                      Select a specific inspection area (optional)
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormField
+              control={form.control}
+              name="inspectionSubcategory"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Inspection Subcategory</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || ""}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a subcategory" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                
+                      {inspectionSubcategories.map((subcategory) => (
+                        <SelectItem
+                          key={subcategory}
+                          value={subcategory}
+                        >
+                          {subcategory}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription className="flex items-center">
+                    <Info className="mr-1 h-3 w-3" />
+                    Select a specific inspection area
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+
+            {/* Display Subcategory Services */}
+            {inspectionSubcategory && availableSubcategoryServices.length > 0 && (
+              <div className="space-y-2 border rounded-md p-3">
+                <h3 className="text-sm font-medium">Services for {inspectionSubcategory}</h3>
+                {availableSubcategoryServices.map((service) => (
+                  <div
+                    key={service.serviceId}
+                    className="flex justify-between items-center p-2 rounded-md bg-muted/50"
+                  >
+                    <div>
+                      <p className="font-medium text-sm">{service.serviceName}</p>
+                      <p className="text-xs text-muted-foreground">{service.description}</p>
+                    </div>
+                    <p className="text-sm font-medium">${service.price.toFixed(2)}</p>
+                  </div>
+                ))}
+              </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -958,6 +1007,22 @@ export default function OrderForm() {
                     </span>
                     <span>${selectedInspectionType.price.toFixed(2)}</span>
                   </div>
+                )}
+
+                {/* Show Subcategory Services in Summary */}
+                {inspectionSubcategory && availableSubcategoryServices.length > 0 && (
+                  <>
+                    <div className="flex justify-between text-sm font-medium">
+                      <span>{inspectionSubcategory} Services:</span>
+                      <span></span>
+                    </div>
+                    {availableSubcategoryServices.map(service => (
+                      <div key={service.serviceId} className="flex justify-between text-sm pl-2">
+                        <span>- {service.serviceName}</span>
+                        <span>${service.price.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </>
                 )}
 
                 {includeService && selectedService && (

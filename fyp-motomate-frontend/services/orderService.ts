@@ -53,6 +53,8 @@ export const orderService = {
   getOrderById: async (id:any) => {
     try {
       const response = await apiClient.get(`/api/Orders/${id}`);
+      console.log(response.data ,"GET ORDER DETAILS");
+      
       return response.data;
     } catch (error) {
       console.error(`Error fetching order ${id}:`, error);

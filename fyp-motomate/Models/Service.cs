@@ -7,40 +7,38 @@ using System.Text.Json.Serialization;
 
 namespace fyp_motomate.Models
 {
-    public class Service
-    {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int ServiceId { get; set; }
+ // Models/Service.cs
+public class Service
+{
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int ServiceId { get; set; }
 
-        [Required]
-        [StringLength(100)]
-        public string ServiceName { get; set; }
+    [Required]
+    [StringLength(100)]
+    public string ServiceName { get; set; }
 
-        [Required]
-        [StringLength(20)]
-        public string Category { get; set; }
+    [Required]
+    [StringLength(20)]
+    public string Category { get; set; }
 
+    [Required]
+    [Column(TypeName = "decimal(10,2)")]
+    public decimal Price { get; set; }
 
-        // New field for subcategory
-        [StringLength(100)]
-        public string SubCategory { get; set; }
+    public string Description { get; set; }
+    
+    // Add this property to match your database
+    public string SubCategory { get; set; }
 
+    // Navigation properties
+    [JsonIgnore]
+    public virtual ICollection<Appointment> Appointments { get; set; }
 
-        [Required]
-        [Column(TypeName = "decimal(10,2)")]
-        public decimal Price { get; set; }
+    [JsonIgnore]
+    public virtual ICollection<Order> Orders { get; set; }
 
-        public string Description { get; set; }
-
-        // Navigation properties - using JsonIgnore to prevent serialization issues
-        [JsonIgnore]
-        public virtual ICollection<Appointment> Appointments { get; set; }
-
-        [JsonIgnore]
-        public virtual ICollection<Order> Orders { get; set; }
-
-        [JsonIgnore]
-        public virtual ICollection<ServiceHistory> ServiceHistories { get; set; }
-    }
+    [JsonIgnore] 
+    public virtual ICollection<ServiceHistory> ServiceHistories { get; set; }
+}
 }

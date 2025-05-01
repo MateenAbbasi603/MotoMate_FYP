@@ -95,6 +95,8 @@ interface ServiceData {
   description: string;
   category: string;
   $id?: string;
+  subCategory?: string; // Make it optional
+
 }
 
 interface UserData {
@@ -263,7 +265,7 @@ export default function OrderDetailPage({
                 `${API_URL}/api/Services/${inspectionServiceId}`
               );
 
-              // console.log('Inspection service details:', inspectionServiceResponse.data);
+              console.log('Inspection service details:', inspectionServiceResponse.data);
 
               // Update the inspection with the service price
               enhancedOrder = {

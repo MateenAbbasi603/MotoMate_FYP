@@ -176,7 +176,8 @@ namespace fyp_motomate.Controllers
                         ServiceName = order.Service.ServiceName,
                         Category = order.Service.Category,
                         Price = order.Service.Price,
-                        Description = order.Service.Description
+                        Description = order.Service.Description,
+                        SubCategory = order.Service.SubCategory ?? "" // Null coalescing operator
                     };
                 }
 
@@ -217,7 +218,9 @@ namespace fyp_motomate.Controllers
                             ServiceName = os.Service.ServiceName,
                             Category = os.Service.Category,
                             Price = os.Service.Price,
-                            Description = os.Service.Description
+                            Description = os.Service.Description,
+                            SubCategory = os.Service.SubCategory ?? "" // Null coalescing operator
+
                         })
                         .ToList();
                 }
@@ -527,7 +530,7 @@ namespace fyp_motomate.Controllers
                         UserId = userId,
                         VehicleId = request.VehicleId,
                         ServiceId = request.InspectionTypeId,
-                                    SubCategory = request.SubCategory, // Add this line
+                        SubCategory = request.SubCategory, // Add this line
 
                         OrderId = orderId, // Use the orderId directly
                         ScheduledDate = request.InspectionDate.Date, // Use .Date to strip the time component

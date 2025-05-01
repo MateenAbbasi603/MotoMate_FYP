@@ -183,7 +183,7 @@ export default function MechanicsPage() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => router.push(`/admin/mechanics/${mechanic.userId}`)}
+                            onClick={() => router.push(`/admin/users/${mechanic.userId}`)}
                           >
                             View Details
                           </Button>
