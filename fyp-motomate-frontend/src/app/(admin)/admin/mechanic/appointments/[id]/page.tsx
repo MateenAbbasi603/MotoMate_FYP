@@ -52,6 +52,7 @@ import { Textarea } from "@/components/ui/textarea";
 import axios from 'axios';
 import { toast } from 'sonner';
 import authService from '../../../../../../../services/authService';
+import { formatLabel } from '@/lib/utils';
 
 interface AppointmentData {
   appointmentId: number;
@@ -60,7 +61,8 @@ interface AppointmentData {
   timeSlot: string;
   status: string;
   notes: string;
-  mechanicId: string
+  mechanicId: number;
+  serviceId: number | null;
   user: {
     userId: number;
     name: string;
@@ -81,7 +83,8 @@ interface AppointmentData {
     price: number;
     description: string;
     category: string;
-  };
+    subCategory?: string;
+  } | null;
 }
 
 interface OrderData {
@@ -113,6 +116,7 @@ interface OrderData {
     price: number;
     description: string;
     category: string;
+    subCategory?: string;
   };
   inspection?: {
     inspectionId: number;
@@ -135,6 +139,7 @@ interface OrderData {
     price: number;
     description: string;
     category: string;
+    subCategory?: string;
   }>;
 }
 
@@ -146,7 +151,7 @@ interface InspectionReportFormData {
   brakeCondition: string;
   transmissionCondition: string;
   notes: string;
-  mechanicId:number
+  mechanicId: number
 }
 
 const conditionOptions = [
@@ -171,7 +176,6 @@ export default function MechanicAppointmentDetail({
   const resolvedParams = use(params);
   const id = resolvedParams.id;
 
-
   const [appointment, setAppointment] = useState<AppointmentData | null>(null);
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -187,7 +191,7 @@ export default function MechanicAppointmentDetail({
     brakeCondition: '',
     transmissionCondition: '',
     notes: '',
-    mechanicId:0
+    mechanicId: 0
   });
 
   useEffect(() => {
@@ -215,18 +219,16 @@ export default function MechanicAppointmentDetail({
             }
           }
         );
-        console.log(appointmentResponse.data);
+        console.log("Appointment data:", appointmentResponse.data);
 
         if (appointmentResponse.data) {
-
-
           setAppointment(appointmentResponse.data);
         }
 
         const user = await authService.getCurrentUser();
 
         // Fetch order details if orderId is available
-        if (id) {
+        if (appointmentResponse.data && appointmentResponse.data.orderId) {
           const orderResponse = await axios.get(
             `${API_URL}/api/Orders/${appointmentResponse.data.orderId}`,
             {
@@ -235,6 +237,8 @@ export default function MechanicAppointmentDetail({
               }
             }
           );
+
+          console.log("Order data:", orderResponse.data);
 
           if (orderResponse.data) {
             setOrder(orderResponse.data);
@@ -295,6 +299,28 @@ export default function MechanicAppointmentDetail({
     }
   };
 
+  // Helper for safely accessing service info
+  const getServiceInfo = (service: any) => {
+    if (!service) {
+      return {
+        name: "Service information unavailable",
+        price: "N/A",
+        description: "No details available",
+        category: "Unknown"
+      };
+    }
+
+    return {
+      name: service.serviceName +
+        (service.category === "Inspection" &&
+          service.subCategory ?
+          ` (${service.subCategory})` : ""),
+      price: `$${service.price.toFixed(2)}`,
+      description: service.description || "No description available",
+      category: service.category
+    };
+  };
+
   // Handle input change for report form
   const handleInputChange = (field: keyof InspectionReportFormData, value: string) => {
     setReportFormData(prev => ({
@@ -303,88 +329,83 @@ export default function MechanicAppointmentDetail({
     }));
   };
 
+  // Handle submit inspection report
+  const handleSubmitReport = async () => {
+    try {
+      setIsSubmittingReport(true);
 
-// Handle submit inspection report
-const handleSubmitReport = async () => {
-  try {
-    setIsSubmittingReport(true);
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-      toast.error('Authentication token not found. Please log in again.');
-      return;
-    }
-
-    const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-
-    // Find the inspection ID from the order data
-    const inspectionId = order?.inspection?.inspectionId;
-
-    if (!inspectionId) {
-      toast.error('Inspection ID not found. Cannot submit report.');
-      return;
-    }
-
-    console.log(reportFormData,"FORM DATA FOR INSPECTION REPORT ");
-    
-
-    // Submit the inspection report update
-    await axios.post(
-      `${API_URL}/api/Inspections/${inspectionId}/report`,
-      reportFormData,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication token not found. Please log in again.');
+        return;
       }
-    );
 
-    // Update appointment status to completed
-    await axios.put(
-      `${API_URL}/api/Appointments/${id}`,
-      {
-        status: 'completed',
-        notes: "Done Job",
-        // Remove the mechanicId field as it's causing issues
-        // Only include these fields if you're actually updating them
-        timeSlot: appointment?.timeSlot,
-        // appointmentDate: appointment?.appointmentDate
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+
+      // Find the inspection ID from the order data
+      const inspectionId = order?.inspection?.inspectionId;
+
+      if (!inspectionId) {
+        toast.error('Inspection ID not found. Cannot submit report.');
+        return;
       }
-    );
 
-    // Update local state
-    if (appointment) {
-      setAppointment({
-        ...appointment,
-        status: 'completed'
-      });
-    }
+      console.log("Submitting report data:", reportFormData);
 
-    if (order && order.inspection) {
-      setOrder({
-        ...order,
-        inspection: {
-          ...order.inspection,
-          ...reportFormData,
+      // Submit the inspection report update
+      await axios.post(
+        `${API_URL}/api/Inspections/${inspectionId}/report`,
+        reportFormData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      // Update appointment status to completed
+      await axios.put(
+        `${API_URL}/api/Appointments/${id}`,
+        {
+          status: 'completed',
+          notes: "Done Job",
+          timeSlot: appointment?.timeSlot,
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      // Update local state
+      if (appointment) {
+        setAppointment({
+          ...appointment,
           status: 'completed'
-        }
-      });
-    }
+        });
+      }
 
-    toast.success('Inspection report submitted successfully');
-    setIsReportDialogOpen(false);
-  } catch (err: any) {
-    console.error('Failed to submit inspection report:', err);
-    toast.error(err.response?.data?.message || 'Failed to submit report. Please try again.');
-  } finally {
-    setIsSubmittingReport(false);
-  }
-};
+      if (order && order.inspection) {
+        setOrder({
+          ...order,
+          inspection: {
+            ...order.inspection,
+            ...reportFormData,
+            status: 'completed'
+          }
+        });
+      }
+
+      toast.success('Inspection report submitted successfully');
+      setIsReportDialogOpen(false);
+    } catch (err: any) {
+      console.error('Failed to submit inspection report:', err);
+      toast.error(err.response?.data?.message || 'Failed to submit report. Please try again.');
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
 
   return (
     <div className="container mx-auto py-6">
@@ -470,16 +491,44 @@ const handleSubmitReport = async () => {
                         Service Information
                       </h3>
                       <div className="bg-muted/50 p-4 rounded-md">
-                        <h4 className="font-medium text-primary">
-                          {order.service?.serviceName || 'Custom Service'}
-                        </h4>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {order.service?.description || 'No description available'}
-                        </p>
-                        <div className="flex justify-between items-center mt-3">
-                          <span className="text-sm">Service Price</span>
-                          <span className="font-medium">${order.service?.price?.toFixed(2) || '0.00'}</span>
-                        </div>
+                        {appointment.service ? (
+                          <>
+                            <h4 className="font-medium text-primary">
+                              {formatLabel(appointment.service.serviceName)}
+                              {appointment.service.category === "Inspection" &&
+                                appointment.service.subCategory &&
+                                ` (${appointment.service.subCategory})`}
+                            </h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {appointment.service.description || 'No description available'}
+                            </p>
+                            <div className="flex justify-between items-center mt-3">
+                              <span className="text-sm">Service Category</span>
+                              <Badge variant="outline">
+                                {appointment.service.category}
+                              </Badge>
+                            </div>
+                            <div className="flex justify-between items-center mt-2">
+                              <span className="text-sm">Service Price</span>
+                              <span className="font-medium">${appointment.service.price.toFixed(2)}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <h4 className="font-medium text-primary">
+                              {appointment.serviceId === null ? "Vehicle Inspection" : "Service"}
+                            </h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {appointment.serviceId === null
+                                ? "Standard vehicle inspection service"
+                                : "Service details not available"}
+                            </p>
+                            <div className="flex justify-between items-center mt-2">
+                              <span className="text-sm">Service Price</span>
+                              <span className="font-medium">Price information not available</span>
+                            </div>
+                          </>
+                        )}
 
                         {order.includesInspection && (
                           <div className="flex justify-between items-center mt-2">
@@ -499,11 +548,20 @@ const handleSubmitReport = async () => {
                             <div key={service.serviceId || index} className="bg-muted/50 p-4 rounded-md mb-2">
                               <h4 className="font-medium text-primary">
                                 {service.serviceName}
+                                {service.category === "Inspection" &&
+                                  service.subCategory &&
+                                  ` (${service.subCategory})`}
                               </h4>
                               <p className="text-sm text-muted-foreground mt-1">
                                 {service.description || 'No description available'}
                               </p>
-                              <div className="flex justify-between items-center mt-3">
+                              <div className="flex justify-between items-center mt-2">
+                                <span className="text-sm">Service Category</span>
+                                <Badge variant="outline">
+                                  {service.category}
+                                </Badge>
+                              </div>
+                              <div className="flex justify-between items-center mt-2">
                                 <span className="text-sm">Service Price</span>
                                 <span className="font-medium">${service.price?.toFixed(2) || '0.00'}</span>
                               </div>
@@ -535,6 +593,32 @@ const handleSubmitReport = async () => {
                           {order.inspection.status}
                         </Badge>
                       </div>
+
+                      {/* Service details for inspection */}
+                      {appointment.service && appointment.service.category === "Inspection" && (
+                        <div className="p-4 bg-blue-50/60 rounded-md">
+                          <div className="flex justify-between items-center">
+                            <h4 className="font-medium text-blue-800">
+                              Inspection Service Type
+                            </h4>
+                            <Badge variant="outline" className="bg-white text-blue-800 border-blue-300">
+                              {appointment.service.serviceName}
+                            </Badge>
+                          </div>
+
+                          {appointment.service.subCategory && (
+                            <div className="flex justify-between items-center mt-2">
+                              <span className="text-sm text-blue-800">Focus Area</span>
+                              <span className="font-medium text-blue-900">{appointment.service.subCategory}</span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center mt-2">
+                            <span className="text-sm text-blue-800">Inspection Fee</span>
+                            <span className="font-medium text-blue-900">${appointment.service.price.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
 
                       <h3 className="text-lg font-medium flex items-center mt-4">
                         <ClipboardCheck className="mr-2 h-5 w-5 text-primary" />
@@ -621,6 +705,14 @@ const handleSubmitReport = async () => {
                   Back to Dashboard
                 </Button>
 
+                {order.inspection && order.inspection.status !== 'completed' && appointment.status !== 'completed' && (
+                  <Button
+                    onClick={() => setIsReportDialogOpen(true)}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Generate Inspection Report
+                  </Button>
+                )}
               </CardFooter>
             </Card>
           </div>
@@ -673,6 +765,33 @@ const handleSubmitReport = async () => {
                     </div>
                   )}
                 </div>
+
+                <hr />
+
+                {/* Service Summary */}
+                {appointment.service && (
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Service Summary</h3>
+                    <div className="p-3 bg-muted/30 rounded-md">
+                      <h4 className="text-sm font-medium">
+                        {appointment.service.serviceName}
+                        {appointment.service.category === "Inspection" &&
+                          appointment.service.subCategory &&
+                          ` (${appointment.service.subCategory})`}
+                      </h4>
+                      <div className="flex justify-between items-center mt-2 text-sm">
+                        <span className="text-muted-foreground">Service Fee:</span>
+                        <span className="font-medium">${appointment.service.price.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center mt-1 text-sm">
+                        <span className="text-muted-foreground">Category:</span>
+                        <Badge variant="outline" className="text-xs">
+                          {appointment.service.category}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <hr />
 

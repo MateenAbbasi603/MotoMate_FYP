@@ -11,7 +11,7 @@
 
  - Mechanic can update the progress of vehicle (Awaiting for parts, in progress, completed) For Mechanic Side
 
- - Inspection only seen as selected 
+ - Inspection only seen as selected ✔️
 
  - Inspection report layout
 
@@ -19,9 +19,10 @@
  
  - Progress cannot be reversable
 
- - Inspection should be prefined from admin side while creating, also customer have dropdown for inspection while odring can select one ,Multiple and Full inspections which include all of them.
+ - Inspection should be prefined from admin side while creating, also customer have dropdown for inspection while odring can select one✔️
+  ,Multiple and Full inspections which include all of them.
 
- - time slot booked twice while ordering
+ - time slot booked twice while ordering✔️
  
 
 
@@ -38,7 +39,7 @@ ADD [imgurl] VARCHAR(255) NULL; -- or NVARCHAR(255) if you need Unicode support
 ALTER TABLE [dbo].[Inspections]
 ADD MechanicId INT;
  ```
- - INVENTORY TO BE DONE TONIGHT
+ - INVENTORY TO BE DONE TONIGHT ✔️
  - Order table should have ordertype field in the table of orders (Walk in, Online)
  - seperate API for walk in customers
  - Service will be on estimated time

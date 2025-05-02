@@ -27,6 +27,7 @@ import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import axios from 'axios';
+import { formatLabel } from '@/lib/utils';
 
 interface AppointmentData {
   appointmentId: number;
@@ -35,6 +36,7 @@ interface AppointmentData {
   timeSlot: string;
   status: string;
   notes: string;
+  serviceId: number | null;
   user: {
     userId: number;
     name: string;
@@ -55,6 +57,7 @@ interface AppointmentData {
     price: number;
     description: string;
     category: string;
+    subCategory?: string;
   };
 }
 
@@ -70,7 +73,7 @@ export default function MechanicDashboard() {
       try {
         setLoading(true);
         setError(null);
-        
+
         // Get the authentication token from localStorage
         const token = localStorage.getItem('token');
         if (!token) {
@@ -131,7 +134,7 @@ export default function MechanicDashboard() {
         return appointmentDate >= today && appointment.status.toLowerCase() !== 'completed';
       });
     } else if (activeTab === 'completed') {
-      return appointments.filter(appointment => 
+      return appointments.filter(appointment =>
         appointment.status.toLowerCase() === 'completed'
       );
     } else {
@@ -200,8 +203,8 @@ export default function MechanicDashboard() {
           ) : getFilteredAppointments().length > 0 ? (
             <div className="space-y-4">
               {getFilteredAppointments().map((appointment) => (
-                <Card 
-                  key={appointment.appointmentId} 
+                <Card
+                  key={appointment.appointmentId}
                   className="overflow-hidden hover:border-primary transition-all cursor-pointer"
                   onClick={() => router.push(`/admin/mechanic/appointments/${appointment.appointmentId}`)}
                 >
@@ -232,7 +235,7 @@ export default function MechanicDashboard() {
                           <span className="text-muted-foreground">Time:</span> {appointment.timeSlot}
                         </p>
                       </div>
-                      
+
                       <div className="p-3 bg-muted/30 rounded-md">
                         <div className="flex items-center mb-2">
                           <Car className="h-4 w-4 mr-2 text-primary" />
@@ -245,7 +248,7 @@ export default function MechanicDashboard() {
                           <span className="text-muted-foreground">License:</span> {appointment.vehicle.licensePlate}
                         </p>
                       </div>
-                      
+
                       <div className="p-3 bg-muted/30 rounded-md">
                         <div className="flex items-center mb-2">
                           <User className="h-4 w-4 mr-2 text-primary" />
@@ -260,10 +263,24 @@ export default function MechanicDashboard() {
                   </CardContent>
                   <CardFooter className="bg-muted/10 pt-3">
                     <div className="w-full flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-medium">{appointment.service.serviceName}</p>
-                        <p className="text-sm text-muted-foreground">${appointment.service.price.toFixed(2)}</p>
-                      </div>
+                      {appointment.service ? (
+                        <div>
+                          <p className="text-sm font-medium">
+                            {formatLabel(appointment.service.serviceName)}
+                            {appointment.service.category === "Inspection" &&
+                              appointment.service.subCategory &&
+                              ` (${appointment.service.subCategory})`}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            ${appointment.service.price.toFixed(2)}
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm font-medium">Vehicle Inspection</p>
+                          <p className="text-sm text-muted-foreground">Service details unavailable</p>
+                        </div>
+                      )}
                       <Button variant="ghost" size="sm" className="gap-1">
                         View Details <ChevronRight className="h-4 w-4" />
                       </Button>
@@ -303,8 +320,8 @@ export default function MechanicDashboard() {
           ) : getFilteredAppointments().length > 0 ? (
             <div className="space-y-4">
               {getFilteredAppointments().map((appointment) => (
-                <Card 
-                  key={appointment.appointmentId} 
+                <Card
+                  key={appointment.appointmentId}
                   className="overflow-hidden hover:border-primary transition-all cursor-pointer"
                   onClick={() => router.push(`/admin/mechanic/appointments/${appointment.appointmentId}`)}
                 >
@@ -332,7 +349,7 @@ export default function MechanicDashboard() {
                           <span className="text-muted-foreground">Order #:</span> {appointment.orderId}
                         </p>
                       </div>
-                      
+
                       <div className="p-3 bg-muted/30 rounded-md">
                         <div className="flex items-center mb-2">
                           <Car className="h-4 w-4 mr-2 text-primary" />
@@ -345,7 +362,7 @@ export default function MechanicDashboard() {
                           <span className="text-muted-foreground">License:</span> {appointment.vehicle.licensePlate}
                         </p>
                       </div>
-                      
+
                       <div className="p-3 bg-muted/30 rounded-md">
                         <div className="flex items-center mb-2">
                           <User className="h-4 w-4 mr-2 text-primary" />
@@ -360,10 +377,24 @@ export default function MechanicDashboard() {
                   </CardContent>
                   <CardFooter className="bg-muted/10 pt-3">
                     <div className="w-full flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-medium">{appointment.service.serviceName}</p>
-                        <p className="text-sm text-muted-foreground">${appointment.service.price.toFixed(2)}</p>
-                      </div>
+                      {appointment.service ? (
+                        <div>
+                          <p className="text-sm font-medium">
+                            {formatLabel(appointment.service.serviceName)}
+                            {appointment.service.category === "Inspection" &&
+                              appointment.service.subCategory &&
+                              ` (${appointment.service.subCategory})`}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            ${appointment.service.price.toFixed(2)}
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm font-medium">Vehicle Inspection</p>
+                          <p className="text-sm text-muted-foreground">Service details unavailable</p>
+                        </div>
+                      )}
                       <Button variant="ghost" size="sm" className="gap-1">
                         View Details <ChevronRight className="h-4 w-4" />
                       </Button>
@@ -403,8 +434,8 @@ export default function MechanicDashboard() {
           ) : appointments.length > 0 ? (
             <div className="space-y-4">
               {appointments.map((appointment) => (
-                <Card 
-                  key={appointment.appointmentId} 
+                <Card
+                  key={appointment.appointmentId}
                   className="overflow-hidden hover:border-primary transition-all cursor-pointer"
                   onClick={() => router.push(`/admin/mechanic/appointments/${appointment.appointmentId}`)}
                 >
@@ -432,7 +463,7 @@ export default function MechanicDashboard() {
                           {appointment.timeSlot}
                         </p>
                       </div>
-                      
+
                       <div className="p-3 bg-muted/30 rounded-md">
                         <div className="flex items-center mb-2">
                           <Car className="h-4 w-4 mr-2 text-primary" />
@@ -445,7 +476,7 @@ export default function MechanicDashboard() {
                           <span className="text-muted-foreground">License:</span> {appointment.vehicle.licensePlate}
                         </p>
                       </div>
-                      
+
                       <div className="p-3 bg-muted/30 rounded-md">
                         <div className="flex items-center mb-2">
                           <User className="h-4 w-4 mr-2 text-primary" />
@@ -460,10 +491,24 @@ export default function MechanicDashboard() {
                   </CardContent>
                   <CardFooter className="bg-muted/10 pt-3">
                     <div className="w-full flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-medium">{appointment.service.serviceName}</p>
-                        <p className="text-sm text-muted-foreground">${appointment.service.price.toFixed(2)}</p>
-                      </div>
+                      {appointment.service ? (
+                        <div>
+                          <p className="text-sm font-medium">
+                            {formatLabel(appointment.service.serviceName)}
+                            {appointment.service.category === "Inspection" &&
+                              appointment.service.subCategory &&
+                              ` (${appointment.service.subCategory})`}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            ${appointment.service.price.toFixed(2)}
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm font-medium">Vehicle Inspection</p>
+                          <p className="text-sm text-muted-foreground">Service details unavailable</p>
+                        </div>
+                      )}
                       <Button variant="ghost" size="sm" className="gap-1">
                         View Details <ChevronRight className="h-4 w-4" />
                       </Button>
