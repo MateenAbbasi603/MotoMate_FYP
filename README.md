@@ -22,7 +22,7 @@
  - Inspection should be prefined from admin side while creating, also customer have dropdown for inspection while odring can select one✔️
   ,Multiple and Full inspections which include all of them.
 
- - time slot booked twice while ordering✔️
+ - time slot booked twice while ordering✔️✔️
  
 
 

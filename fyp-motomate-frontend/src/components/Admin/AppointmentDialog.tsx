@@ -25,25 +25,25 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
 
-export default function AppointmentDialog({ 
-  isOpen, 
-  onClose, 
+export default function AppointmentDialog({
+  isOpen,
+  onClose,
   order,
   onAppointmentCreated
-}:{isOpen:boolean, onClose:()=>void, order:any, onAppointmentCreated:(appointment:any)=>void}) {
+}: { isOpen: boolean, onClose: () => void, order: any, onAppointmentCreated: (appointment: any) => void }) {
   const [mechanicId, setMechanicId] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [mechanics, setMechanics] = useState([]);
   const [loadingMechanics, setLoadingMechanics] = useState(false);
-  
+
   // Extract date and time slot from the order
-// console.log(order,"order");
+  // console.log(order,"order");
 
 
   const inspectionDate = order?.inspection?.scheduledDate;
   const timeSlot = order?.inspection?.timeSlot;
-  
+
   // Format date for display
   const formattedDate = inspectionDate ? format(new Date(inspectionDate), 'MMMM d, yyyy') : 'N/A';
 
@@ -51,7 +51,7 @@ export default function AppointmentDialog({
   useEffect(() => {
     const fetchAvailableMechanics = async () => {
       if (!isOpen || !inspectionDate || !timeSlot) return;
-      
+
       try {
         setLoadingMechanics(true);
         const token = localStorage.getItem('token');
@@ -60,15 +60,16 @@ export default function AppointmentDialog({
           return;
         }
 
+        // Use orderId in the query to exclude mechanics already assigned to this order
         const response = await axios.get(
-          `${API_URL}/api/Appointments/mechanics/available?date=${format(new Date(inspectionDate), 'yyyy-MM-dd')}&timeSlot=${timeSlot}`,
+          `${API_URL}/api/Appointments/mechanics/available?date=${format(new Date(inspectionDate), 'yyyy-MM-dd')}&timeSlot=${timeSlot}&orderId=${order.orderId}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
             }
           }
         );
-        
+
         // Extract mechanics from response
         let mechanicsData = [];
         if (response.data && Array.isArray(response.data)) {
@@ -76,7 +77,7 @@ export default function AppointmentDialog({
         } else if (response.data && response.data.$values) {
           mechanicsData = response.data.$values;
         }
-        
+
         setMechanics(mechanicsData);
       } catch (error) {
         console.error('Error fetching available mechanics:', error);
@@ -87,8 +88,7 @@ export default function AppointmentDialog({
     };
 
     fetchAvailableMechanics();
-  }, [isOpen, inspectionDate, timeSlot]);
-
+  }, [isOpen, inspectionDate, timeSlot, order?.orderId]);
   const handleSubmit = async () => {
     if (!mechanicId) {
       toast.error('Please select a mechanic');
@@ -126,7 +126,7 @@ export default function AppointmentDialog({
       toast.success('Mechanic assigned successfully');
       onAppointmentCreated(response.data);
       onClose();
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Error assigning mechanic:', error);
       toast.error(error.response?.data?.message || 'Failed to assign mechanic');
     } finally {
@@ -154,7 +154,7 @@ export default function AppointmentDialog({
             Assign a mechanic to perform the service for this order.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="grid gap-4 py-4">
           {/* Display the already scheduled date and time */}
           <div className="bg-blue-50 p-4 rounded-md mb-4">
@@ -169,10 +169,10 @@ export default function AppointmentDialog({
               <span className="ml-2 font-medium">{timeSlot || 'N/A'}</span>
             </div>
           </div>
-          
+
           <div className="grid gap-2">
             <Label htmlFor="mechanic">Select Mechanic</Label>
-            <Select 
+            <Select
               value={mechanicId}
               onValueChange={setMechanicId}
               disabled={loadingMechanics}
@@ -186,9 +186,9 @@ export default function AppointmentDialog({
                     Loading mechanics...
                   </SelectItem>
                 ) : mechanics.length > 0 ? (
-                  mechanics.map((mechanic:any) => (
-                    <SelectItem 
-                      key={mechanic.mechanicId} 
+                  mechanics.map((mechanic: any) => (
+                    <SelectItem
+                      key={mechanic.mechanicId}
                       value={mechanic.mechanicId.toString()}
                       disabled={!mechanic.isAvailable}
                     >
@@ -203,7 +203,7 @@ export default function AppointmentDialog({
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="grid gap-2">
             <Label htmlFor="notes">Notes (Optional)</Label>
             <Textarea
@@ -214,7 +214,7 @@ export default function AppointmentDialog({
             />
           </div>
         </div>
-        
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel

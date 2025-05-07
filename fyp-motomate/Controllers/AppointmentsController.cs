@@ -321,9 +321,23 @@ namespace fyp_motomate.Controllers
                     });
                 }
 
-                // Check if mechanic exists and is available
-                bool isMechanicAvailable = await _appointmentService.IsMechanicAvailableAsync(
-                    request.MechanicId, appointmentDate, timeSlot);
+                // First, check if an appointment already exists for this order
+                var existingAppointment = await _context.Appointments
+                    .FirstOrDefaultAsync(a => a.OrderId == request.OrderId);
+
+                if (existingAppointment != null)
+                {
+                    return BadRequest(new { message = "An appointment already exists for this order" });
+                }
+
+                // Check if mechanic exists and is available (only check against OTHER appointments, not this order's inspection)
+                bool isMechanicAvailable = await _context.Appointments
+                    .Where(a => a.MechanicId == request.MechanicId &&
+                           a.AppointmentDate.Date == appointmentDate.Date &&
+                           a.TimeSlot == timeSlot &&
+                           a.Status != "cancelled" &&
+                           a.OrderId != request.OrderId)
+                    .CountAsync() == 0;
 
                 if (!isMechanicAvailable)
                 {
@@ -438,6 +452,7 @@ namespace fyp_motomate.Controllers
                 return StatusCode(500, new { message = "An error occurred while creating the appointment", error = ex.Message });
             }
         }
+
 
         // PUT: api/Appointments/5
         [HttpPut("{id}")]
@@ -619,7 +634,10 @@ namespace fyp_motomate.Controllers
         // GET: api/Appointments/mechanics/available
         [HttpGet("mechanics/available")]
         [Authorize(Roles = "super_admin,admin,service_agent")]
-        public async Task<ActionResult<IEnumerable<MechanicAvailabilityDto>>> GetAvailableMechanics([FromQuery] DateTime date, [FromQuery] string timeSlot)
+        public async Task<ActionResult<IEnumerable<MechanicAvailabilityDto>>> GetAvailableMechanics(
+            [FromQuery] DateTime date,
+            [FromQuery] string timeSlot,
+            [FromQuery] int? orderId = null)
         {
             try
             {
@@ -639,10 +657,12 @@ namespace fyp_motomate.Controllers
                 }
 
                 // Check which mechanics are already booked for this time slot
+                // Exclude appointments for the current order if orderId is provided
                 var bookedMechanicIds = await _context.Appointments
                     .Where(a => a.AppointmentDate.Date == date.Date &&
                            a.TimeSlot == timeSlot &&
-                           a.Status != "cancelled")
+                           a.Status != "cancelled" &&
+                           (orderId == null || a.OrderId != orderId))
                     .Select(a => a.MechanicId)
                     .ToListAsync();
 
@@ -664,6 +684,8 @@ namespace fyp_motomate.Controllers
                 return StatusCode(500, new { message = "An error occurred while retrieving available mechanics", error = ex.Message });
             }
         }
+
+
         // GET: api/Appointments/timeslots/available
         [HttpGet("timeslots/available")]
         [Authorize(Roles = "super_admin,admin,service_agent")]

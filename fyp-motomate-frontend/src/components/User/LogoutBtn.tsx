@@ -53,7 +53,7 @@ export default function LogoutButton({
       disabled={isLoggingOut}
       className={className}
     >
-      {showIcon && <LogOut className="mr-2 h-4 w-4" />}
+      {showIcon && <LogOut className="mr-2 h-4 w-4 cursor-pointer" />}
       {isLoggingOut ? "Logging out..." : "Logout"}
     </Button>
   );
