@@ -357,6 +357,198 @@ namespace fyp_motomate.Controllers
             return CreatedAtAction(nameof(GetOrder), new { id = order.OrderId }, order);
         }
 
+
+
+        // POST: api/Orders/walkin
+        [HttpPost("walkin")]
+        [Authorize(Roles = "super_admin,admin,service_agent")]
+        public async Task<ActionResult<Order>> CreateWalkInOrder([FromBody] WalkInOrderRequest request)
+        {
+            try
+            {
+                // Validate request
+                if (!request.IncludesInspection && !request.ServiceId.HasValue)
+                {
+                    return BadRequest(new { message = "Order must include either an inspection or a service" });
+                }
+
+                // Check if user exists
+                var user = await _context.Users.FindAsync(request.UserId);
+                if (user == null)
+                {
+                    return BadRequest(new { message = "User not found" });
+                }
+
+                // Verify vehicle exists
+                var vehicle = await _context.Vehicles.FindAsync(request.VehicleId);
+                if (vehicle == null)
+                {
+                    return BadRequest(new { message = "Vehicle not found" });
+                }
+
+                // Validate service if provided
+                if (request.ServiceId.HasValue)
+                {
+                    var service = await _context.Services.FindAsync(request.ServiceId.Value);
+                    if (service == null)
+                    {
+                        return BadRequest(new { message = "Service not found" });
+                    }
+                }
+
+                // Validate inspection service if included
+                if (request.IncludesInspection && request.InspectionTypeId.HasValue)
+                {
+                    var inspectionService = await _context.Services.FindAsync(request.InspectionTypeId.Value);
+                    if (inspectionService == null)
+                    {
+                        return BadRequest(new { message = "Inspection type not found" });
+                    }
+
+                    if (inspectionService.Category.ToLower() != "inspection")
+                    {
+                        return BadRequest(new { message = "The selected service is not an inspection type" });
+                    }
+                }
+
+                if (request.MechanicId.HasValue)
+                {
+                    var mechanic = await _context.Users.FirstOrDefaultAsync(u =>
+                        u.UserId == request.MechanicId.Value && u.Role.ToLower() == "mechanic");
+
+                    if (mechanic == null)
+                    {
+                        return BadRequest(new { message = "Selected mechanic not found" });
+                    }  // Optionally check mechanic availability
+                    var currentAppointments = await _context.Appointments
+                        .CountAsync(a => a.MechanicId == request.MechanicId.Value &&
+                                  (a.Status == "scheduled" || a.Status == "in progress"));
+
+                    if (currentAppointments >= 3) // Threshold of 3 concurrent appointments
+                    {
+                        return BadRequest(new { message = "Selected mechanic is currently busy with too many appointments" });
+                    }
+                }
+
+                // Create order
+                var order = new Order
+                {
+                    UserId = request.UserId,
+                    VehicleId = request.VehicleId,
+                    ServiceId = request.ServiceId,
+                    IncludesInspection = request.IncludesInspection,
+                    OrderDate = DateTime.Now,
+                    Status = "pending",
+                    TotalAmount = request.TotalAmount,
+                    Notes = request.Notes ?? "",
+                    OrderType = "Walk-In" // Always set to Walk-In for this endpoint
+                };
+
+                _context.Orders.Add(order);
+                await _context.SaveChangesAsync();
+
+                // If order includes inspection, create it
+                if (request.IncludesInspection && request.InspectionTypeId.HasValue)
+                {
+                    var inspection = new Inspection
+                    {
+                        UserId = request.UserId,
+                        VehicleId = request.VehicleId,
+                        ServiceId = request.InspectionTypeId.Value,
+                        SubCategory = request.InspectionSubCategory,
+                        OrderId = order.OrderId,
+                        ScheduledDate = DateTime.Now, // Current date for walk-in
+                        Status = "pending",
+                        Notes = request.Notes ?? "",
+                        CreatedAt = DateTime.Now,
+                        TimeSlot = "Walk-In", // Special time slot for walk-ins
+                        MechanicId = request.MechanicId ?? 0, // Assign mechanic if selected
+                        EngineCondition = "Not Inspected Yet",
+                        TransmissionCondition = "Not Inspected Yet",
+                        BrakeCondition = "Not Inspected Yet",
+                        ElectricalCondition = "Not Inspected Yet",
+                        BodyCondition = "Not Inspected Yet",
+                        TireCondition = "Not Inspected Yet",
+                        InteriorCondition = "Not Inspected Yet",
+                        SuspensionCondition = "Not Inspected Yet",
+                        TiresCondition = "Not Inspected Yet"
+                    };
+
+                    _context.Inspections.Add(inspection);
+                    await _context.SaveChangesAsync();
+                }
+                // If a mechanic is assigned, create an appointment
+                if (request.MechanicId.HasValue)
+                {
+                    var appointment = new Appointment
+                    {
+                        OrderId = order.OrderId,
+                        UserId = request.UserId,
+                        VehicleId = request.VehicleId,
+                        ServiceId = request.ServiceId,
+                        MechanicId = request.MechanicId.Value,
+                        AppointmentDate = DateTime.Now,
+                        TimeSlot = "Walk-In", // Special time slot for walk-ins
+                        Status = "scheduled",
+                        Notes = "Walk-in appointment",
+                        CreatedAt = DateTime.Now
+                    };
+
+                    _context.Appointments.Add(appointment);
+                    await _context.SaveChangesAsync();
+
+                    // Update order status since mechanic is assigned
+                    order.Status = "in progress";
+                    await _context.SaveChangesAsync();
+
+                    // Create notification for mechanic
+                    var mechanicNotification = new Notification
+                    {
+                        UserId = request.MechanicId.Value,
+                        Message = $"You have been assigned to a walk-in order #{order.OrderId}",
+                        Status = "unread",
+                        CreatedAt = DateTime.Now
+                    };
+
+                    _context.Notifications.Add(mechanicNotification);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Create customer notification
+                var customerNotification = new Notification
+                {
+                    UserId = order.UserId,
+                    Message = "Your walk-in order has been placed successfully" +
+                              (request.MechanicId.HasValue ? " and a mechanic has been assigned" : ""),
+                    Status = "unread",
+                    CreatedAt = DateTime.Now
+                };
+                _context.Notifications.Add(customerNotification);
+
+                // Create a notification for admins/service agents
+                var staffNotification = new Notification
+                {
+                    // Assuming there's an admin user with ID 1
+                    UserId = 1,
+                    Message = $"New walk-in order received from user ID {order.UserId}" +
+                              (request.MechanicId.HasValue ? $", assigned to mechanic ID {request.MechanicId}" : ""),
+                    Status = "unread",
+                    CreatedAt = DateTime.Now
+                };
+                _context.Notifications.Add(staffNotification);
+
+                await _context.SaveChangesAsync();
+
+                return CreatedAtAction(nameof(GetOrder), new { id = order.OrderId }, order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating walk-in order");
+                return StatusCode(500, new { message = "An error occurred while creating the walk-in order", error = ex.Message });
+            }
+        }
+
+
         // POST: api/Orders/CreateWithInspection
         [HttpPost("CreateWithInspection")]
         public async Task<ActionResult<object>> CreateOrderWithInspection([FromBody] InspectionOrderRequest request)
@@ -1303,6 +1495,31 @@ namespace fyp_motomate.Controllers
         public int? ServiceId { get; set; }
     }
 
+    public class WalkInOrderRequest
+    {
+        [Required]
+        public int UserId { get; set; }
+
+        [Required]
+        public int VehicleId { get; set; }
+
+        public int? ServiceId { get; set; }
+
+        public int? InspectionTypeId { get; set; }
+
+        public string InspectionSubCategory { get; set; }
+
+
+        public bool IncludesInspection { get; set; }
+
+        [Required]
+        public decimal TotalAmount { get; set; }
+
+        public string Notes { get; set; }
+
+        public int? MechanicId { get; set; } // Added mechanic ID
+
+    }
     public class OrderRequest
     {
         public int UserId { get; set; }

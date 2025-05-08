@@ -72,6 +72,35 @@ namespace fyp_motomate.Controllers
             return vehicle;
         }
 
+
+        // GET: api/Vehicles/user/{userId}
+        [HttpGet("user/{userId}")]
+        [Authorize(Roles = "super_admin,admin,service_agent")]
+        public async Task<ActionResult<IEnumerable<Vehicle>>> GetVehiclesByUserId(int userId)
+        {
+            try
+            {
+                // Verify user exists
+                var user = await _context.Users.FindAsync(userId);
+                if (user == null)
+                {
+                    return NotFound(new { success = false, message = "User not found" });
+                }
+
+                // Get all vehicles for the specified user
+                var vehicles = await _context.Vehicles
+                    .Where(v => v.UserId == userId)
+                    .ToListAsync();
+
+                return Ok(vehicles);
+            }
+            catch (Exception ex)
+            {
+
+                return StatusCode(500, new { success = false, message = "An error occurred while fetching vehicles", error = ex.Message });
+            }
+        }
+
         // POST: api/Vehicles
         [HttpPost]
         public async Task<ActionResult<Vehicle>> CreateVehicle(VehicleRequest request)
@@ -92,8 +121,8 @@ namespace fyp_motomate.Controllers
                 Model = request.Model,
                 Year = request.Year,
                 LicensePlate = request.LicensePlate,
-                CreatedAt =DateTime.Now,
-                UpdatedAt =DateTime.Now
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
             };
 
             // If customer is creating a vehicle, set the UserId to their own ID
@@ -145,7 +174,7 @@ namespace fyp_motomate.Controllers
             }
 
             // Check if license plate is being changed and if it's already taken
-            if (vehicle.LicensePlate != request.LicensePlate && 
+            if (vehicle.LicensePlate != request.LicensePlate &&
                 await _context.Vehicles.AnyAsync(v => v.LicensePlate.ToLower() == request.LicensePlate.ToLower() && v.VehicleId != id))
             {
                 return BadRequest(new { message = "Vehicle with this license plate already exists" });
@@ -156,7 +185,7 @@ namespace fyp_motomate.Controllers
             vehicle.Model = request.Model;
             vehicle.Year = request.Year;
             vehicle.LicensePlate = request.LicensePlate;
-            vehicle.UpdatedAt =DateTime.Now;
+            vehicle.UpdatedAt = DateTime.Now;
 
             // If staff is updating the owner of the vehicle
             if (userRole != "customer" && request.UserId.HasValue && vehicle.UserId != request.UserId.Value)
@@ -213,8 +242,9 @@ namespace fyp_motomate.Controllers
 
             if (hasAppointments || hasOrders)
             {
-                return BadRequest(new { 
-                    message = "Cannot delete vehicle with existing appointments or orders" 
+                return BadRequest(new
+                {
+                    message = "Cannot delete vehicle with existing appointments or orders"
                 });
             }
 
@@ -233,13 +263,13 @@ namespace fyp_motomate.Controllers
     public class VehicleRequest
     {
         public int? UserId { get; set; } // Optional, used when staff creates vehicle for customer
-        
+
         public string Make { get; set; }
-        
+
         public string Model { get; set; }
-        
+
         public int Year { get; set; }
-        
+
         public string LicensePlate { get; set; }
     }
 }

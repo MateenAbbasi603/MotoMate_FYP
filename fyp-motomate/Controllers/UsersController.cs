@@ -65,23 +65,27 @@ namespace fyp_motomate.Controllers
                     u.CreatedAt,
                     u.UpdatedAt,
                     // Include additional details as needed
-                    MechanicAppointments = u.Role == "mechanic" ? 
-                        u.MechanicAppointments.Select(a => new {
+                    MechanicAppointments = u.Role == "mechanic" ?
+                        u.MechanicAppointments.Select(a => new
+                        {
                             a.AppointmentId,
                             a.AppointmentDate,
                             a.Status,
-                            Vehicle = new {
+                            Vehicle = new
+                            {
                                 a.Vehicle.Make,
                                 a.Vehicle.Model,
                                 a.Vehicle.Year
                             },
-                            Service = new {
+                            Service = new
+                            {
                                 a.Service.ServiceName,
                                 a.Service.Category
                             }
                         }) : null,
-                    Performance = u.Role == "mechanic" ? 
-                        u.MechanicPerformance != null ? new {
+                    Performance = u.Role == "mechanic" ?
+                        u.MechanicPerformance != null ? new
+                        {
                             u.MechanicPerformance.TotalJobs,
                             u.MechanicPerformance.CompletedJobs,
                             u.MechanicPerformance.Rating
@@ -97,13 +101,51 @@ namespace fyp_motomate.Controllers
             return Ok(user);
         }
 
+        // GET: api/Users/search
+        [HttpGet("search")]
+        [Authorize(Roles = "super_admin,admin,service_agent")]
+        public async Task<ActionResult<IEnumerable<object>>> SearchUsers([FromQuery] string term)
+        {
+            if (string.IsNullOrEmpty(term))
+            {
+                return BadRequest(new { message = "Search term is required" });
+            }
+
+            try
+            {
+                // Search by name, email, or phone (only for customer role)
+                var users = await _context.Users
+                    .Where(u => u.Role == "customer" &&
+                          (u.Name.Contains(term) ||
+                           u.Email.Contains(term) ||
+                           u.Phone.Contains(term)))
+                    .Select(u => new
+                    {
+                        u.UserId,
+                        u.Name,
+                        u.Email,
+                        u.Phone,
+                        u.Address
+                    })
+                    .Take(10) // Limit to 10 results
+                    .ToListAsync();
+
+                return Ok(users);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An error occurred while searching users", error = ex.Message });
+            }
+        }
+
+
         // GET: api/Users/Staff
         [HttpGet("Staff")]
         public async Task<ActionResult<IEnumerable<object>>> GetStaffUsers()
         {
             // Get users with specific staff roles
             var staffRoles = new[] { "mechanic", "service_agent", "finance_officer" };
-            
+
             var users = await _context.Users
                 .Where(u => staffRoles.Contains(u.Role))
                 .Select(u => new
@@ -127,7 +169,7 @@ namespace fyp_motomate.Controllers
         {
             // Get only admin users
             var adminRoles = new[] { "super_admin", "admin" };
-            
+
             var users = await _context.Users
                 .Where(u => adminRoles.Contains(u.Role))
                 .Select(u => new
@@ -159,7 +201,8 @@ namespace fyp_motomate.Controllers
                     u.Email,
                     u.Name,
                     u.Phone,
-                    Performance = u.MechanicPerformance != null ? new {
+                    Performance = u.MechanicPerformance != null ? new
+                    {
                         u.MechanicPerformance.TotalJobs,
                         u.MechanicPerformance.CompletedJobs,
                         u.MechanicPerformance.Rating
@@ -196,12 +239,13 @@ namespace fyp_motomate.Controllers
                 {
                     var hasActiveAppointments = await _context.Appointments
                         .AnyAsync(a => a.MechanicId == id && a.Status != "completed" && a.Status != "cancelled");
-                    
+
                     if (hasActiveAppointments)
                     {
-                        return BadRequest(new { 
-                            success = false, 
-                            message = "Cannot delete mechanic with active appointments. Reassign or complete these appointments first." 
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = "Cannot delete mechanic with active appointments. Reassign or complete these appointments first."
                         });
                     }
                 }
