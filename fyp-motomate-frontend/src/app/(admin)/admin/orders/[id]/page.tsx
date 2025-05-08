@@ -40,7 +40,8 @@ import {
   UserCheck,
   Plus,
   PenTool,
-  Loader2
+  Loader2,
+  CheckCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -114,6 +115,7 @@ interface UserData {
 interface OrderData {
   orderId: number;
   userId: number;
+  serviceId?:number;
   vehicleId?: number;
   status: string;
   orderDate: string;
@@ -175,11 +177,59 @@ export default function OrderDetailPage({
   const [isAddingService, setIsAddingService] = useState<boolean>(false);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isAppointmentDialogOpen, setIsAppointmentDialogOpen] = useState(false);
-  const [appointment, setAppointment] = useState(null);
+  const [appointment, setAppointment] = useState<any>(null);
   const [loadingAppointment, setLoadingAppointment] = useState(false);
+  const [isTransferringService, setIsTransferringService] = useState<boolean>(false);
 
 
 
+  const handleTransferToService = async () => {
+    if (!order || !appointment || !appointment.mechanic) {
+      toast.error("Cannot transfer: No mechanic assigned to inspection");
+      return;
+    }
+
+    try {
+      setIsTransferringService(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error("Please log in again to continue");
+        return;
+      }
+
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Orders/${order.orderId}/transfer-to-service`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.data && response.data.success) {
+        toast.success("Service successfully transferred to mechanic");
+
+        // Update the order status
+        if (order && response.data.order) {
+          setOrder({
+            ...order,
+            status: response.data.order.status
+          });
+        }
+
+        // Refresh page data after successful transfer
+        router.refresh();
+      } else {
+        toast.error(response.data?.message || "Failed to transfer service");
+      }
+    } catch (error: any) {
+      console.error('Error transferring service:', error);
+      toast.error(error.response?.data?.message || "Failed to transfer service");
+    } finally {
+      setIsTransferringService(false);
+    }
+  };
 
   // console.log(order,"order");
 
@@ -188,6 +238,8 @@ export default function OrderDetailPage({
     if (!orderData.additionalServices) {
       return [];
     }
+
+
 
     // If it's an object with $values property
     if (typeof orderData.additionalServices === 'object' &&
@@ -743,6 +795,7 @@ export default function OrderDetailPage({
             <p className="text-muted-foreground">Mechanic information not available</p>
           )}
 
+
           {appointment.notes && (
             <div className="mt-3 pt-3 border-t">
               <p className="text-sm text-muted-foreground mb-1">Appointment Notes</p>
@@ -1059,11 +1112,11 @@ export default function OrderDetailPage({
                               );
                             case 'suspensioninspection':
                               return (
-                                <> 
-                                <div className="p-3 border rounded-md">
-                                  <p className="text-sm text-muted-foreground">Suspension Condition</p>
-                                  <p className="font-medium">{order.inspection.suspensionCondition || 'Not inspected'}</p>
-                                </div>
+                                <>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Suspension Condition</p>
+                                    <p className="font-medium">{order.inspection.suspensionCondition || 'Not inspected'}</p>
+                                  </div>
                                 </>
                               )
                             case 'brakeinspection':
@@ -1074,36 +1127,36 @@ export default function OrderDetailPage({
                                     <p className="text-sm text-muted-foreground">Brake Condition</p>
                                     <p className="font-medium">{order.inspection.brakeCondition || 'Not inspected'}</p>
                                   </div>
-                                 
+
                                 </>
                               );
-                              case 'tireinspection':
-                                return (
-                                  <>
-                                    <div className="p-3 border rounded-md">
-                                      <p className="text-sm text-muted-foreground">Tire Condition</p>
-                                      <p className="font-medium">{order.inspection.tireCondition || 'Not inspected'}</p>
-                                    </div>
-                                  </>
-                                );
-                                case 'electricalinspection':
-                                return (
-                                  <>
-                                    <div className="p-3 border rounded-md">
-                                      <p className="text-sm text-muted-foreground">Electrical Condition</p>
-                                      <p className="font-medium">{order.inspection.electricalCondition || 'Not inspected'}</p>
-                                    </div>
-                                  </>
-                                );
-                                case 'interiorinspection':
-                                  return (
-                                    <>
-                                      <div className="p-3 border rounded-md">
-                                        <p className="text-sm text-muted-foreground">Interior Condition</p>
-                                        <p className="font-medium">{order.inspection.interiorCondition || 'Not inspected'}</p>
-                                      </div>
-                                    </>
-                                  );
+                            case 'tireinspection':
+                              return (
+                                <>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Tire Condition</p>
+                                    <p className="font-medium">{order.inspection.tireCondition || 'Not inspected'}</p>
+                                  </div>
+                                </>
+                              );
+                            case 'electricalinspection':
+                              return (
+                                <>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Electrical Condition</p>
+                                    <p className="font-medium">{order.inspection.electricalCondition || 'Not inspected'}</p>
+                                  </div>
+                                </>
+                              );
+                            case 'interiorinspection':
+                              return (
+                                <>
+                                  <div className="p-3 border rounded-md">
+                                    <p className="text-sm text-muted-foreground">Interior Condition</p>
+                                    <p className="font-medium">{order.inspection.interiorCondition || 'Not inspected'}</p>
+                                  </div>
+                                </>
+                              );
                             case 'fullvehicleinspection':
                               return (
                                 <>
@@ -1288,7 +1341,31 @@ export default function OrderDetailPage({
                     </Button>
                   </div>
                 </div>
-
+                {appointment && appointment.mechanic && order.service && order.serviceId && (
+                  <div className="mt-4 pt-4 border-t">
+                    <Button
+                      className="w-full"
+                      variant="default"
+                      onClick={handleTransferToService}
+                      disabled={isTransferringService}
+                    >
+                      {isTransferringService ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Transferring...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCheck className="mr-2 h-4 w-4" />
+                          Transfer to Service
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Assign the mechanic from inspection to perform the service work
+                    </p>
+                  </div>
+                )}
                 <hr />
 
                 {/* Status update */}

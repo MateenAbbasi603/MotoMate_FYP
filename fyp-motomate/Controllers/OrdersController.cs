@@ -948,7 +948,129 @@ namespace fyp_motomate.Controllers
         }
 
 
+        // POST: api/Orders/5/transfer-to-service
+        [HttpPost("{id}/transfer-to-service")]
+        [Authorize(Roles = "super_admin,admin,service_agent")]
+        public async Task<IActionResult> TransferToService(int id)
+        {
+            try
+            {
+                // Get the order with related data
+                var order = await _context.Orders
+                    .Include(o => o.Inspection)
+                    .Include(o => o.Service)
+                    .Include(o => o.Vehicle)
+                    .FirstOrDefaultAsync(o => o.OrderId == id);
 
+                if (order == null)
+                {
+                    return NotFound(new { success = false, message = "Order not found" });
+                }
+
+                // Check if the order includes a service
+                if (!order.ServiceId.HasValue)
+                {
+                    return BadRequest(new { success = false, message = "Order does not include a service to transfer" });
+                }
+
+                // Check if there's an inspection
+                if (order.Inspection == null)
+                {
+                    return BadRequest(new { success = false, message = "No inspection found for this order" });
+                }
+
+                // Look for an appointment related to this inspection to find a mechanic
+                var inspectionAppointment = await _context.Appointments
+                    .FirstOrDefaultAsync(a => a.OrderId == id);
+
+                if (inspectionAppointment == null || inspectionAppointment.MechanicId <= 0)
+                {
+                    // No appointment found, try to look for mechanic directly in the inspection
+                    if (order.Inspection.MechanicId <= 0)
+                    {
+                        return BadRequest(new { success = false, message = "No mechanic has been assigned to this inspection yet" });
+                    }
+                }
+
+                // Determine which mechanic ID to use (from appointment or inspection)
+                int mechanicId = (inspectionAppointment != null && inspectionAppointment.MechanicId > 0)
+                    ? inspectionAppointment.MechanicId
+                    : order.Inspection.MechanicId;
+
+                // Check if transfer already exists
+                var existingTransfer = await _context.TransferToServices
+                    .FirstOrDefaultAsync(t => t.OrderId == id);
+
+                if (existingTransfer != null)
+                {
+                    // Update existing transfer record
+                    existingTransfer.MechanicId = mechanicId;
+                    existingTransfer.Status = "transferred";
+                    existingTransfer.Notes += $"\nUpdated on {DateTime.Now}: Reassigned to mechanic (ID: {mechanicId})";
+                    existingTransfer.ETA = DateTime.Now.AddDays(3); // Default ETA of 3 days
+                }
+                else
+                {
+                    // Create new transfer record
+                    var transfer = new TransferToService
+                    {
+                        OrderId = order.OrderId,
+                        UserId = order.UserId,
+                        VehicleId = order.VehicleId,
+                        ServiceId = order.ServiceId.Value,
+                        MechanicId = mechanicId,
+                        OrderDate = DateTime.Now,
+                        Status = "transferred",
+                        Notes = $"Service transferred to mechanic ID: {mechanicId} who performed the inspection.",
+                        CreatedAt = DateTime.Now
+                    };
+
+                    _context.TransferToServices.Add(transfer);
+                }
+
+                // Update order status
+                order.Status = "in progress";
+                order.Notes += $"\nTransferred to service on {DateTime.Now}. Assigned to mechanic ID: {mechanicId}.";
+
+                // Create notifications
+                var customerNotification = new Notification
+                {
+                    UserId = order.UserId,
+                    Message = $"Your service has been scheduled with the same mechanic who performed your inspection.",
+                    Status = "unread",
+                    CreatedAt = DateTime.Now
+                };
+
+                var mechanicNotification = new Notification
+                {
+                    UserId = mechanicId,
+                    Message = $"You have been assigned to perform service for Order #{order.OrderId} following your inspection.",
+                    Status = "unread",
+                    CreatedAt = DateTime.Now
+                };
+
+                _context.Notifications.AddRange(customerNotification, mechanicNotification);
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Service successfully transferred to the inspection mechanic",
+                    order = new
+                    {
+                        orderId = order.OrderId,
+                        status = order.Status,
+                        mechanicId = mechanicId,
+                        eta = DateTime.Now.AddDays(3).ToString("yyyy-MM-dd")
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error transferring service for order {OrderId}", id);
+                return StatusCode(500, new { success = false, message = "An error occurred while transferring the service", error = ex.Message });
+            }
+        }
 
         // POST: api/Orders/5/add-service
         [HttpPost("{id}/add-service")]

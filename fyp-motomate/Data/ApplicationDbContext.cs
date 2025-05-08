@@ -28,6 +28,9 @@ namespace fyp_motomate.Data
         public DbSet<Inspection> Inspections { get; set; }
         public DbSet<OrderService> OrderServices { get; set; }
 
+        public DbSet<TransferToService> TransferToServices { get; set; }
+
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             optionsBuilder.ConfigureWarnings(warnings =>
@@ -39,6 +42,18 @@ namespace fyp_motomate.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<TransferToService>()
+                .HasOne(t => t.User)
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<TransferToService>()
+                .HasOne(t => t.Mechanic)
+                .WithMany()
+                .HasForeignKey(t => t.MechanicId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Configure unique constraints
             modelBuilder.Entity<User>()
@@ -211,33 +226,33 @@ namespace fyp_motomate.Data
             {
                 // Primary Key
                 entity.HasKey(e => e.OrderId);
-                
+
                 // Properties
                 entity.Property(e => e.Notes)
                     .HasColumnName("Notes")
                     .IsRequired(false);
-                
+
                 entity.Property(e => e.Status)
                     .IsRequired()
                     .HasMaxLength(20)
                     .HasDefaultValue("pending");
-                
+
                 entity.Property(e => e.OrderDate)
                     .IsRequired()
                     .HasDefaultValueSql("GETUTCDATE()");
-                
+
                 entity.Property(e => e.IncludesInspection)
                     .IsRequired()
                     .HasDefaultValue(true);
-                
+
                 entity.Property(e => e.TotalAmount)
                     .IsRequired()
                     .HasColumnType("decimal(10,2)");
-                
+
                 // Make ServiceId nullable in Order
                 entity.Property(o => o.ServiceId)
                     .IsRequired(false);
-                
+
                 // Relationships - only define the user and vehicle relationships here,
                 // since Service is already defined above and we want to avoid duplication
                 entity.HasOne(d => d.User)
@@ -245,7 +260,7 @@ namespace fyp_motomate.Data
                     .HasForeignKey(d => d.UserId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Orders_Users_UserId");
-                
+
                 entity.HasOne(d => d.Vehicle)
                     .WithMany(p => p.Orders)
                     .HasForeignKey(d => d.VehicleId)
@@ -258,28 +273,28 @@ namespace fyp_motomate.Data
             {
                 // Primary Key
                 entity.HasKey(e => e.InspectionId);
-                
+
                 // Configure User relationship (to prevent UserId1 shadow property)
                 entity.HasOne(i => i.User)
                     .WithMany(u => u.Inspections)
                     .HasForeignKey(i => i.UserId)
                     .OnDelete(DeleteBehavior.Restrict)
                     .HasConstraintName("FK_Inspections_Users_UserId");
-                
+
                 // Configure Vehicle relationship
                 entity.HasOne(i => i.Vehicle)
                     .WithMany()
                     .HasForeignKey(i => i.VehicleId)
                     .OnDelete(DeleteBehavior.Restrict)
                     .HasConstraintName("FK_Inspections_Vehicles_VehicleId");
-                
+
                 // Configure Service relationship if your Inspection has one
                 entity.HasOne(i => i.Service)
                     .WithMany()
                     .HasForeignKey(i => i.ServiceId)
                     .OnDelete(DeleteBehavior.Restrict)
                     .HasConstraintName("FK_Inspections_Services_ServiceId");
-                
+
                 // Configure Order relationship - ONE relationship definition
                 entity.HasOne(i => i.Order)
                     .WithOne(o => o.Inspection)
@@ -313,7 +328,7 @@ namespace fyp_motomate.Data
                 .WithMany(o => o.OrderServices)
                 .HasForeignKey(os => os.OrderId)
                 .OnDelete(DeleteBehavior.Cascade);
-                
+
             modelBuilder.Entity<OrderService>()
                 .HasOne(os => os.Service)
                 .WithMany()

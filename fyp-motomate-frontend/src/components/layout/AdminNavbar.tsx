@@ -76,6 +76,12 @@ const mechanicNavItems = [
     href: '/admin/mechanic/appointments',
     icon: Calendar,
   },
+
+  {
+    title: 'Services',
+    href: '/admin/mechanic/services',
+    icon: Calendar,
+  },
   {
     title: 'Tasks',
     href: '/admin/mechanic/tasks',

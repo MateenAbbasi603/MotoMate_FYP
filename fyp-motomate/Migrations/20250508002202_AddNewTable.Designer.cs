@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using fyp_motomate.Data;
 
@@ -11,9 +12,11 @@ using fyp_motomate.Data;
 namespace fyp_motomate.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250508002202_AddNewTable")]
+    partial class AddNewTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -522,62 +525,6 @@ namespace fyp_motomate.Migrations
                     b.ToTable("ServiceHistories");
                 });
 
-            modelBuilder.Entity("fyp_motomate.Models.TransferToService", b =>
-                {
-                    b.Property<int>("TransferId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TransferId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("ETA")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("MechanicId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Notes")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("OrderDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("ServiceId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("VehicleId")
-                        .HasColumnType("int");
-
-                    b.HasKey("TransferId");
-
-                    b.HasIndex("MechanicId");
-
-                    b.HasIndex("OrderId");
-
-                    b.HasIndex("ServiceId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("VehicleId");
-
-                    b.ToTable("TransferToServices");
-                });
-
             modelBuilder.Entity("fyp_motomate.Models.User", b =>
                 {
                     b.Property<int>("UserId")
@@ -650,7 +597,7 @@ namespace fyp_motomate.Migrations
                             CreatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "superadmin@example.com",
                             Name = "Super Admin",
-                            Password = "$2a$11$l6HCOb4WHX3zX4Yx1NJoqO/5Xq2uywu1rTXYiEwL.2B6eG.ZZPPw.",
+                            Password = "$2a$11$sEowC5oNfuuXz22ZG.OLF.vSVFJ5pbB6kzf01oQSXDRHbSkuP3c2q",
                             Phone = "+1234567890",
                             Role = "super_admin",
                             UpdatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
@@ -911,49 +858,6 @@ namespace fyp_motomate.Migrations
                         .HasForeignKey("VehicleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("Service");
-
-                    b.Navigation("User");
-
-                    b.Navigation("Vehicle");
-                });
-
-            modelBuilder.Entity("fyp_motomate.Models.TransferToService", b =>
-                {
-                    b.HasOne("fyp_motomate.Models.User", "Mechanic")
-                        .WithMany()
-                        .HasForeignKey("MechanicId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("fyp_motomate.Models.Order", "Order")
-                        .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("fyp_motomate.Models.Service", "Service")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("fyp_motomate.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("fyp_motomate.Models.Vehicle", "Vehicle")
-                        .WithMany()
-                        .HasForeignKey("VehicleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Mechanic");
-
-                    b.Navigation("Order");
 
                     b.Navigation("Service");
 

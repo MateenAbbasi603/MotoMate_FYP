@@ -175,23 +175,23 @@ const LandingPage: React.FC = () => {
 
     return (
         <div className="min-h-screen overflow-x-hidden font-sans">
-           
+
             {/* Hero Section */}
             <section className="relative h-screen flex flex-col items-center justify-center text-white bg-gradient-to-r from-red-700 to-red-950 overflow-hidden">
 
-                
-                <motion.div
-                            
-                            initial={{ opacity: 0, x: -100 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.8, delay: 1 }}
-                            
-                        >
-                            <Image width={500} height={500} src="/logo.png" alt="Logo" className='h-full w-full' />
-                        </motion.div>
 
-                        {/* Background with parallax effect */}
                 <motion.div
+
+                    initial={{ opacity: 0, x: -100 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.8, delay: 1 }}
+
+                >
+                    <Image width={500} height={500} src="/logo.png" alt="Logo" className='h-full w-full' />
+                </motion.div>
+
+                {/* Background with parallax effect */}
+                <motion.div 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 0.2 }}
                     transition={{ duration: 1.5 }}
@@ -199,8 +199,8 @@ const LandingPage: React.FC = () => {
                 >
                     <div className="absolute inset-0 bg-[url('/hero-bg.jpg')] bg-cover bg-center"></div>
                 </motion.div>
-                
-                
+
+
                 <div className="container mx-auto px-4 z-10">
                     <motion.div
                         initial="hidden"
@@ -216,7 +216,7 @@ const LandingPage: React.FC = () => {
                         </motion.h1>
 
                         <motion.div
-                            
+
                             initial={{ opacity: 0, x: -100 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.8, delay: 1 }}
@@ -244,8 +244,8 @@ const LandingPage: React.FC = () => {
                                     Login
                                 </Button>
                             </motion.div>
-                            
-                           
+
+
                         </motion.div>
                     </motion.div>
                 </div>
