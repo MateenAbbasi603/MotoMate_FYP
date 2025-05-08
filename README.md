@@ -43,7 +43,7 @@ ADD MechanicId INT;
  - Order table should have ordertype field in the table of orders (Walk in, Online)
  - seperate API for walk in customers
  - Service will be on estimated time
- - admin button for transfer to order
+ - admin button for transfer to order ✔️✔️
 
 
  ```sql
