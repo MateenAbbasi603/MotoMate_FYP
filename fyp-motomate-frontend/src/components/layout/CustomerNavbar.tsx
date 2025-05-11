@@ -17,6 +17,7 @@ import { User } from '../../../services/orderApi';
 import authService from '../../../services/authService';
 import { toast } from 'sonner';
 import axios from 'axios';
+import NotificationDropdown from '../NotificationDropdown';
 
 const customerNavItems = [
   {
@@ -61,19 +62,19 @@ export default function CustomerNavbar() {
           return;
         }
 
-        const userData :any = await authService.getCurrentUser();
-        
+        const userData: any = await authService.getCurrentUser();
+
         // Make sure userData has an avatar property (using imgUrl as fallback)
-        const userWithAvatar  = {
+        const userWithAvatar = {
           ...userData,
           avatar: userData.avatar || userData.imgUrl || ''
         };
-        
+
         setUser(userWithAvatar as any);
-      } catch (error:any) {
+      } catch (error: any) {
         console.error("Error fetching user profile:", error);
         toast.error("Failed to load profile. Please try again.");
-        
+
         // If unauthorized, redirect to login
         if (axios.isAxiosError(error) && error.response?.status === 401) {
           router.push("/login");
@@ -115,7 +116,7 @@ export default function CustomerNavbar() {
           </nav>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-4">
-          {!loading && user && <UserInfo user={user as any} />}
+          {!loading && user && <><NotificationDropdown /><UserInfo user={user as any} /></>}
           <ModeToggle />
         </div>
       </div>

@@ -114,14 +114,8 @@ export function UserInfo({
                             Profile
                         </DropdownMenuItem>
                     </Link>
-                    <DropdownMenuItem className="cursor-pointer">
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        Billing
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer">
-                        <Bell className="mr-2 h-4 w-4" />
-                        Notifications
-                    </DropdownMenuItem>
+                    
+                    
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="cursor-pointer">

@@ -25,6 +25,7 @@ import { UserInfo } from '../User/UserInfo';
 import authService from '../../../services/authService';
 import { toast } from 'sonner';
 import axios from 'axios';
+import NotificationDropdown from '../NotificationDropdown';
 
 // Admin navigation items
 const adminNavItems = [
@@ -57,7 +58,7 @@ const adminNavItems = [
     title: 'Finance',
     href: '/admin/view-finance',
     icon: DollarSign,
-  },  {
+  }, {
     title: 'Manage Inventory',
     href: '/admin/manage-inventory',
     icon: DollarSign,
@@ -165,7 +166,7 @@ const financeOfficerNavItems = [
     href: '/finance/receipts',
     icon: Receipt,
   },
-  
+
 ];
 
 // Shared Navbar component that accepts navigation items and title
@@ -185,19 +186,19 @@ function Navbar({ title, navItems }: { title: string; navItems: any[] }) {
         }
 
         const userData = await authService.getCurrentUser();
-        
+
         // Make sure userData has an avatar property (using imgUrl as fallback)
         const userWithAvatar = {
           ...userData,
           avatar: userData.imgUrl || '',
           role: userData.role // Make sure role is included
         };
-        
+
         setUser(userWithAvatar);
       } catch (error) {
         console.error("Error fetching user profile:", error);
         toast.error("Failed to load profile. Please try again.");
-        
+
         // If unauthorized, redirect to login
         if (axios.isAxiosError(error) && error.response?.status === 401) {
           router.push("/login");
@@ -240,7 +241,7 @@ function Navbar({ title, navItems }: { title: string; navItems: any[] }) {
         </div>
         <div className="flex-1"></div>
         <div className="flex items-center space-x-2">
-          {!loading && user && <UserInfo user={user} />}
+          {!loading && user && <><NotificationDropdown /><UserInfo user={user as any} /></>}
           <ModeToggle />
         </div>
       </div>
