@@ -200,7 +200,7 @@ export default function ServiceList() {
           <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
             {service.description}
           </p>
-          <p className="text-xl font-bold">{(service.price)}</p>
+          <p className="text-xl font-bold">PKR {(service.price)}</p>
         </CardContent>
         <CardFooter className="border-t p-4 bg-muted/50 flex justify-end gap-2">
           <Button

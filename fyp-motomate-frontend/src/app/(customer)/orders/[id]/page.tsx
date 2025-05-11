@@ -306,7 +306,7 @@ export default function OrderDetailPage({
                       </p>
                       <div className="flex justify-between items-center mt-3">
                         <span className="text-sm">Service Price</span>
-                        <span className="font-medium">${order.service?.price?.toFixed(2) || '0.00'}</span>
+                        <span className="font-medium">PKR {order.service?.price?.toFixed(2) || '0.00'}</span>
                       </div>
 
                       {order.includesInspection && (
@@ -333,7 +333,7 @@ export default function OrderDetailPage({
                             </p>
                             <div className="flex justify-between items-center mt-3">
                               <span className="text-sm">Service Price</span>
-                              <span className="font-medium">${service.price?.toFixed(2) || '0.00'}</span>
+                              <span className="font-medium">PKR {service.price?.toFixed(2) || '0.00'}</span>
                             </div>
                           </div>
                         ))}
@@ -350,13 +350,13 @@ export default function OrderDetailPage({
                     <div className="bg-muted/50 p-4 rounded-md">
                       <div className="flex justify-between items-center pb-2 border-b">
                         <span>Main Service</span>
-                        <span>${order.service?.price?.toFixed(2) || '0.00'}</span>
+                        <span>PKR {order.service?.price?.toFixed(2) || '0.00'}</span>
                       </div>
 
                       {order.includesInspection && order.inspection && (
                         <div className="flex justify-between items-center py-2 border-b">
                           <span>Inspection Fee</span>
-                          <span>${order.inspection.price?.toFixed(2) || '0.00'}</span>
+                          <span>PKR {order.inspection.price?.toFixed(2) || '0.00'}</span>
                         </div>
                       )}
 
@@ -364,7 +364,7 @@ export default function OrderDetailPage({
                         <div className="flex justify-between items-center py-2 border-b">
                           <span>Additional Services</span>
                           <span>
-                            ${order.additionalServices
+                            PKR {order.additionalServices
                               .reduce((sum: number, service: any) => sum + (parseFloat(service.price) || 0), 0)
                               .toFixed(2)}
                           </span>
@@ -373,7 +373,7 @@ export default function OrderDetailPage({
 
                       <div className="flex justify-between items-center pt-2 font-medium">
                         <span>Total Amount</span>
-                        <span>${order.totalAmount?.toFixed(2) || '0.00'}</span>
+                        <span>PKR {order.totalAmount?.toFixed(2) || '0.00'}</span>
                       </div>
                     </div>
                   </div>
@@ -556,7 +556,7 @@ export default function OrderDetailPage({
                                 <tr className="border-t">
                                   <td className="px-4 py-2">Subtotal</td>
                                   <td className="px-4 py-2 text-right">
-                                    ${typeof invoice?.invoice?.subTotal === 'number'
+                                    PKR {typeof invoice?.invoice?.subTotal === 'number'
                                       ? invoice.invoice.subTotal.toFixed(2)
                                       : parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0').toFixed(2)}
                                   </td>
@@ -566,7 +566,7 @@ export default function OrderDetailPage({
                                     Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
                                   </td>
                                   <td className="px-4 py-2 text-right">
-                                    ${typeof invoice?.invoice?.taxAmount === 'number'
+                                    PKR {typeof invoice?.invoice?.taxAmount === 'number'
                                       ? invoice.invoice.taxAmount.toFixed(2)
                                       : (parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0') * 0.18).toFixed(2)}
                                   </td>
@@ -574,7 +574,7 @@ export default function OrderDetailPage({
                                 <tr className="border-t font-medium">
                                   <td className="px-4 py-2">Total</td>
                                   <td className="px-4 py-2 text-right">
-                                    ${typeof invoice?.invoice?.totalAmount === 'number'
+                                    PKR {typeof invoice?.invoice?.totalAmount === 'number'
                                       ? invoice.invoice.totalAmount.toFixed(2)
                                       : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
                                   </td>
@@ -656,7 +656,7 @@ export default function OrderDetailPage({
                     <div className="flex justify-between items-center text-sm pt-2 mb-2">
                       <span className="font-medium">Total Amount:</span>
                       <span className="font-bold">
-                        ${typeof invoice?.invoice?.totalAmount === 'number'
+                        PKR {typeof invoice?.invoice?.totalAmount === 'number'
                           ? invoice.invoice.totalAmount.toFixed(2)
                           : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
                       </span>
@@ -866,12 +866,12 @@ export default function OrderDetailPage({
                               <td className="px-4 py-2">{item.description}</td>
                               <td className="px-4 py-2 text-center">{item.quantity}</td>
                               <td className="px-4 py-2 text-right">
-                                ${typeof item.unitPrice === 'number'
+                                PKR {typeof item.unitPrice === 'number'
                                   ? item.unitPrice.toFixed(2)
                                   : parseFloat(item.unitPrice || '0').toFixed(2)}
                               </td>
                               <td className="px-4 py-2 text-right">
-                                ${typeof item.totalPrice === 'number'
+                                PKR {typeof item.totalPrice === 'number'
                                   ? item.totalPrice.toFixed(2)
                                   : parseFloat(item.totalPrice || '0').toFixed(2)}
                               </td>
@@ -892,7 +892,7 @@ export default function OrderDetailPage({
                       <tr>
                         <td colSpan={3} className="px-4 py-2 text-right font-medium">Subtotal</td>
                         <td className="px-4 py-2 text-right">
-                          ${typeof invoice?.invoice?.subTotal === 'number'
+                          PKR {typeof invoice?.invoice?.subTotal === 'number'
                             ? invoice.invoice.subTotal.toFixed(2)
                             : parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0').toFixed(2)}
                         </td>
@@ -902,7 +902,7 @@ export default function OrderDetailPage({
                           Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
                         </td>
                         <td className="px-4 py-2 text-right">
-                          ${typeof invoice?.invoice?.taxAmount === 'number'
+                          PKR {typeof invoice?.invoice?.taxAmount === 'number'
                             ? invoice.invoice.taxAmount.toFixed(2)
                             : (parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0') * 0.18).toFixed(2)}
                         </td>
@@ -910,7 +910,7 @@ export default function OrderDetailPage({
                       <tr className="font-bold">
                         <td colSpan={3} className="px-4 py-2 text-right">Total Amount</td>
                         <td className="px-4 py-2 text-right">
-                          ${typeof invoice?.invoice?.totalAmount === 'number'
+                          PKR {typeof invoice?.invoice?.totalAmount === 'number'
                             ? invoice.invoice.totalAmount.toFixed(2)
                             : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
                         </td>

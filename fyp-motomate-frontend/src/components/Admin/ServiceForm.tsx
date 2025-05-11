@@ -352,7 +352,7 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
               name="price"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Price ($)</FormLabel>
+                  <FormLabel>Price (PKR)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -366,7 +366,7 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
                     />
                   </FormControl>
                   <FormDescription>
-                    The price of the service in USD.
+                    The price of the service in PKR.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

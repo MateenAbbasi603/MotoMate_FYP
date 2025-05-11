@@ -396,7 +396,7 @@ export default function ServiceDetailPage({
                         </p>
                         <div className="flex justify-between items-center mt-3">
                           <span className="text-sm">Service Price</span>
-                          <span className="font-medium">${service.service?.price?.toFixed(2) || '0.00'}</span>
+                          <span className="font-medium">PKR {service.service?.price?.toFixed(2) || '0.00'}</span>
                         </div>
                       </div>
 
@@ -414,7 +414,7 @@ export default function ServiceDetailPage({
                               </p>
                               <div className="flex justify-between items-center mt-3">
                                 <span className="text-sm">Service Price</span>
-                                <span className="font-medium">${additionalService.price?.toFixed(2) || '0.00'}</span>
+                                <span className="font-medium">PKR {additionalService.price?.toFixed(2) || '0.00'}</span>
                               </div>
                             </div>
                           ))}

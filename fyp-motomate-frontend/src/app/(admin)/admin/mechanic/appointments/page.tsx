@@ -272,7 +272,7 @@ export default function MechanicDashboard() {
                               ` (${appointment.service.subCategory})`}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            ${appointment.service.price.toFixed(2)}
+                            PKR {appointment.service.price.toFixed(2)}
                           </p>
                         </div>
                       ) : (
@@ -386,7 +386,7 @@ export default function MechanicDashboard() {
                               ` (${appointment.service.subCategory})`}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            ${appointment.service.price.toFixed(2)}
+                            PKR {appointment.service.price.toFixed(2)}
                           </p>
                         </div>
                       ) : (
@@ -500,7 +500,7 @@ export default function MechanicDashboard() {
                               ` (${appointment.service.subCategory})`}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            ${appointment.service.price.toFixed(2)}
+                            PKR {appointment.service.price.toFixed(2)}
                           </p>
                         </div>
                       ) : (

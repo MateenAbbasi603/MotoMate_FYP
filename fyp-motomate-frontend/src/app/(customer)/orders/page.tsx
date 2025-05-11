@@ -369,7 +369,7 @@ export default function OrdersPage() {
                           <h3 className="font-medium">Details</h3>
                         </div>
                         <p className="text-sm">
-                          <span className="font-medium">Total:</span> ${order.totalAmount.toFixed(2)}
+                          <span className="font-medium">Total:</span> PKR {order.totalAmount.toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -445,7 +445,7 @@ export default function OrdersPage() {
                             <h3 className="font-medium">Details</h3>
                           </div>
                           <p className="text-sm">
-                            <span className="font-medium">Total:</span> ${order.totalAmount.toFixed(2)}
+                            <span className="font-medium">Total:</span> PKR {order.totalAmount.toFixed(2)}
                           </p>
                         </div>
                       </div>
@@ -527,7 +527,7 @@ export default function OrdersPage() {
                             <h3 className="font-medium">Details</h3>
                           </div>
                           <p className="text-sm">
-                            <span className="font-medium">Total:</span> ${order.totalAmount.toFixed(2)}
+                            <span className="font-medium">Total:</span> PKR {order.totalAmount.toFixed(2)}
                           </p>
                         </div>
                       </div>
@@ -603,7 +603,7 @@ export default function OrdersPage() {
                             <h3 className="font-medium">Details</h3>
                           </div>
                           <p className="text-sm">
-                            <span className="font-medium">Total:</span> ${order.totalAmount.toFixed(2)}
+                            <span className="font-medium">Total:</span> PKR {order.totalAmount.toFixed(2)}
                           </p>
                         </div>
                       </div>

@@ -364,7 +364,7 @@ export default function OrdersPage() {
                         <TableCell>
                           {order.orderDate ? format(new Date(order.orderDate), 'MMM dd, yyyy') : 'N/A'}
                         </TableCell>
-                        <TableCell>${order.totalAmount?.toFixed(2) || '0.00'}</TableCell>
+                        <TableCell>PKR {order.totalAmount?.toFixed(2) || '0.00'}</TableCell>
                         <TableCell>
                           <StatusBadge status={order.status} />
                         </TableCell>

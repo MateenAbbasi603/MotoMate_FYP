@@ -510,7 +510,7 @@ export default function MechanicAppointmentDetail({
                             </div>
                             <div className="flex justify-between items-center mt-2">
                               <span className="text-sm">Service Price</span>
-                              <span className="font-medium">${appointment.service.price.toFixed(2)}</span>
+                              <span className="font-medium">PKR {appointment.service.price.toFixed(2)}</span>
                             </div>
                           </>
                         ) : (
@@ -563,7 +563,7 @@ export default function MechanicAppointmentDetail({
                               </div>
                               <div className="flex justify-between items-center mt-2">
                                 <span className="text-sm">Service Price</span>
-                                <span className="font-medium">${service.price?.toFixed(2) || '0.00'}</span>
+                                <span className="font-medium">PKR {service.price?.toFixed(2) || '0.00'}</span>
                               </div>
                             </div>
                           ))}
@@ -615,7 +615,7 @@ export default function MechanicAppointmentDetail({
 
                           <div className="flex justify-between items-center mt-2">
                             <span className="text-sm text-blue-800">Inspection Fee</span>
-                            <span className="font-medium text-blue-900">${appointment.service.price.toFixed(2)}</span>
+                            <span className="font-medium text-blue-900">PKR {appointment.service.price.toFixed(2)}</span>
                           </div>
                         </div>
                       )}
@@ -781,7 +781,7 @@ export default function MechanicAppointmentDetail({
                       </h4>
                       <div className="flex justify-between items-center mt-2 text-sm">
                         <span className="text-muted-foreground">Service Fee:</span>
-                        <span className="font-medium">${appointment.service.price.toFixed(2)}</span>
+                        <span className="font-medium">PKR {appointment.service.price.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between items-center mt-1 text-sm">
                         <span className="text-muted-foreground">Category:</span>

@@ -1006,7 +1006,7 @@ export default function OrderDetailPage({
                         </p>
                         <div className="flex justify-between items-center mt-3">
                           <span className="text-sm">Service Price</span>
-                          <span className="font-medium">${order.service?.price?.toFixed(2) || '0.00'}</span>
+                          <span className="font-medium">PKR {order.service?.price?.toFixed(2) || '0.00'}</span>
                         </div>
 
                         {order.includesInspection && (
@@ -1050,7 +1050,7 @@ export default function OrderDetailPage({
                               </p>
                               <div className="flex justify-between items-center mt-3">
                                 <span className="text-sm">Service Price</span>
-                                <span className="font-medium">${service.price?.toFixed(2) || '0.00'}</span>
+                                <span className="font-medium">PKR {service.price?.toFixed(2) || '0.00'}</span>
                               </div>
                             </div>
                           ))}
@@ -1067,26 +1067,26 @@ export default function OrderDetailPage({
                       <div className="bg-muted/50 p-4 rounded-md">
                         <div className="flex justify-between items-center pb-2 border-b">
                           <span>Main Service Fee</span>
-                          <span>${order.service?.price?.toFixed(2) || '0.00'}</span>
+                          <span>PKR {order.service?.price?.toFixed(2) || '0.00'}</span>
                         </div>
 
                         {order.includesInspection && order.inspection && (
                           <div className="flex justify-between items-center py-2 border-b">
                             <span>Inspection Fee</span>
-                            <span>${order.inspection.price?.toFixed(2) || '0.00'}</span>
+                            <span>PKR {order.inspection.price?.toFixed(2) || '0.00'}</span>
                           </div>
                         )}
 
                         {hasAdditionalServices() && (
                           <div className="flex justify-between items-center py-2 border-b">
                             <span>Additional Services</span>
-                            <span>${getAdditionalServices().reduce((sum, service) => sum + (service.price || 0), 0).toFixed(2)}</span>
+                            <span>PKR {getAdditionalServices().reduce((sum, service) => sum + (service.price || 0), 0).toFixed(2)}</span>
                           </div>
                         )}
 
                         <div className="flex justify-between items-center pt-2 font-medium">
                           <span>Total Amount</span>
-                          <span>${order.totalAmount?.toFixed(2) || calculateTotalAmount().toFixed(2)}</span>
+                          <span>PKR {order.totalAmount?.toFixed(2) || calculateTotalAmount().toFixed(2)}</span>
                         </div>
                       </div>
                     </div>
