@@ -41,7 +41,9 @@ import {
   Plus,
   PenTool,
   Loader2,
-  CheckCheck
+  CheckCheck,
+
+
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -65,6 +67,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import invoiceService from '../../../../../../services/invoiceService';
 
 interface InspectionData {
   inspectionId: number;
@@ -115,7 +118,7 @@ interface UserData {
 interface OrderData {
   orderId: number;
   userId: number;
-  serviceId?:number;
+  serviceId?: number;
   vehicleId?: number;
   status: string;
   orderDate: string;
@@ -180,8 +183,42 @@ export default function OrderDetailPage({
   const [appointment, setAppointment] = useState<any>(null);
   const [loadingAppointment, setLoadingAppointment] = useState(false);
   const [isTransferringService, setIsTransferringService] = useState<boolean>(false);
+  const [generatingInvoice, setGeneratingInvoice] = useState(false);
+  const [invoiceId, setInvoiceId] = useState<number | null>(null);
 
 
+
+  const handleGenerateInvoice = async () => {
+    if (!order) return;
+
+    try {
+      setGeneratingInvoice(true);
+      const response = await invoiceService.generateFromOrder(order.orderId.toString());
+
+      if (response.success) {
+        toast.success(response.isExisting ? 'Invoice already exists' : 'Invoice generated successfully');
+        setInvoiceId(response.invoice.invoiceId);
+
+        // Redirect to the invoice page
+        router.push(`/admin/invoices/${response.invoice.invoiceId}`);
+      } else {
+        toast.error(response.message || 'Failed to generate invoice');
+      }
+    } catch (error: any) {
+      console.error('Error generating invoice:', error);
+      const errorMessage = error.response?.data?.message ||
+        error.response?.data?.error ||
+        'Failed to generate invoice';
+      toast.error(errorMessage);
+
+      // Show more detailed error in console for debugging
+      if (error.response?.data?.innerError) {
+        console.error('Inner error:', error.response.data.innerError);
+      }
+    } finally {
+      setGeneratingInvoice(false);
+    }
+  };
 
   const handleTransferToService = async () => {
     if (!order || !appointment || !appointment.mechanic) {
@@ -1368,6 +1405,33 @@ export default function OrderDetailPage({
                 )}
                 <hr />
 
+
+                {order && order.status.toLowerCase() === 'completed' && (
+                  <div className="mt-4 pt-4 border-t">
+                    <h3 className="text-sm font-medium mb-3">Invoice</h3>
+                    <Button
+                      className="w-full"
+                      variant="default"
+                      onClick={handleGenerateInvoice}
+                      disabled={generatingInvoice}
+                    >
+                      {generatingInvoice ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="mr-2 h-4 w-4" />
+                          {invoiceId ? 'View Invoice' : 'Generate Invoice'}
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {invoiceId ? 'View the generated invoice' : 'Create a detailed invoice from this order'}
+                    </p>
+                  </div>
+                )}
                 {/* Status update */}
                 <div>
                   <h3 className="text-sm font-medium mb-3">Update Status</h3>

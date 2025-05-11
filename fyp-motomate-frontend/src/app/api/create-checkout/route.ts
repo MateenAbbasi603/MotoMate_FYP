@@ -2,9 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Safepay } from '@sfpy/node-sdk';
 
-// Create Safepay client - same as in create-payment
+// Create Safepay client
 const safepay = new Safepay({
-    // @ts-ignore
+  //@ts-ignore
   environment: 'sandbox',
   apiKey: process.env.SAFEPAY_API_KEY || 'sec_asd12-2342s-1231s',
   v1Secret: process.env.SAFEPAY_V1_SECRET || 'bar',
@@ -14,7 +14,7 @@ const safepay = new Safepay({
 export async function POST(request: NextRequest) {
   try {
     // Parse the request body
-    const { token, orderId, productName } = await request.json();
+    const { token, orderId, invoiceId } = await request.json();
     
     // Validate inputs
     if (!token || !orderId) {
@@ -27,12 +27,12 @@ export async function POST(request: NextRequest) {
     // Get base URL with fallback
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     
-    // Create checkout URL
+    // Create checkout URL - remove token from redirect URL to avoid issues
     const url = safepay.checkout.create({
       token,
       orderId,
-      cancelUrl: `${baseUrl}/cancel?order=${orderId}`,
-      redirectUrl: `${baseUrl}/success?order=${orderId}`,
+      cancelUrl: `${baseUrl}/payment/cancel?invoice=${invoiceId}`,
+      redirectUrl: `${baseUrl}/payment/success?invoice=${invoiceId}`,
       source: 'custom',
       webhooks: true
     });

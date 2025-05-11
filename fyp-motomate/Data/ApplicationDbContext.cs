@@ -23,12 +23,15 @@ namespace fyp_motomate.Data
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<ServiceHistory> ServiceHistories { get; set; }
         public DbSet<MechanicsPerformance> MechanicsPerformances { get; set; }
-        public DbSet<Invoice> Invoices { get; set; }
+
         public DbSet<Payment> Payments { get; set; }
         public DbSet<Inspection> Inspections { get; set; }
         public DbSet<OrderService> OrderServices { get; set; }
 
         public DbSet<TransferToService> TransferToServices { get; set; }
+
+        public DbSet<Invoice> Invoices { get; set; }
+        public DbSet<InvoiceItem> InvoiceItems { get; set; }
 
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -202,6 +205,30 @@ namespace fyp_motomate.Data
                 .HasForeignKey(sh => sh.ServiceId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.Order)
+                .WithMany()
+                .HasForeignKey(i => i.OrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.User)
+                .WithMany()
+                .HasForeignKey(i => i.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.Mechanic)
+                .WithMany()
+                .HasForeignKey(i => i.MechanicId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<InvoiceItem>()
+                .HasOne(ii => ii.Invoice)
+                .WithMany(i => i.InvoiceItems)
+                .HasForeignKey(ii => ii.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
             // Configure appointment relationships
             modelBuilder.Entity<Appointment>()
                 .HasOne(a => a.Invoice)
@@ -333,6 +360,13 @@ namespace fyp_motomate.Data
                 .HasOne(os => os.Service)
                 .WithMany()
                 .HasForeignKey(os => os.ServiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Add this relationship configuration in the OnModelCreating method
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.Appointment)
+                .WithOne(a => a.Invoice)
+                .HasForeignKey<Invoice>(i => i.AppointmentId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }

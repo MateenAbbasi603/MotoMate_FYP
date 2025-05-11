@@ -49,6 +49,12 @@ namespace fyp_motomate.Models.DTOs
         public string Password { get; set; }
     }
 
+
+public class SafepayPaymentRequest
+{
+    public int InvoiceId { get; set; }
+    public string TransactionId { get; set; }
+}
     public class UserDto
     {
         public int UserId { get; set; }

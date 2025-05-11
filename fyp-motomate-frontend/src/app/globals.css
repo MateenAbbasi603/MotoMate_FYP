@@ -122,3 +122,25 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+@media print {
+  @page {
+    margin: 1cm;
+  }
+  
+  body * {
+    visibility: hidden;
+  }
+  
+  #invoice-printable, #invoice-printable * {
+    visibility: visible;
+  }
+  
+  #invoice-printable {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}

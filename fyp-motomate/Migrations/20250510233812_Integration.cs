@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace fyp_motomate.Migrations
 {
     /// <inheritdoc />
-    public partial class Initial : Migration
+    public partial class Integration : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -150,6 +150,7 @@ namespace fyp_motomate.Migrations
                     IncludesInspection = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
                     OrderDate = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETUTCDATE()"),
                     Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false, defaultValue: "pending"),
+                    OrderType = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     TotalAmount = table.Column<decimal>(type: "decimal(10,2)", nullable: false),
                     Notes = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
@@ -347,14 +348,72 @@ namespace fyp_motomate.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "TransferToServices",
+                columns: table => new
+                {
+                    TransferId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    VehicleId = table.Column<int>(type: "int", nullable: false),
+                    ServiceId = table.Column<int>(type: "int", nullable: false),
+                    OrderId = table.Column<int>(type: "int", nullable: false),
+                    OrderDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    MechanicId = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ETA = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TransferToServices", x => x.TransferId);
+                    table.ForeignKey(
+                        name: "FK_TransferToServices_Orders_OrderId",
+                        column: x => x.OrderId,
+                        principalTable: "Orders",
+                        principalColumn: "OrderId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_TransferToServices_Services_ServiceId",
+                        column: x => x.ServiceId,
+                        principalTable: "Services",
+                        principalColumn: "ServiceId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_TransferToServices_Users_MechanicId",
+                        column: x => x.MechanicId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TransferToServices_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TransferToServices_Vehicles_VehicleId",
+                        column: x => x.VehicleId,
+                        principalTable: "Vehicles",
+                        principalColumn: "VehicleId",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Invoices",
                 columns: table => new
                 {
                     InvoiceId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    AppointmentId = table.Column<int>(type: "int", nullable: false),
+                    OrderId = table.Column<int>(type: "int", nullable: false),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    MechanicId = table.Column<int>(type: "int", nullable: true),
                     TotalAmount = table.Column<decimal>(type: "decimal(10,2)", nullable: false),
-                    InvoiceDate = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    InvoiceDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DueDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    AppointmentId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -365,6 +424,24 @@ namespace fyp_motomate.Migrations
                         principalTable: "Appointments",
                         principalColumn: "AppointmentId",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Invoices_Orders_OrderId",
+                        column: x => x.OrderId,
+                        principalTable: "Orders",
+                        principalColumn: "OrderId",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Invoices_Users_MechanicId",
+                        column: x => x.MechanicId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Invoices_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -397,6 +474,29 @@ namespace fyp_motomate.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "InvoiceItems",
+                columns: table => new
+                {
+                    InvoiceItemId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    InvoiceId = table.Column<int>(type: "int", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Quantity = table.Column<int>(type: "int", nullable: false),
+                    UnitPrice = table.Column<decimal>(type: "decimal(10,2)", nullable: false),
+                    TotalPrice = table.Column<decimal>(type: "decimal(10,2)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_InvoiceItems", x => x.InvoiceItemId);
+                    table.ForeignKey(
+                        name: "FK_InvoiceItems_Invoices_InvoiceId",
+                        column: x => x.InvoiceId,
+                        principalTable: "Invoices",
+                        principalColumn: "InvoiceId",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Payments",
                 columns: table => new
                 {
@@ -421,7 +521,7 @@ namespace fyp_motomate.Migrations
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "UserId", "Address", "CreatedAt", "Email", "Name", "Password", "Phone", "Role", "UpdatedAt", "Username", "imgUrl" },
-                values: new object[] { 1, "Admin Headquarters", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin@example.com", "Super Admin", "$2a$11$4Z03ts31qhc336CLgcJyVOvoo6aCNMASWRZ5WaZa9PvywzhQouKZ2", "+1234567890", "super_admin", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin", "https://ui-avatars.com/api/?name=Super+Admin&background=random" });
+                values: new object[] { 1, "Admin Headquarters", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin@example.com", "Super Admin", "$2a$11$cAKzMa4u1HdrmXJ/QdEgkOU9M.XtVuJrc51xQT/kQ/3TDojUN6xHy", "+1234567890", "super_admin", new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "superadmin", "https://ui-avatars.com/api/?name=Super+Admin&background=random" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Appointments_MechanicId",
@@ -471,10 +571,30 @@ namespace fyp_motomate.Migrations
                 column: "VehicleId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_InvoiceItems_InvoiceId",
+                table: "InvoiceItems",
+                column: "InvoiceId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Invoices_AppointmentId",
                 table: "Invoices",
                 column: "AppointmentId",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Invoices_MechanicId",
+                table: "Invoices",
+                column: "MechanicId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Invoices_OrderId",
+                table: "Invoices",
+                column: "OrderId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Invoices_UserId",
+                table: "Invoices",
+                column: "UserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_MechanicsPerformances_MechanicId",
@@ -543,6 +663,31 @@ namespace fyp_motomate.Migrations
                 column: "VehicleId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_TransferToServices_MechanicId",
+                table: "TransferToServices",
+                column: "MechanicId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TransferToServices_OrderId",
+                table: "TransferToServices",
+                column: "OrderId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TransferToServices_ServiceId",
+                table: "TransferToServices",
+                column: "ServiceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TransferToServices_UserId",
+                table: "TransferToServices",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TransferToServices_VehicleId",
+                table: "TransferToServices",
+                column: "VehicleId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Users_Email",
                 table: "Users",
                 column: "Email",
@@ -576,6 +721,9 @@ namespace fyp_motomate.Migrations
                 name: "Inventory");
 
             migrationBuilder.DropTable(
+                name: "InvoiceItems");
+
+            migrationBuilder.DropTable(
                 name: "MechanicsPerformances");
 
             migrationBuilder.DropTable(
@@ -592,6 +740,9 @@ namespace fyp_motomate.Migrations
 
             migrationBuilder.DropTable(
                 name: "ServiceHistories");
+
+            migrationBuilder.DropTable(
+                name: "TransferToServices");
 
             migrationBuilder.DropTable(
                 name: "Invoices");

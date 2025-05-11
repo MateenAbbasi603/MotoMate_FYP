@@ -4,7 +4,7 @@ import { Safepay } from '@sfpy/node-sdk';
 
 // Create Safepay client
 const safepay = new Safepay({
-    // @ts-ignore
+  //@ts-ignore
   environment: 'sandbox', // Use 'production' for live payments
   apiKey: process.env.SAFEPAY_API_KEY || 'sec_asd12-2342s-1231s', // Replace with your actual API key
   v1Secret: process.env.SAFEPAY_V1_SECRET || 'bar', // Replace with your actual secret
@@ -14,7 +14,7 @@ const safepay = new Safepay({
 export async function POST(request: NextRequest) {
   try {
     // Parse the request body
-    const { amount, currency } = await request.json();
+    const { amount, currency, invoiceId } = await request.json();
     
     // Validate inputs
     if (!amount || !currency) {
@@ -40,4 +40,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
