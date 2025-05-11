@@ -66,5 +66,8 @@ namespace fyp_motomate.Models
         // Collection of additional services
         [JsonIgnore]
         public ICollection<OrderService> OrderServices { get; set; } = new List<OrderService>();
+
+        [JsonIgnore]
+        public ICollection<Review> Reviews { get; set; } = new List<Review>();
     }
 }

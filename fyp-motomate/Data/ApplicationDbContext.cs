@@ -236,12 +236,6 @@ namespace fyp_motomate.Data
                 .HasForeignKey<Invoice>(i => i.AppointmentId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            modelBuilder.Entity<Appointment>()
-                .HasMany(a => a.Reviews)
-                .WithOne(r => r.Appointment)
-                .HasForeignKey(r => r.AppointmentId)
-                .OnDelete(DeleteBehavior.Cascade);
-
             modelBuilder.Entity<Invoice>()
                 .HasMany(i => i.Payments)
                 .WithOne(p => p.Invoice)
@@ -280,8 +274,7 @@ namespace fyp_motomate.Data
                 entity.Property(o => o.ServiceId)
                     .IsRequired(false);
 
-                // Relationships - only define the user and vehicle relationships here,
-                // since Service is already defined above and we want to avoid duplication
+                // Relationships
                 entity.HasOne(d => d.User)
                     .WithMany(p => p.Orders)
                     .HasForeignKey(d => d.UserId)
@@ -293,6 +286,11 @@ namespace fyp_motomate.Data
                     .HasForeignKey(d => d.VehicleId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Orders_Vehicles_VehicleId");
+
+                entity.HasMany(o => o.Reviews)
+                    .WithOne(r => r.Order)
+                    .HasForeignKey(r => r.OrderId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             // Configure Inspection entity

@@ -253,7 +253,6 @@ namespace fyp_motomate.Models
         public string VendorName { get; set; }
     }
 
-
     public class Review
     {
         [Key]
@@ -261,10 +260,18 @@ namespace fyp_motomate.Models
         public int ReviewId { get; set; }
 
         [Required]
-        public int AppointmentId { get; set; }
+        public int OrderId { get; set; }
 
         [Required]
         public int UserId { get; set; }
+
+        // Review type can be "Workshop" or "Mechanic"
+        [Required]
+        [StringLength(20)]
+        public string ReviewType { get; set; } = "Workshop";
+
+        // Optional mechanic ID (only required for mechanic reviews)
+        public int? MechanicId { get; set; }
 
         [Required]
         [Range(1, 5)]
@@ -275,11 +282,17 @@ namespace fyp_motomate.Models
         public DateTime ReviewDate { get; set; } = DateTime.Now;
 
         // Foreign key relationships
-        [ForeignKey("AppointmentId")]
-        public Appointment Appointment { get; set; }
+        [ForeignKey("OrderId")]
+        [JsonIgnore]
+        public Order Order { get; set; }
 
         [ForeignKey("UserId")]
+        [JsonIgnore]
         public User User { get; set; }
+
+        [ForeignKey("MechanicId")]
+        [JsonIgnore]
+        public User Mechanic { get; set; }
     }
 
     public class Notification
@@ -337,7 +350,6 @@ namespace fyp_motomate.Models
         [ForeignKey("ServiceId")]
         public Service Service { get; set; }
     }
-
     public class MechanicsPerformance
     {
         [Key]
@@ -347,6 +359,9 @@ namespace fyp_motomate.Models
         [Required]
         public int MechanicId { get; set; }
 
+        // New property
+        public int? OrderId { get; set; }
+
         public int TotalJobs { get; set; } = 0;
 
         public int CompletedJobs { get; set; } = 0;
@@ -354,76 +369,83 @@ namespace fyp_motomate.Models
         [Column(TypeName = "decimal(3,2)")]
         public decimal Rating { get; set; } = 0;
 
-        // Foreign key relationship
+        // Foreign key relationships
         [ForeignKey("MechanicId")]
+        [JsonIgnore]
         public User Mechanic { get; set; }
+
+        [ForeignKey("OrderId")]
+        [JsonIgnore]
+        public Order Order { get; set; }
     }
-public class Invoice
-{
-    [Key]
-    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int InvoiceId { get; set; }
 
-    [Required]
-    public int OrderId { get; set; }
 
-    [Required]
-    public int UserId { get; set; }
-    
-    public int? AppointmentId { get; set; }
-    
-    public int? MechanicId { get; set; }
+    public class Invoice
+    {
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int InvoiceId { get; set; }
 
-    [Required]
-    [Column(TypeName = "decimal(10,2)")]
-    public decimal SubTotal { get; set; }
+        [Required]
+        public int OrderId { get; set; }
 
-    [Required]
-    [Column(TypeName = "decimal(10,2)")]
-    public decimal TaxRate { get; set; } = 18.0m; // Default tax rate of 18%
+        [Required]
+        public int UserId { get; set; }
 
-    [Required]
-    [Column(TypeName = "decimal(10,2)")]
-    public decimal TaxAmount { get; set; }
-    
-    [Required]
-    [Column(TypeName = "decimal(10,2)")]
-    public decimal TotalAmount { get; set; }
+        public int? AppointmentId { get; set; }
 
-    [Required]
-    public DateTime InvoiceDate { get; set; }
-    
-    [Required]
-    public DateTime DueDate { get; set; }
-    
-    [Required]
-    [StringLength(20)]
-    public string Status { get; set; } // issued, paid, overdue, cancelled
-    
-    public string Notes { get; set; }
+        public int? MechanicId { get; set; }
 
-    // Navigation properties
-    [ForeignKey("OrderId")]
-    [JsonIgnore]
-    public Order Order { get; set; }
-    
-    [ForeignKey("UserId")]
-    [JsonIgnore]
-    public User User { get; set; }
-    
-    [ForeignKey("MechanicId")]
-    [JsonIgnore]
-    public User Mechanic { get; set; }
-    
-    [ForeignKey("AppointmentId")]
-    [JsonIgnore]
-    public Appointment Appointment { get; set; }
-    
-    public ICollection<InvoiceItem> InvoiceItems { get; set; } = new List<InvoiceItem>();
+        [Required]
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal SubTotal { get; set; }
 
-    [JsonIgnore]
-    public ICollection<Payment> Payments { get; set; } = new List<Payment>();
-}
+        [Required]
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal TaxRate { get; set; } = 18.0m; // Default tax rate of 18%
+
+        [Required]
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal TaxAmount { get; set; }
+
+        [Required]
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal TotalAmount { get; set; }
+
+        [Required]
+        public DateTime InvoiceDate { get; set; }
+
+        [Required]
+        public DateTime DueDate { get; set; }
+
+        [Required]
+        [StringLength(20)]
+        public string Status { get; set; } // issued, paid, overdue, cancelled
+
+        public string Notes { get; set; }
+
+        // Navigation properties
+        [ForeignKey("OrderId")]
+        [JsonIgnore]
+        public Order Order { get; set; }
+
+        [ForeignKey("UserId")]
+        [JsonIgnore]
+        public User User { get; set; }
+
+        [ForeignKey("MechanicId")]
+        [JsonIgnore]
+        public User Mechanic { get; set; }
+
+        [ForeignKey("AppointmentId")]
+        [JsonIgnore]
+        public Appointment Appointment { get; set; }
+
+        public ICollection<InvoiceItem> InvoiceItems { get; set; } = new List<InvoiceItem>();
+
+        [JsonIgnore]
+        public ICollection<Payment> Payments { get; set; } = new List<Payment>();
+    }
     public class InvoiceItem
     {
         [Key]

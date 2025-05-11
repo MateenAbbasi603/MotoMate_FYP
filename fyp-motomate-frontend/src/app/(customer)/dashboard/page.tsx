@@ -1,18 +1,12 @@
-'use client'
+import ReviewGuard from '@/components/ReviewGuard'
+import React from 'react'
 
-
-import { MechanicRatingDialog } from "@/components/MechanicRatingDialog";
-import LogoutButton from "@/components/User/LogoutBtn";
-
-// app/dashboard/page.tsx
-export default function DashboardPage() {
+export default function page() {
   return (
-    <div className="container mx-auto py-10">
-      <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
-
-<LogoutButton/>     
-<MechanicRatingDialog />
-
+    <ReviewGuard>
+    <div>
+     MY DASHBOARD
     </div>
-  );
+  </ReviewGuard>
+  )
 }

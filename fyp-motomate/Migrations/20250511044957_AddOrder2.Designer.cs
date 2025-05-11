@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using fyp_motomate.Data;
 
@@ -11,9 +12,11 @@ using fyp_motomate.Data;
 namespace fyp_motomate.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250511044957_AddOrder2")]
+    partial class AddOrder2
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -505,7 +508,7 @@ namespace fyp_motomate.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ReviewId"));
 
-                    b.Property<int?>("AppointmentId")
+                    b.Property<int>("AppointmentId")
                         .HasColumnType("int");
 
                     b.Property<string>("Comments")
@@ -515,7 +518,7 @@ namespace fyp_motomate.Migrations
                     b.Property<int?>("MechanicId")
                         .HasColumnType("int");
 
-                    b.Property<int>("OrderId")
+                    b.Property<int?>("OrderId")
                         .HasColumnType("int");
 
                     b.Property<int>("Rating")
@@ -743,7 +746,7 @@ namespace fyp_motomate.Migrations
                             CreatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "superadmin@example.com",
                             Name = "Super Admin",
-                            Password = "$2a$11$Njm6Ly4KE0ETArvYMxQ1qOi7ARSu4xYBzZx9AjngOoqOE8wciUL4i",
+                            Password = "$2a$11$lYmA7tkJDAu8nBP/09ZeBuc3k30BxqWK2E9pyR9TgAnBBuKiU6q.O",
                             Phone = "+1234567890",
                             Role = "super_admin",
                             UpdatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
@@ -1007,25 +1010,27 @@ namespace fyp_motomate.Migrations
 
             modelBuilder.Entity("fyp_motomate.Models.Review", b =>
                 {
-                    b.HasOne("fyp_motomate.Models.Appointment", null)
+                    b.HasOne("fyp_motomate.Models.Appointment", "Appointment")
                         .WithMany("Reviews")
-                        .HasForeignKey("AppointmentId");
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("fyp_motomate.Models.User", "Mechanic")
                         .WithMany()
                         .HasForeignKey("MechanicId");
 
                     b.HasOne("fyp_motomate.Models.Order", "Order")
-                        .WithMany("Reviews")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .WithMany()
+                        .HasForeignKey("OrderId");
 
                     b.HasOne("fyp_motomate.Models.User", "User")
                         .WithMany("Reviews")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Appointment");
 
                     b.Navigation("Mechanic");
 
@@ -1136,8 +1141,6 @@ namespace fyp_motomate.Migrations
                         .IsRequired();
 
                     b.Navigation("OrderServices");
-
-                    b.Navigation("Reviews");
                 });
 
             modelBuilder.Entity("fyp_motomate.Models.Service", b =>
