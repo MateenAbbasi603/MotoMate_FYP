@@ -127,6 +127,20 @@ namespace fyp_motomate.Controllers
                     }
                 }
 
+                // Check if invoice exists for this order and get its status
+                var invoice = await _context.Invoices
+                    .Where(i => i.OrderId == id)
+                    .FirstOrDefaultAsync();
+
+                string invoiceStatus = "none";
+                int? invoiceId = null;
+
+                if (invoice != null)
+                {
+                    invoiceStatus = invoice.Status;
+                    invoiceId = invoice.InvoiceId;
+                }
+
                 // Map to DTO to prevent circular references
                 var orderDto = new OrderResponseDto
                 {
@@ -138,7 +152,9 @@ namespace fyp_motomate.Controllers
                     OrderDate = order.OrderDate,
                     Status = order.Status,
                     TotalAmount = order.TotalAmount,
-                    Notes = order.Notes
+                    Notes = order.Notes,
+                    InvoiceStatus = invoiceStatus,
+                    InvoiceId = invoiceId
                 };
 
                 // Add user info if available
@@ -194,8 +210,8 @@ namespace fyp_motomate.Controllers
                     {
                         InspectionId = order.Inspection.InspectionId,
                         ServiceId = order.Inspection.ServiceId,
-                        ServiceName = order.Inspection.Service.ServiceName,
-                        SubCategory = order.Inspection.Service.SubCategory,
+                        ServiceName = order.Inspection.Service?.ServiceName,
+                        SubCategory = order.Inspection.Service?.SubCategory,
                         ScheduledDate = order.Inspection.ScheduledDate,
                         Status = order.Inspection.Status,
                         TimeSlot = order.Inspection.TimeSlot,
@@ -222,7 +238,6 @@ namespace fyp_motomate.Controllers
                             Price = os.Service.Price,
                             Description = os.Service.Description,
                             SubCategory = os.Service.SubCategory ?? "" // Null coalescing operator
-
                         })
                         .ToList();
                 }
@@ -238,7 +253,6 @@ namespace fyp_motomate.Controllers
                 return StatusCode(500, new { message = "An error occurred while fetching the order", error = ex.Message });
             }
         }
-
 
         // POST: api/Orders
         [HttpPost]

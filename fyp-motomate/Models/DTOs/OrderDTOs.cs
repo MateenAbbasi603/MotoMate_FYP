@@ -88,6 +88,9 @@ namespace fyp_motomate.Models.DTOs
         public decimal TotalAmount { get; set; }
         public string Notes { get; set; }
 
+        public string InvoiceStatus { get; set; } = "none";
+        public int? InvoiceId { get; set; }
+
         // Related entities
         public UserDetailsDto User { get; set; }
         public VehicleDetailsDto Vehicle { get; set; }
