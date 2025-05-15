@@ -177,7 +177,7 @@ export default function MechanicAppointmentDetail({
   const id = resolvedParams.id;
 
   const [appointment, setAppointment] = useState<AppointmentData | null>(null);
-  const [order, setOrder] = useState<OrderData | null>(null);
+  const [order, setOrder] = useState<OrderData | any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
@@ -488,85 +488,53 @@ export default function MechanicAppointmentDetail({
                     <div>
                       <h3 className="text-lg font-medium flex items-center mb-3">
                         <Wrench className="mr-2 h-5 w-5 text-primary" />
-                        Service Information
+                        Inspection Information
                       </h3>
-                      <div className="bg-muted/50 p-4 rounded-md">
-                        {appointment.service ? (
-                          <>
-                            <h4 className="font-medium text-primary">
-                              {formatLabel(appointment.service.serviceName)}
-                              {appointment.service.category === "Inspection" &&
-                                appointment.service.subCategory &&
-                                ` (${appointment.service.subCategory})`}
-                            </h4>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {appointment.service.description || 'No description available'}
-                            </p>
-                            <div className="flex justify-between items-center mt-3">
-                              <span className="text-sm">Service Category</span>
-                              <Badge variant="outline">
-                                {appointment.service.category}
-                              </Badge>
-                            </div>
-                            <div className="flex justify-between items-center mt-2">
-                              <span className="text-sm">Service Price</span>
-                              <span className="font-medium">PKR {appointment.service.price.toFixed(2)}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <h4 className="font-medium text-primary">
-                              {appointment.serviceId === null ? "Vehicle Inspection" : "Service"}
-                            </h4>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {appointment.serviceId === null
-                                ? "Standard vehicle inspection service"
-                                : "Service details not available"}
-                            </p>
-                            <div className="flex justify-between items-center mt-2">
-                              <span className="text-sm">Service Price</span>
-                              <span className="font-medium">Price information not available</span>
-                            </div>
-                          </>
-                        )}
+                      
+                      {order.inspection.serviceName} 
 
-                        {order.includesInspection && (
-                          <div className="flex justify-between items-center mt-2">
-                            <span className="text-sm">Includes Inspection</span>
-                            <Badge variant="outline" className="bg-blue-50 text-blue-800">
-                              Yes
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
 
                       {/* Additional Services */}
-                      {order.additionalServices && order.additionalServices.length > 0 && (
+                      {order.additionalServices && order.additionalServices.$values && order.additionalServices.$values.length > 0 && (
                         <div className="mt-4">
-                          <h4 className="font-medium mb-2">Additional Services</h4>
-                          {order.additionalServices.map((service, index) => (
-                            <div key={service.serviceId || index} className="bg-muted/50 p-4 rounded-md mb-2">
-                              <h4 className="font-medium text-primary">
-                                {service.serviceName}
-                                {service.category === "Inspection" &&
-                                  service.subCategory &&
-                                  ` (${service.subCategory})`}
-                              </h4>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {service.description || 'No description available'}
-                              </p>
-                              <div className="flex justify-between items-center mt-2">
-                                <span className="text-sm">Service Category</span>
-                                <Badge variant="outline">
-                                  {service.category}
-                                </Badge>
-                              </div>
-                              <div className="flex justify-between items-center mt-2">
-                                <span className="text-sm">Service Price</span>
-                                <span className="font-medium">PKR {service.price?.toFixed(2) || '0.00'}</span>
-                              </div>
-                            </div>
-                          ))}
+                          {/* Filter inspection services */}
+                          {(() => {
+                            const inspectionServices = order.additionalServices.$values.filter(
+                              (service: any) => service.category.toLowerCase() === "inspection"
+                            );
+
+
+                            if (inspectionServices.length === 0) {
+                              return null;
+                            }
+
+                            return (
+                              <>
+                                
+                                {inspectionServices.map((service: any, index: any) => (
+                                  <div key={service.serviceId || index} className="bg-muted/50 p-4 rounded-md mb-2">
+                                    <h4 className="font-medium text-primary">
+                                      {service.serviceName}
+                                      {service.subCategory && ` (${service.subCategory})`}
+                                    </h4>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {service.description || 'No description available'}
+                                    </p>
+                                    <div className="flex justify-between items-center mt-2">
+                                      <span className="text-sm">Inspection Type</span>
+                                      <Badge variant="outline" className="bg-blue-50 text-blue-800">
+                                        {service.subCategory || 'General'}
+                                      </Badge>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-2">
+                                      <span className="text-sm">Price</span>
+                                      <span className="font-medium">PKR {service.price?.toFixed(2) || '0.00'}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>

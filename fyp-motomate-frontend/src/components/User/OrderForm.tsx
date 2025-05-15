@@ -1,4 +1,4 @@
-// src/components/User/OrderForm.tsx (updated)
+// Updated OrderForm.tsx with accordion for main categories and subcategory cards
 
 "use client";
 
@@ -19,7 +19,9 @@ import {
   Clock,
   PlusCircle,
   MinusCircle,
-  Info
+  Info,
+  Plus,
+  Check
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -62,6 +64,12 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import timeSlotService, { TimeSlotInfo } from "../../../services/timeSlotService";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 // Define interfaces for data types
 interface Vehicle {
@@ -98,15 +106,18 @@ interface Service {
   subCategory?: string;
 }
 
-// Form schema for order with mandatory inspection
+interface SelectedSubcategory {
+  serviceId: number;
+  serviceName: string;
+  price: number;
+  description?: string;
+}
+
+// Form schema for order with multiple inspection types and subcategories
 const orderFormSchema = z.object({
   vehicleId: z.string().min(1, {
     message: "Please select a vehicle",
   }),
-  inspectionTypeId: z.string().min(1, {
-    message: "Please select an inspection type",
-  }),
-  inspectionSubcategory: z.string().optional(),
   inspectionDate: z.date({
     required_error: "Inspection date is required",
   }),
@@ -117,34 +128,28 @@ const orderFormSchema = z.object({
   serviceId: z.string().optional(),
   additionalServiceIds: z.array(z.string()).default([]),
   notes: z.string().optional(),
-}).refine(
-  (data) => {
-    // If includeService is true, serviceId must be provided
-    return !data.includeService || (data.includeService && data.serviceId);
-  },
-  {
-    message: "Please select a service",
-    path: ["serviceId"],
-  }
-);
+  // We'll handle inspections outside the form schema due to their dynamic nature
+});
 
 type FormValues = z.infer<typeof orderFormSchema>;
 
 export default function OrderForm() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
-  const [inspectionSubcategories, setInspectionSubcategories] = useState<string[]>([]);
-  const [availableSubcategoryServices, setAvailableSubcategoryServices] = useState<Service[]>([]);
+  const [mainCategories, setMainCategories] = useState<string[]>([]);
+  const [subcategoriesByMainCategory, setSubcategoriesByMainCategory] = useState<{[key: string]: Service[]}>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedInspectionType, setSelectedInspectionType] = useState<InspectionType | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedAdditionalServices, setSelectedAdditionalServices] = useState<Service[]>([]);
   const [timeSlotInfos, setTimeSlotInfos] = useState<TimeSlotInfo[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [allServices, setAllServices] = useState<Service[]>([]);
+  
+  // New state for managing selected subcategories
+  const [selectedSubcategories, setSelectedSubcategories] = useState<SelectedSubcategory[]>([]);
+  
   const router = useRouter();
   const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -158,7 +163,6 @@ export default function OrderForm() {
       additionalServiceIds: [],
       notes: "",
       inspectionDate: today,
-      inspectionSubcategory: "",
     },
   });
 
@@ -166,8 +170,6 @@ export default function OrderForm() {
   const includeService = form.watch("includeService");
   const serviceId = form.watch("serviceId");
   const additionalServiceIds = form.watch("additionalServiceIds");
-  const inspectionTypeId = form.watch("inspectionTypeId");
-  const inspectionSubcategory = form.watch("inspectionSubcategory");
   const inspectionDate = form.watch("inspectionDate");
 
   // Helper to get auth token from local storage
@@ -198,13 +200,9 @@ export default function OrderForm() {
         // Handle the nested data structure with $values array
         let vehiclesData = [];
         if (vehiclesResponse.data && vehiclesResponse.data.$values) {
-          // If data is in $values array format
           vehiclesData = vehiclesResponse.data.$values;
-          console.log("Vehicles data extracted from $values:", vehiclesData);
         } else if (Array.isArray(vehiclesResponse.data)) {
-          // If data is directly an array
           vehiclesData = vehiclesResponse.data;
-          console.log("Vehicles data is already an array:", vehiclesData);
         } else {
           console.error("Invalid vehicles data format:", vehiclesResponse.data);
           toast.error("Failed to load vehicles data");
@@ -231,26 +229,29 @@ export default function OrderForm() {
           (service: Service) => service.category.toLowerCase() !== 'inspection'
         );
 
-        // Get inspection types from services API (where category = inspection and no subcategory)
-        const inspectionTypes = servicesData.filter(
-          (service: Service) => service.subCategory?.toLowerCase()
+        // Get inspection types from services API (where category = inspection)
+        const inspectionServices = servicesData.filter(
+          (service: Service) => service.category.toLowerCase() === 'inspection'
         );
-        // Extract unique subcategories
-        const subcategories = [...new Set(
-          servicesData
-            .filter((service: Service) =>
-              service.category.toLowerCase() === 'inspection' &&
-              service.subCategory &&
-              service.subCategory !== ""
-            )
-            .map((service: Service) => service.serviceName || "")
-        )];
-        console.log(subcategories, "SUB CATEGORIES");
 
+        // Extract all unique subcategories
+        const mainCats:any = [...new Set(inspectionServices.map(
+          (service: Service) => service.subCategory || 'General'
+        ))];
+
+        // Group subcategories by main category
+        const subcategoryMap: {[key: string]: Service[]} = {};
+        
+        mainCats.forEach(mainCat => {
+          // Find all services with this subcategory
+          subcategoryMap[mainCat] = inspectionServices.filter(
+            service => service.subCategory === mainCat
+          );
+        });
 
         setServices(filteredServices);
-        setInspectionTypes(inspectionTypes);
-        setInspectionSubcategories(subcategories as any);
+        setMainCategories(mainCats);
+        setSubcategoriesByMainCategory(subcategoryMap);
 
         // Load initial time slots for today
         fetchAvailableTimeSlotsForDate(today);
@@ -292,49 +293,6 @@ export default function OrderForm() {
     }
   }, [additionalServiceIds, services]);
 
-  useEffect(() => {
-    if (inspectionTypeId) {
-      // Get the selected inspection type object
-      const selectedType = inspectionTypes.find(it => it.serviceId.toString() === inspectionTypeId);
-
-      if (selectedType) {
-        // Filter services that match the selected inspection type's subcategory
-        const relatedServices = allServices.filter(
-          (service: Service) =>
-            service.category.toLowerCase() === 'inspection' &&
-            service.subCategory === selectedType.subCategory
-        );
-
-        // Extract unique service names
-        const serviceNames = [...new Set(
-          relatedServices.map((service: Service) => service.serviceName)
-        )];
-
-        setInspectionSubcategories(serviceNames);
-      } else {
-        setInspectionSubcategories([]);
-      }
-
-      // Reset selected subcategory
-      form.setValue("inspectionSubcategory", "standard");
-    }
-  }, [inspectionTypeId, inspectionTypes, allServices, form]);
-  // Update available subcategory services when inspectionSubcategory changes
-  useEffect(() => {
-    if (inspectionSubcategory) {
-      // Filter services based on the selected subcategory
-      const subcategoryServices = allServices.filter(
-        (service: Service) =>
-          service.category.toLowerCase() === 'inspection' &&
-          service.subCategory === inspectionSubcategory
-      );
-
-      setAvailableSubcategoryServices(subcategoryServices);
-    } else {
-      setAvailableSubcategoryServices([]);
-    }
-  }, [inspectionSubcategory, allServices]);
-
   // Function to fetch available time slots for a specific date
   const fetchAvailableTimeSlotsForDate = async (date: Date) => {
     if (!date) return;
@@ -368,117 +326,161 @@ export default function OrderForm() {
     }
   }, [inspectionDate]);
 
-  // Updated onSubmit function with better error handling
-  const onSubmit = async (values: FormValues) => {
-    try {
-      setSubmitting(true);
-      setError(null);
+  // Toggle selection of a subcategory
+  const toggleSubcategorySelection = (subcategory: Service) => {
+    const isSelected = selectedSubcategories.some(
+      item => item.serviceId === subcategory.serviceId
+    );
 
-      const token = getAuthToken();
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      // Check if the time slot is still available
-      const isSlotAvailable = await timeSlotService.isTimeSlotAvailable(
-        values.inspectionDate,
-        values.timeSlot
+    if (isSelected) {
+      // Remove from selection
+      setSelectedSubcategories(
+        selectedSubcategories.filter(item => item.serviceId !== subcategory.serviceId)
       );
-
-      if (!isSlotAvailable) {
-        setError("The selected time slot is no longer available. Please choose another time.");
-        toast.error("Time slot is no longer available");
-        // Refresh available time slots
-        fetchAvailableTimeSlotsForDate(values.inspectionDate);
-        form.setValue("timeSlot", "");
-        return;
-      }
-
-      // Prepare data for API request - use noon time to avoid timezone issues
-      const inspectionDateWithNoon = new Date(
-        values.inspectionDate.getFullYear(),
-        values.inspectionDate.getMonth(),
-        values.inspectionDate.getDate(),
-        12, 0, 0
-      );
-
-      const orderData = {
-        vehicleId: parseInt(values.vehicleId),
-        inspectionTypeId: parseInt(values.inspectionTypeId),
-        subCategory: values.inspectionSubcategory || "", // Include subcategory
-        serviceId: values.includeService && values.serviceId ? parseInt(values.serviceId) : null,
-        additionalServiceIds: values.additionalServiceIds.map(id => parseInt(id)),
-        inspectionDate: inspectionDateWithNoon.toISOString(),
-        timeSlot: values.timeSlot,
-        notes: values.notes || "",
-      };
-
-      console.log("Creating order with data:", orderData);
-
-      try {
-        // Call API to create order with inspection
-        const response = await axios.post(
-          `${API_URL}/api/orders/CreateWithInspection`,
-          orderData,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        console.log("API Response:", response.data);
-
-        if (response.data.success) {
-          toast.success("Your order has been placed successfully!");
-          router.push("/dashboard");
-        } else {
-          setError(response.data.message || "Failed to create order");
-          toast.error(response.data.message || "Failed to create order");
+    } else {
+      // Add to selection
+      setSelectedSubcategories([
+        ...selectedSubcategories,
+        {
+          serviceId: subcategory.serviceId,
+          serviceName: subcategory.serviceName,
+          price: subcategory.price,
+          description: subcategory.description
         }
-      } catch (apiError) {
-        console.error("API error details:", apiError);
-
-        if (axios.isAxiosError(apiError)) {
-          if (apiError.response) {
-            // The server responded with a status code outside the 2xx range
-            console.error("API error response:", apiError.response.data);
-
-            // Handle specific backend errors based on their structure
-            if (apiError.response.data.error && apiError.response.data.error.includes("entity changes")) {
-              // The error is related to entity framework saving changes
-              setError("There was a problem with the data format. Please check all fields and try again.");
-            } else {
-              setError(apiError.response.data.message || "Server error occurred");
-            }
-          } else if (apiError.request) {
-            // The request was made but no response was received
-            console.error("No response received:", apiError.request);
-            setError("No response from server. Please check your connection and try again.");
-          } else {
-            // Something happened in setting up the request
-            console.error("Request setup error:", apiError.message);
-            setError(`Error setting up the request: ${apiError.message}`);
-          }
-
-          toast.error("Failed to create order. See details for more information.");
-        } else {
-          // Generic error handling for non-Axios errors
-          setError("An unexpected error occurred");
-          toast.error("Failed to create order");
-        }
-      }
-    } catch (error) {
-      console.error("Form submission error:", error);
-      setError("Failed to process your order. Please try again.");
-      toast.error("Failed to create order");
-    } finally {
-      setSubmitting(false);
+      ]);
     }
   };
 
+// Updated onSubmit function
+
+const onSubmit = async (values: FormValues) => {
+  console.log("Form values:", values);
+  
+  try {
+    // Validate that at least one subcategory is selected
+    if (selectedSubcategories.length === 0) {
+      toast.error("Please select at least one inspection subcategory");
+      return;
+    }
+    
+    setSubmitting(true);
+    setError(null);
+
+    const token = getAuthToken();
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    // Check if the time slot is still available
+    const isSlotAvailable = await timeSlotService.isTimeSlotAvailable(
+      values.inspectionDate,
+      values.timeSlot
+    );
+
+    if (!isSlotAvailable) {
+      setError("The selected time slot is no longer available. Please choose another time.");
+      toast.error("Time slot is no longer available");
+      // Refresh available time slots
+      fetchAvailableTimeSlotsForDate(values.inspectionDate);
+      form.setValue("timeSlot", "");
+      return;
+    }
+
+    // Prepare data for API request - use noon time to avoid timezone issues
+    const inspectionDateWithNoon = new Date(
+      values.inspectionDate.getFullYear(),
+      values.inspectionDate.getMonth(),
+      values.inspectionDate.getDate(),
+      12, 0, 0
+    );
+
+    // Get primary inspection (the first selected subcategory)
+    const primaryInspection = selectedSubcategories[0];
+    
+    // Convert additionalServiceIds from strings to numbers
+    const additionalServiceIdsAsNumbers = values.additionalServiceIds.map(id => parseInt(id));
+    
+    // Get all subcategory IDs except the primary one
+    const additionalSubcategoryIds = selectedSubcategories
+      .slice(1)
+      .map(subcategory => subcategory.serviceId);
+    
+    console.log("Primary inspection:", primaryInspection);
+    console.log("Additional services:", additionalServiceIdsAsNumbers);
+    console.log("Additional subcategories:", additionalSubcategoryIds);
+
+    // Prepare the final request object
+    const orderData = {
+      vehicleId: parseInt(values.vehicleId),
+      inspectionTypeId: primaryInspection.serviceId,
+      subCategory: primaryInspection.serviceName,
+      serviceId: values.includeService && values.serviceId ? parseInt(values.serviceId) : null,
+      additionalServiceIds: [...additionalServiceIdsAsNumbers, ...additionalSubcategoryIds],
+      inspectionDate: inspectionDateWithNoon.toISOString(),
+      timeSlot: values.timeSlot,
+      notes: values.notes || "",
+    };
+
+    console.log("Creating order with data:", orderData);
+
+    try {
+      // Call API to create order with inspection
+      const response = await axios.post(
+        `${API_URL}/api/orders/CreateWithInspection`,
+        orderData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log("API Response:", response.data);
+
+      if (response.data.success) {
+        toast.success("Your order has been placed successfully!");
+        router.push("/dashboard");
+      } else {
+        setError(response.data.message || "Failed to create order");
+        toast.error(response.data.message || "Failed to create order");
+      }
+    } catch (apiError: any) {
+      console.error("API error details:", apiError);
+
+      if (axios.isAxiosError(apiError)) {
+        if (apiError.response) {
+          console.error("API error response:", apiError.response.data);
+
+          // Handle specific backend errors
+          if (apiError.response.data.error && apiError.response.data.error.includes("entity changes")) {
+            setError("There was a problem with the data format. Please check all fields and try again.");
+          } else {
+            setError(apiError.response.data.message || "Server error occurred");
+          }
+        } else if (apiError.request) {
+          console.error("No response received:", apiError.request);
+          setError("No response from server. Please check your connection and try again.");
+        } else {
+          console.error("Request setup error:", apiError.message);
+          setError(`Error setting up the request: ${apiError.message}`);
+        }
+
+        toast.error("Failed to create order. See details for more information.");
+      } else {
+        setError("An unexpected error occurred");
+        toast.error("Failed to create order");
+      }
+    }
+  } catch (error) {
+    console.error("Form submission error:", error);
+    setError("Failed to process your order. Please try again.");
+    toast.error("Failed to create order");
+  } finally {
+    setSubmitting(false);
+  }
+};
   // Add a service to the additional services list
   const addAdditionalService = (serviceId: string) => {
     const currentIds = form.getValues("additionalServiceIds");
@@ -506,15 +508,16 @@ export default function OrderForm() {
     form.setValue("additionalServiceIds", newIds);
   };
 
-  // Calculate total based on inspection fee and selected service
+  // Calculate total based on selected subcategories and services
   const calculateTotal = () => {
-    let total = selectedInspectionType ? selectedInspectionType.price : 0;
+    let total = 0;
 
-    // Add subcategory service price if applicable
-    if (inspectionSubcategory && availableSubcategoryServices.length > 0) {
-      total += availableSubcategoryServices.reduce((sum, service) => sum + service.price, 0);
+    // Add cost for all selected subcategories
+    if (selectedSubcategories.length > 0) {
+      total += selectedSubcategories.reduce((sum, subcategory) => sum + subcategory.price, 0);
     }
 
+    // Add main service price
     if (includeService && selectedService) {
       total += selectedService.price;
     }
@@ -590,7 +593,7 @@ export default function OrderForm() {
           Create New Order
         </CardTitle>
         <CardDescription>
-          All orders require a vehicle inspection. You can also add additional services.
+          All orders require at least one inspection. You can select multiple inspection types and subcategories.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -638,97 +641,98 @@ export default function OrderForm() {
               )}
             />
 
-            {/* Inspection Type Selection */}
-            <FormField
-              control={form.control}
-              name="inspectionTypeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Inspection Type</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select an inspection type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {inspectionTypes.map((type) => (
-                        <SelectItem
-                          key={type.serviceId}
-                          value={type.serviceId.toString()}
-                        >
-                          {type.subCategory}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription className="flex items-center">
-                    <ClipboardCheck className="mr-1 h-3 w-3" />
-                    Select the type of inspection needed
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Inspection Selection Section */}
+            <div className="space-y-4 border rounded-md p-4">
+              <h3 className="font-medium text-lg">Inspection Selection</h3>
+              <p className="text-sm text-muted-foreground">
+                Select the inspection types you need. You can add multiple inspections.
+              </p>
 
-            <FormField
-              control={form.control}
-              name="inspectionSubcategory"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Inspection Subcategory</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value || ""}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a subcategory" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                
-                      {inspectionSubcategories.map((subcategory) => (
-                        <SelectItem
-                          key={subcategory}
-                          value={subcategory}
-                        >
-                          {subcategory}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription className="flex items-center">
-                    <Info className="mr-1 h-3 w-3" />
-                    Select a specific inspection area
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-
-            {/* Display Subcategory Services */}
-            {inspectionSubcategory && availableSubcategoryServices.length > 0 && (
-              <div className="space-y-2 border rounded-md p-3">
-                <h3 className="text-sm font-medium">Services for {inspectionSubcategory}</h3>
-                {availableSubcategoryServices.map((service) => (
-                  <div
-                    key={service.serviceId}
-                    className="flex justify-between items-center p-2 rounded-md bg-muted/50"
-                  >
-                    <div>
-                      <p className="font-medium text-sm">{service.serviceName}</p>
-                      <p className="text-xs text-muted-foreground">{service.description}</p>
-                    </div>
-                    <p className="text-sm font-medium">${service.price.toFixed(2)}</p>
-                  </div>
+              {/* Inspection Categories Accordion */}
+              <Accordion type="single" collapsible className="w-full">
+                {mainCategories.map((categoryName) => (
+                  <AccordionItem key={categoryName} value={categoryName}>
+                    <AccordionTrigger>
+                      {categoryName} Inspections
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-4">
+                        {subcategoriesByMainCategory[categoryName] && 
+                         subcategoriesByMainCategory[categoryName].map((subcategory) => {
+                           // Check if this subcategory is already selected
+                           const isSelected = selectedSubcategories.some(
+                             item => item.serviceId === subcategory.serviceId
+                           );
+                           
+                           return (
+                             <div 
+                               key={subcategory.serviceId} 
+                               className={`p-4 rounded-md border cursor-pointer ${
+                                 isSelected ? 'bg-primary/10 border-primary' : 'hover:bg-accent'
+                               }`}
+                               onClick={() => toggleSubcategorySelection(subcategory)}
+                             >
+                               <div className="flex justify-between items-center">
+                                 <div className="flex items-center">
+                                   <div className={`w-5 h-5 rounded-full flex items-center justify-center mr-2 ${
+                                     isSelected ? 'bg-primary text-white' : 'border border-muted-foreground'
+                                   }`}>
+                                     {isSelected && <Check className="h-3 w-3" />}
+                                   </div>
+                                   <h4 className="font-medium">{subcategory.serviceName}</h4>
+                                 </div>
+                                 <Badge variant="outline">${subcategory.price.toFixed(2)}</Badge>
+                               </div>
+                               
+                               {subcategory.description && (
+                                 <p className="text-sm text-muted-foreground mt-2 ml-7">
+                                   {subcategory.description}
+                                 </p>
+                               )}
+                             </div>
+                           );
+                         })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
                 ))}
+              </Accordion>
+
+              {/* Selected Inspections Summary */}
+              <div className="border-t pt-3 mt-3">
+                <h4 className="font-medium mb-2">Selected Inspections</h4>
+                {selectedSubcategories.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedSubcategories.map((subcategory) => (
+                      <div 
+                        key={subcategory.serviceId}
+                        className="flex justify-between items-center p-2 rounded-md bg-muted/50"
+                      >
+                        <div>
+                          <p className="font-medium text-sm">{subcategory.serviceName}</p>
+                        </div>
+                        <div className="flex items-center">
+                          <Badge className="mr-2">${subcategory.price.toFixed(2)}</Badge>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSubcategorySelection(subcategory as Service);
+                            }}
+                          >
+                            <MinusCircle className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No inspections selected yet</p>
+                )}
               </div>
-            )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
@@ -879,7 +883,7 @@ export default function OrderForm() {
                       onValueChange={field.onChange}
                       defaultValue={field.value}
                     >
-                      <FormControl>
+                    <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a service" />
                         </SelectTrigger>
@@ -995,31 +999,17 @@ export default function OrderForm() {
             <div className="rounded-md border p-4 mt-6">
               <h3 className="font-medium mb-3">Order Summary</h3>
               <div className="space-y-2">
-                {selectedInspectionType && (
-                  <div className="flex justify-between text-sm">
-                    <span>
-                      {selectedInspectionType.serviceName}
-                      {inspectionSubcategory && (
-                        <span className="text-muted-foreground ml-1">
-                          ({inspectionSubcategory})
-                        </span>
-                      )}:
-                    </span>
-                    <span>${selectedInspectionType.price.toFixed(2)}</span>
-                  </div>
-                )}
-
-                {/* Show Subcategory Services in Summary */}
-                {inspectionSubcategory && availableSubcategoryServices.length > 0 && (
+                {/* Display selected inspections in summary */}
+                {selectedSubcategories.length > 0 && (
                   <>
                     <div className="flex justify-between text-sm font-medium">
-                      <span>{inspectionSubcategory} Services:</span>
+                      <span>Selected Inspections:</span>
                       <span></span>
                     </div>
-                    {availableSubcategoryServices.map(service => (
-                      <div key={service.serviceId} className="flex justify-between text-sm pl-2">
-                        <span>- {service.serviceName}</span>
-                        <span>${service.price.toFixed(2)}</span>
+                    {selectedSubcategories.map((subcategory) => (
+                      <div key={subcategory.serviceId} className="flex justify-between text-sm pl-2">
+                        <span>- {subcategory.serviceName}</span>
+                        <span>${subcategory.price.toFixed(2)}</span>
                       </div>
                     ))}
                   </>

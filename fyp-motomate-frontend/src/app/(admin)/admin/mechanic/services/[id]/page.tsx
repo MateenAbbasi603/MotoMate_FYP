@@ -78,7 +78,7 @@ export default function ServiceDetailPage({
   const [service, setService] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [updatingStatus, setUpdatingStatus] = useState<boolean>(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState<boolean>(false);
   const [selectedStatus, setSelectedStatus] = useState<string>('');
@@ -105,6 +105,8 @@ export default function ServiceDetailPage({
             }
           }
         );
+
+        console.log("LOG ", response.data);
 
         setService(response.data);
       } catch (err: any) {
@@ -146,7 +148,7 @@ export default function ServiceDetailPage({
   // Get status badge
   const getStatusBadge = (status: string) => {
     const statusLower = status?.toLowerCase() || '';
-    
+
     switch (statusLower) {
       case 'completed':
         return <Badge variant="outline" className="bg-green-100 text-green-800">Completed</Badge>;
@@ -170,7 +172,7 @@ export default function ServiceDetailPage({
 
     try {
       setUpdatingStatus(true);
-      
+
       const token = localStorage.getItem('token');
       if (!token) {
         toast.error('Authentication token not found');
@@ -195,7 +197,7 @@ export default function ServiceDetailPage({
 
       if (response.data && response.data.success) {
         toast.success(`Status updated to ${selectedStatus}`);
-        
+
         // Update local state
         setService({
           ...service,
@@ -209,7 +211,7 @@ export default function ServiceDetailPage({
             status: selectedStatus
           }
         });
-        
+
         // Reset form
         setSelectedStatus('');
         setStatusNotes('');
@@ -264,7 +266,7 @@ export default function ServiceDetailPage({
                   </div>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(service.order.status)}
-                    
+
                     {/* Status update dialog */}
                     <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
                       <DialogTrigger asChild>
@@ -294,7 +296,7 @@ export default function ServiceDetailPage({
                               </SelectContent>
                             </Select>
                           </div>
-                          
+
                           {selectedStatus && selectedStatus !== 'completed' && (
                             <div className="grid gap-2">
                               <Label htmlFor="estimatedDays">Estimated Days to Completion</Label>
@@ -308,7 +310,7 @@ export default function ServiceDetailPage({
                               />
                             </div>
                           )}
-                          
+
                           <div className="grid gap-2">
                             <Label htmlFor="notes">Notes (Optional)</Label>
                             <Textarea
@@ -401,23 +403,37 @@ export default function ServiceDetailPage({
                       </div>
 
                       {/* Additional Services */}
-                      {service.additionalServices && service.additionalServices.length > 0 && (
+                      {service.additionalServices && (
                         <div className="mt-4">
                           <h4 className="font-medium mb-2">Additional Services</h4>
-                          {service.additionalServices.map((additionalService: any, index: number) => (
-                            <div key={additionalService.serviceId || index} className="bg-muted/50 p-4 rounded-md mb-2">
-                              <h4 className="font-medium text-primary">
-                                {additionalService.serviceName}
-                              </h4>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {additionalService.description || 'No description available'}
-                              </p>
-                              <div className="flex justify-between items-center mt-3">
-                                <span className="text-sm">Service Price</span>
-                                <span className="font-medium">PKR {additionalService.price?.toFixed(2) || '0.00'}</span>
+                          {/* Handle both direct array and $values array structure, and filter out inspection services */}
+                          {(Array.isArray(service.additionalServices)
+                            ? service.additionalServices
+                            : (service.additionalServices.$values || [])
+                          )
+                            // Filter out services with category "inspection"
+                            .filter((service: any) => service.category?.toLowerCase() !== 'inspection')
+                            .map((additionalService: any, index: any) => (
+                              <div key={additionalService.serviceId || index} className="bg-muted/50 p-4 rounded-md mb-2">
+                                <h4 className="font-medium text-primary">
+                                  {additionalService.serviceName}
+                                </h4>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {additionalService.description || 'No description available'}
+                                </p>
+                                <div className="flex justify-between items-center mt-3">
+                                  <span className="text-sm">Service Price</span>
+                                  <span className="font-medium">PKR {additionalService.price?.toFixed(2) || '0.00'}</span>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          {/* Show message if no non-inspection services are found */}
+                          {(Array.isArray(service.additionalServices)
+                            ? service.additionalServices
+                            : (service.additionalServices.$values || [])
+                          ).filter((service: any) => service.category?.toLowerCase() !== 'inspection').length === 0 && (
+                              <p className="text-sm text-muted-foreground italic">No additional services</p>
+                            )}
                         </div>
                       )}
                     </div>
@@ -599,7 +615,7 @@ export default function ServiceDetailPage({
                         In Progress
                       </p>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <div className={`p-1 rounded-full ${service.order.status === 'awaiting parts' ? 'bg-yellow-500' : 'bg-gray-300'}`}>
                         <AlertCircle className="h-4 w-4 text-white" />
@@ -608,7 +624,7 @@ export default function ServiceDetailPage({
                         Awaiting Parts
                       </p>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <div className={`p-1 rounded-full ${service.order.status === 'completed' ? 'bg-green-500' : 'bg-gray-300'}`}>
                         <CheckCircle className="h-4 w-4 text-white" />
@@ -626,16 +642,16 @@ export default function ServiceDetailPage({
                 <div>
                   <h3 className="text-sm font-medium mb-3">Quick Actions</h3>
                   <div className="space-y-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="w-full justify-start"
                       onClick={() => setStatusDialogOpen(true)}
                     >
                       <Wrench className="mr-2 h-4 w-4" />
                       Update Status
                     </Button>
-                    
-                    <Button 
+
+                    <Button
                       variant={service.order.status === 'in progress' ? 'default' : 'outline'}
                       className="w-full justify-start"
                       disabled={service.order.status === 'in progress'}
@@ -649,8 +665,8 @@ export default function ServiceDetailPage({
                       <Clock4 className="mr-2 h-4 w-4" />
                       Mark as In Progress
                     </Button>
-                    
-                    <Button 
+
+                    <Button
                       variant={service.order.status === 'awaiting parts' ? 'default' : 'outline'}
                       className="w-full justify-start"
                       disabled={service.order.status === 'awaiting parts'}
@@ -664,8 +680,8 @@ export default function ServiceDetailPage({
                       <AlertCircle className="mr-2 h-4 w-4" />
                       Mark as Awaiting Parts
                     </Button>
-                    
-                    <Button 
+
+                    <Button
                       variant={service.order.status === 'completed' ? 'default' : 'outline'}
                       className="w-full justify-start"
                       disabled={service.order.status === 'completed'}

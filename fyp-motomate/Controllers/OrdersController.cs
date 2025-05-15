@@ -563,280 +563,267 @@ namespace fyp_motomate.Controllers
         }
 
 
-        // POST: api/Orders/CreateWithInspection
-        [HttpPost("CreateWithInspection")]
-        public async Task<ActionResult<object>> CreateOrderWithInspection([FromBody] InspectionOrderRequest request)
+[HttpPost("CreateWithInspection")]
+public async Task<ActionResult<object>> CreateOrderWithInspection([FromBody] InspectionOrderRequest request)
+{
+    try
+    {
+        _logger.LogInformation("CreateOrderWithInspection started with request: {@Request}", request);
+
+        // Validate request
+        if (request == null)
         {
-            try
+            _logger.LogWarning("Request is null");
+            return BadRequest(new { success = false, message = "Invalid request data" });
+        }
+
+        if (request.VehicleId <= 0)
+        {
+            _logger.LogWarning("Invalid vehicle ID: {VehicleId}", request.VehicleId);
+            return BadRequest(new { success = false, message = "Valid vehicle ID is required" });
+        }
+
+        if (request.InspectionTypeId <= 0)
+        {
+            _logger.LogWarning("Invalid inspection type ID: {InspectionTypeId}", request.InspectionTypeId);
+            return BadRequest(new { success = false, message = "Valid inspection type ID is required" });
+        }
+
+        int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+        string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        _logger.LogInformation("User ID: {UserId}, Role: {UserRole}", userId, userRole);
+
+        // Verify vehicle exists and belongs to user
+        var vehicle = await _context.Vehicles.FindAsync(request.VehicleId);
+        if (vehicle == null)
+        {
+            _logger.LogWarning("Vehicle not found: {VehicleId}", request.VehicleId);
+            return BadRequest(new { success = false, message = "Vehicle not found" });
+        }
+
+        if (userRole == "customer" && vehicle.UserId != userId)
+        {
+            _logger.LogWarning("Vehicle does not belong to user. VehicleUserId: {VehicleUserId}, UserId: {UserId}", vehicle.UserId, userId);
+            return BadRequest(new { success = false, message = "Vehicle does not belong to the user" });
+        }
+
+        // Validate inspection service
+        var inspectionService = await _context.Services.FindAsync(request.InspectionTypeId);
+        if (inspectionService == null)
+        {
+            _logger.LogWarning("Inspection type not found: {InspectionTypeId}", request.InspectionTypeId);
+            return BadRequest(new { success = false, message = "Inspection type not found" });
+        }
+
+        // Calculate total amount
+        decimal totalAmount = inspectionService.Price;
+        _logger.LogInformation("Base inspection price: {Price}", totalAmount);
+
+        // Validate primary service if provided
+        if (request.ServiceId.HasValue)
+        {
+            var service = await _context.Services.FindAsync(request.ServiceId.Value);
+            if (service == null)
             {
-                _logger.LogInformation("CreateOrderWithInspection started with request: {@Request}", request);
-
-                // Validate request
-                if (request == null)
-                {
-                    _logger.LogWarning("Request is null");
-                    return BadRequest(new { success = false, message = "Invalid request data" });
-                }
-
-                if (request.VehicleId <= 0)
-                {
-                    _logger.LogWarning("Invalid vehicle ID: {VehicleId}", request.VehicleId);
-                    return BadRequest(new { success = false, message = "Valid vehicle ID is required" });
-                }
-
-                if (request.InspectionTypeId <= 0)
-                {
-                    _logger.LogWarning("Invalid inspection type ID: {InspectionTypeId}", request.InspectionTypeId);
-                    return BadRequest(new { success = false, message = "Valid inspection type ID is required" });
-                }
-
-                int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-                string userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-
-                _logger.LogInformation("User ID: {UserId}, Role: {UserRole}", userId, userRole);
-
-                // Verify vehicle exists and belongs to user
-                var vehicle = await _context.Vehicles.FindAsync(request.VehicleId);
-                if (vehicle == null)
-                {
-                    _logger.LogWarning("Vehicle not found: {VehicleId}", request.VehicleId);
-                    return BadRequest(new { success = false, message = "Vehicle not found" });
-                }
-
-                if (userRole == "customer" && vehicle.UserId != userId)
-                {
-                    _logger.LogWarning("Vehicle does not belong to user. VehicleUserId: {VehicleUserId}, UserId: {UserId}", vehicle.UserId, userId);
-                    return BadRequest(new { success = false, message = "Vehicle does not belong to the user" });
-                }
-
-                // Validate inspection service
-                var inspectionService = await _context.Services.FindAsync(request.InspectionTypeId);
-                if (inspectionService == null)
-                {
-                    _logger.LogWarning("Inspection type not found: {InspectionTypeId}", request.InspectionTypeId);
-                    return BadRequest(new { success = false, message = "Inspection type not found" });
-                }
-
-                if (inspectionService.Category.ToLower() != "inspection")
-                {
-                    _logger.LogWarning("Service is not an inspection type. Category: {Category}", inspectionService.Category);
-                    return BadRequest(new { success = false, message = "The selected service is not an inspection type" });
-                }
-
-                // Calculate total amount
-                decimal totalAmount = inspectionService.Price;
-                _logger.LogInformation("Base inspection price: {Price}", totalAmount);
-
-                // Validate primary service if provided
-                if (request.ServiceId.HasValue)
-                {
-                    var service = await _context.Services.FindAsync(request.ServiceId.Value);
-                    if (service == null)
-                    {
-                        _logger.LogWarning("Primary service not found: {ServiceId}", request.ServiceId.Value);
-                        return BadRequest(new { success = false, message = "Primary service not found" });
-                    }
-
-                    // Make sure we don't add another inspection service
-                    if (service.Category.ToLower() == "inspection")
-                    {
-                        _logger.LogWarning("Cannot add multiple inspection services");
-                        return BadRequest(new { success = false, message = "Cannot add multiple inspection services" });
-                    }
-
-                    // Add service price to total
-                    totalAmount += service.Price;
-                    _logger.LogInformation("Added primary service price: {Price}, New total: {Total}", service.Price, totalAmount);
-                }
-
-                // Validate additional services if provided
-                List<Service> additionalServices = new List<Service>();
-                if (request.AdditionalServiceIds != null && request.AdditionalServiceIds.Any())
-                {
-                    foreach (var serviceId in request.AdditionalServiceIds)
-                    {
-                        var service = await _context.Services.FindAsync(serviceId);
-                        if (service == null)
-                        {
-                            _logger.LogWarning("Additional service not found: {ServiceId}", serviceId);
-                            return BadRequest(new { success = false, message = $"Additional service with ID {serviceId} not found" });
-                        }
-
-                        // Make sure we don't add another inspection service
-                        if (service.Category.ToLower() == "inspection")
-                        {
-                            _logger.LogWarning("Cannot add multiple inspection services");
-                            return BadRequest(new { success = false, message = "Cannot add multiple inspection services" });
-                        }
-
-                        // Add service price to total
-                        totalAmount += service.Price;
-                        additionalServices.Add(service);
-                        _logger.LogInformation("Added additional service price: {Price}, New total: {Total}", service.Price, totalAmount);
-                    }
-                }
-
-                // Check if the time slot is available
-                bool isSlotAvailable = await _timeSlotService.IsTimeSlotAvailableAsync(request.InspectionDate, request.TimeSlot);
-                if (!isSlotAvailable)
-                {
-                    _logger.LogWarning("Time slot not available: {Date} {TimeSlot}", request.InspectionDate, request.TimeSlot);
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "The selected time slot is no longer available. Please choose a different time."
-                    });
-                }
-
-                _logger.LogInformation("Time slot is available: {Date} {TimeSlot}", request.InspectionDate, request.TimeSlot);
-
-                // Create order and inspection without using transactions
-                // This simplifies the process and avoids execution strategy issues
-                try
-                {
-                    // Create order first
-                    var order = new Order
-                    {
-                        UserId = userId,
-                        VehicleId = request.VehicleId,
-                        ServiceId = request.ServiceId,
-                        IncludesInspection = true,
-                        OrderDate = DateTime.Now,
-                        Status = "pending",
-                        TotalAmount = totalAmount,
-                        Notes = request.Notes ?? ""
-                    };
-
-                    _logger.LogInformation("Creating order");
-                    _context.Orders.Add(order);
-                    await _context.SaveChangesAsync();
-
-                    int orderId = order.OrderId;
-                    _logger.LogInformation("Order created with ID: {OrderId}", orderId);
-
-                    // Add additional services as OrderService entries
-                    if (additionalServices.Any())
-                    {
-                        foreach (var service in additionalServices)
-                        {
-                            var orderService = new OrderService
-                            {
-                                OrderId = orderId,
-                                ServiceId = service.ServiceId,
-                                AddedAt = DateTime.Now,
-                                Notes = "Added during order creation"
-                            };
-                            _context.OrderServices.Add(orderService);
-                        }
-                        await _context.SaveChangesAsync();
-                        _logger.LogInformation("Added {Count} additional services to order", additionalServices.Count);
-                    }
-
-                    // If order was created successfully, create the inspection
-                    var inspection = new Inspection
-                    {
-                        UserId = userId,
-                        VehicleId = request.VehicleId,
-                        ServiceId = request.InspectionTypeId,
-                        SubCategory = request.SubCategory, // Add this line
-
-                        OrderId = orderId, // Use the orderId directly
-                        ScheduledDate = request.InspectionDate.Date, // Use .Date to strip the time component
-                        TimeSlot = request.TimeSlot ?? "09:00 AM - 11:00 AM",
-                        Status = "pending",
-                        Notes = request.Notes ?? "",
-                        CreatedAt = DateTime.Now,
-                        EngineCondition = "Not Inspected Yet",
-                        TransmissionCondition = "Not Inspected Yet",
-                        BrakeCondition = "Not Inspected Yet",
-                        ElectricalCondition = "Not Inspected Yet",
-                        BodyCondition = "Not Inspected Yet",
-                        TireCondition = "Not Inspected Yet",
-                        InteriorCondition = "Not Inspected Yet",
-                        SuspensionCondition = "Not Inspected Yet",
-                        TiresCondition = "Not Inspected Yet"
-                    };
-
-                    _logger.LogInformation("Creating inspection with OrderId: {OrderId}", inspection.OrderId);
-                    _context.Inspections.Add(inspection);
-                    await _context.SaveChangesAsync();
-
-                    int inspectionId = inspection.InspectionId;
-                    _logger.LogInformation("Inspection created with ID: {InspectionId}", inspectionId);
-
-                    // Create notifications
-                    var userNotification = new Notification
-                    {
-                        UserId = userId,
-                        Message = $"Your inspection appointment has been scheduled for {request.InspectionDate.ToString("yyyy-MM-dd")} at {request.TimeSlot}",
-                        Status = "unread",
-                        CreatedAt = DateTime.Now
-                    };
-
-                    var staffNotification = new Notification
-                    {
-                        UserId = 1, // Admin or service manager
-                        Message = $"New inspection scheduled for vehicle {vehicle.Make} {vehicle.Model} on {request.InspectionDate.ToString("yyyy-MM-dd")} at {request.TimeSlot}",
-                        Status = "unread",
-                        CreatedAt = DateTime.Now
-                    };
-
-                    _context.Notifications.AddRange(userNotification, staffNotification);
-                    await _context.SaveChangesAsync();
-
-                    return CreatedAtAction(
-                        nameof(GetOrder),
-                        new { id = orderId },
-                        new
-                        {
-                            success = true,
-                            message = "Order created successfully",
-                            orderId = orderId,
-                            inspectionId = inspectionId
-                        }
-                    );
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error creating order or inspection");
-
-                    // Get detailed error information
-                    var detailedError = ex.Message;
-                    var innerEx = ex.InnerException;
-                    while (innerEx != null)
-                    {
-                        detailedError += " | Inner Exception: " + innerEx.Message;
-                        innerEx = innerEx.InnerException;
-                    }
-
-                    return StatusCode(500, new
-                    {
-                        success = false,
-                        message = "Error creating order or inspection",
-                        error = detailedError
-                    });
-                }
+                _logger.LogWarning("Primary service not found: {ServiceId}", request.ServiceId.Value);
+                return BadRequest(new { success = false, message = "Primary service not found" });
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unhandled exception in CreateOrderWithInspection");
 
-                var detailedError = ex.Message;
-                var innerEx = ex.InnerException;
-                while (innerEx != null)
+            // REMOVED: Check that prevented adding inspection services
+            // Now allowing inspection services as primary services
+
+            // Add service price to total
+            totalAmount += service.Price;
+            _logger.LogInformation("Added primary service price: {Price}, New total: {Total}", service.Price, totalAmount);
+        }
+
+        // Validate additional services if provided
+        List<Service> additionalServices = new List<Service>();
+        if (request.AdditionalServiceIds != null && request.AdditionalServiceIds.Any())
+        {
+            foreach (var serviceId in request.AdditionalServiceIds)
+            {
+                var service = await _context.Services.FindAsync(serviceId);
+                if (service == null)
                 {
-                    detailedError += " | Inner Exception: " + innerEx.Message;
-                    innerEx = innerEx.InnerException;
+                    _logger.LogWarning("Additional service not found: {ServiceId}", serviceId);
+                    return BadRequest(new { success = false, message = $"Additional service with ID {serviceId} not found" });
                 }
 
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = "An unexpected error occurred",
-                    error = detailedError
-                });
+                // REMOVED: Check that prevented adding inspection services
+                // Now allowing inspection services as additional services
+
+                // Add service price to total
+                totalAmount += service.Price;
+                additionalServices.Add(service);
+                _logger.LogInformation("Added additional service price: {Price}, New total: {Total}", service.Price, totalAmount);
             }
         }
+
+        // Check if the time slot is available
+        bool isSlotAvailable = await _timeSlotService.IsTimeSlotAvailableAsync(request.InspectionDate, request.TimeSlot);
+        if (!isSlotAvailable)
+        {
+            _logger.LogWarning("Time slot not available: {Date} {TimeSlot}", request.InspectionDate, request.TimeSlot);
+            return BadRequest(new
+            {
+                success = false,
+                message = "The selected time slot is no longer available. Please choose a different time."
+            });
+        }
+
+        _logger.LogInformation("Time slot is available: {Date} {TimeSlot}", request.InspectionDate, request.TimeSlot);
+
+        // Create order and inspection without using transactions
+        try
+        {
+            // Create order first
+            var order = new Order
+            {
+                UserId = userId,
+                VehicleId = request.VehicleId,
+                ServiceId = request.ServiceId,
+                IncludesInspection = true,
+                OrderDate = DateTime.Now,
+                Status = "pending",
+                TotalAmount = totalAmount,
+                Notes = request.Notes ?? ""
+            };
+
+            _logger.LogInformation("Creating order");
+            _context.Orders.Add(order);
+            await _context.SaveChangesAsync();
+
+            int orderId = order.OrderId;
+            _logger.LogInformation("Order created with ID: {OrderId}", orderId);
+
+            // Add additional services as OrderService entries
+            if (additionalServices.Any())
+            {
+                foreach (var service in additionalServices)
+                {
+                    var orderService = new OrderService
+                    {
+                        OrderId = orderId,
+                        ServiceId = service.ServiceId,
+                        AddedAt = DateTime.Now,
+                        Notes = service.Category.ToLower() == "inspection" 
+                            ? "Added as subcategory inspection during order creation" 
+                            : "Added during order creation"
+                    };
+                    _context.OrderServices.Add(orderService);
+                }
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Added {Count} additional services to order", additionalServices.Count);
+            }
+
+            // If order was created successfully, create the inspection
+            var inspection = new Inspection
+            {
+                UserId = userId,
+                VehicleId = request.VehicleId,
+                ServiceId = request.InspectionTypeId,
+                SubCategory = request.SubCategory, // Use the subcategory name
+                OrderId = orderId,
+                ScheduledDate = request.InspectionDate.Date, // Use .Date to strip the time component
+                TimeSlot = request.TimeSlot ?? "09:00 AM - 11:00 AM",
+                Status = "pending",
+                Notes = request.Notes ?? "",
+                CreatedAt = DateTime.Now,
+                EngineCondition = "Not Inspected Yet",
+                TransmissionCondition = "Not Inspected Yet",
+                BrakeCondition = "Not Inspected Yet",
+                ElectricalCondition = "Not Inspected Yet",
+                BodyCondition = "Not Inspected Yet",
+                TireCondition = "Not Inspected Yet",
+                InteriorCondition = "Not Inspected Yet",
+                SuspensionCondition = "Not Inspected Yet",
+                TiresCondition = "Not Inspected Yet"
+            };
+
+            _logger.LogInformation("Creating inspection with OrderId: {OrderId}", inspection.OrderId);
+            _context.Inspections.Add(inspection);
+            await _context.SaveChangesAsync();
+
+            int inspectionId = inspection.InspectionId;
+            _logger.LogInformation("Inspection created with ID: {InspectionId}", inspectionId);
+
+            // Create notifications
+            var userNotification = new Notification
+            {
+                UserId = userId,
+                Message = $"Your inspection appointment has been scheduled for {request.InspectionDate.ToString("yyyy-MM-dd")} at {request.TimeSlot}",
+                Status = "unread",
+                CreatedAt = DateTime.Now
+            };
+
+            var staffNotification = new Notification
+            {
+                UserId = 1, // Admin or service manager
+                Message = $"New inspection scheduled for vehicle {vehicle.Make} {vehicle.Model} on {request.InspectionDate.ToString("yyyy-MM-dd")} at {request.TimeSlot}",
+                Status = "unread",
+                CreatedAt = DateTime.Now
+            };
+
+            _context.Notifications.AddRange(userNotification, staffNotification);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(
+                nameof(GetOrder),
+                new { id = orderId },
+                new
+                {
+                    success = true,
+                    message = "Order created successfully",
+                    orderId = orderId,
+                    inspectionId = inspectionId
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating order or inspection");
+
+            // Get detailed error information
+            var detailedError = ex.Message;
+            var innerEx = ex.InnerException;
+            while (innerEx != null)
+            {
+                detailedError += " | Inner Exception: " + innerEx.Message;
+                innerEx = innerEx.InnerException;
+            }
+
+            return StatusCode(500, new
+            {
+                success = false,
+                message = "Error creating order or inspection",
+                error = detailedError
+            });
+        }
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Unhandled exception in CreateOrderWithInspection");
+
+        var detailedError = ex.Message;
+        var innerEx = ex.InnerException;
+        while (innerEx != null)
+        {
+            detailedError += " | Inner Exception: " + innerEx.Message;
+            innerEx = innerEx.InnerException;
+        }
+
+        return StatusCode(500, new
+        {
+            success = false,
+            message = "An unexpected error occurred",
+            error = detailedError
+        });
+    }
+}
+
+
 
         // POST: api/Orders/DirectSQL (Fallback method if EF approach doesn't work)
         [HttpPost("DirectSQL")]
@@ -1494,6 +1481,9 @@ namespace fyp_motomate.Controllers
 
 
         public List<int> AdditionalServiceIds { get; set; } = new List<int>();
+
+        public List<int> AdditionalSubcategoryIds { get; set; } = new List<int>();
+
 
         [Required]
         public DateTime InspectionDate { get; set; }
