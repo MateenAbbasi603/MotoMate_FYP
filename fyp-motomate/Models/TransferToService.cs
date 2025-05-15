@@ -35,7 +35,7 @@ namespace fyp_motomate.Models
         
         public string Notes { get; set; }
         
-        public DateTime? ETA { get; set; }
+        public string? ETA { get; set; }
         
         [Required]
         public DateTime CreatedAt { get; set; } = DateTime.Now;

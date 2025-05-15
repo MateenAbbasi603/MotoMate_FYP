@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using fyp_motomate.Data;
 
@@ -11,9 +12,11 @@ using fyp_motomate.Data;
 namespace fyp_motomate.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250515020952_DateTime5")]
+    partial class DateTime5
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -626,8 +629,8 @@ namespace fyp_motomate.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("ETA")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<DateTime?>("ETA")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("MechanicId")
                         .HasColumnType("int");
@@ -743,7 +746,7 @@ namespace fyp_motomate.Migrations
                             CreatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "superadmin@example.com",
                             Name = "Super Admin",
-                            Password = "$2a$11$MFRGBl58KYSRz5h55uBSI.7e6HXEFgJ0cSRR5pGs6yS9xy7/tNuLS",
+                            Password = "$2a$11$Zl3vCTwzc6Ib06g.7AQcK.PF1h4TbLUpU149RFPalmYzSBOGV.Ur2",
                             Phone = "+1234567890",
                             Role = "super_admin",
                             UpdatedAt = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),

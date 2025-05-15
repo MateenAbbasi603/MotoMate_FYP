@@ -36,13 +36,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 import {
   ChevronLeft,
-  Calendar,
+  Calendar as CalendarIcon2,
   Car,
   User,
   Wrench,
@@ -57,9 +64,10 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  Loader2
+  Loader2,
+  CalendarIcon
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { toast } from 'sonner';
 
 type PageProps = {
@@ -83,7 +91,10 @@ export default function ServiceDetailPage({
   const [statusDialogOpen, setStatusDialogOpen] = useState<boolean>(false);
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [statusNotes, setStatusNotes] = useState<string>('');
-  const [estimatedDays, setEstimatedDays] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [selectedMinute, setSelectedMinute] = useState<number | null>(null);
+  const [selectedAmPm, setSelectedAmPm] = useState<string>("PM");
 
   // Fetch service details
   useEffect(() => {
@@ -126,23 +137,15 @@ export default function ServiceDetailPage({
   // Format date
   const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return 'N/A';
-    try {
-      return format(new Date(dateString), 'MMMM dd, yyyy');
-    } catch (e) {
-      console.error('Error formatting date:', e);
-      return 'Invalid date';
-    }
+    // Handle date string directly
+    return dateString;
   };
 
-  // Format date and time
+  // Format date and time for display
   const formatDateTime = (dateString: string | undefined): string => {
     if (!dateString) return 'N/A';
-    try {
-      return format(new Date(dateString), 'MMMM dd, yyyy h:mm a');
-    } catch (e) {
-      console.error('Error formatting date:', e);
-      return 'Invalid date';
-    }
+    // Handle date string directly
+    return dateString;
   };
 
   // Get status badge
@@ -163,10 +166,40 @@ export default function ServiceDetailPage({
     }
   };
 
+  // Format date and time as a string
+  const getFormattedETA = (): string | null => {
+    if (!selectedDate || selectedHour === null || selectedMinute === null) {
+      return null;
+    }
+
+    // Format the date as DD/MM/YYYY
+    const day = selectedDate.getDate();
+    const month = selectedDate.getMonth() + 1;
+    const year = selectedDate.getFullYear();
+
+    // Format the time with AM/PM
+    let hour = selectedHour;
+    if (selectedAmPm === "PM" && hour < 12) {
+      hour += 12;
+    } else if (selectedAmPm === "AM" && hour === 12) {
+      hour = 0;
+    }
+
+    // Format as DD/MM/YYYY HH:MM AM/PM
+    return `${day}/${month}/${year} ${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedAmPm}`;
+  };
+
   // Handle status update
   const handleUpdateStatus = async () => {
     if (!selectedStatus) {
       toast.error('Please select a status');
+      return;
+    }
+
+    // For non-completed statuses, require date and time
+    if (selectedStatus !== 'completed' &&
+      (!selectedDate || selectedHour === null || selectedMinute === null)) {
+      toast.error('Please select both date and time for estimated completion');
       return;
     }
 
@@ -179,10 +212,13 @@ export default function ServiceDetailPage({
         return;
       }
 
+      // Get formatted ETA
+      const formattedETA = selectedStatus !== 'completed' ? getFormattedETA() : null;
+
       const payload = {
         status: selectedStatus,
         notes: statusNotes,
-        estimatedDays: estimatedDays ? parseInt(estimatedDays) : undefined
+        eta: formattedETA
       };
 
       const response = await axios.put(
@@ -204,7 +240,7 @@ export default function ServiceDetailPage({
           transferService: {
             ...service.transferService,
             status: selectedStatus,
-            eta: selectedStatus.toLowerCase() === 'completed' ? null : response.data.eta
+            eta: formattedETA
           },
           order: {
             ...service.order,
@@ -215,7 +251,10 @@ export default function ServiceDetailPage({
         // Reset form
         setSelectedStatus('');
         setStatusNotes('');
-        setEstimatedDays('');
+        setSelectedDate(undefined);
+        setSelectedHour(null);
+        setSelectedMinute(null);
+        setSelectedAmPm("PM");
         setStatusDialogOpen(false);
       } else {
         toast.error(response.data?.message || 'Failed to update status');
@@ -226,6 +265,36 @@ export default function ServiceDetailPage({
     } finally {
       setUpdatingStatus(false);
     }
+  };
+
+  // Set default values for quick status updates
+  const handleQuickStatusUpdate = (status: string, notes: string) => {
+    setSelectedStatus(status);
+    setStatusNotes(notes);
+
+    // Set default date and time based on status
+    if (status !== 'completed') {
+      const today = new Date();
+      if (status === 'in progress') {
+        // Default to 3 days from now
+        setSelectedDate(addDays(today, 3));
+      } else if (status === 'awaiting parts') {
+        // Default to 7 days from now
+        setSelectedDate(addDays(today, 7));
+      }
+
+      // Default time to 5:00 PM
+      setSelectedHour(5);
+      setSelectedMinute(0);
+      setSelectedAmPm("PM");
+    } else {
+      // Clear date and time for completed status
+      setSelectedDate(undefined);
+      setSelectedHour(null);
+      setSelectedMinute(null);
+    }
+
+    setStatusDialogOpen(true);
   };
 
   return (
@@ -283,8 +352,8 @@ export default function ServiceDetailPage({
                           <div className="grid gap-2">
                             <Label htmlFor="status">Status</Label>
                             <Select
-                              value={selectedStatus || ""}
-                              onValueChange={setSelectedStatus || ''}
+                              value={selectedStatus}
+                              onValueChange={(value) => setSelectedStatus(value)}
                             >
                               <SelectTrigger id="status">
                                 <SelectValue placeholder="Select a status" />
@@ -298,16 +367,100 @@ export default function ServiceDetailPage({
                           </div>
 
                           {selectedStatus && selectedStatus !== 'completed' && (
-                            <div className="grid gap-2">
-                              <Label htmlFor="estimatedDays">Estimated Days to Completion</Label>
-                              <Input
-                                id="estimatedDays"
-                                type="number"
-                                min="1"
-                                value={estimatedDays}
-                                onChange={(e) => setEstimatedDays(e.target.value)}
-                                placeholder="Enter number of days"
-                              />
+                            <div className="space-y-4">
+                              <div className="grid gap-2">
+                                <Label>Estimated Completion Date & Time</Label>
+
+                                {/* Date Picker */}
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className={cn(
+                                        "w-full justify-start text-left font-normal",
+                                        !selectedDate && "text-muted-foreground"
+                                      )}
+                                    >
+                                      <CalendarIcon className="mr-2 h-4 w-4" />
+                                      {selectedDate ? (
+                                        format(selectedDate, "MM/dd/yyyy")
+                                      ) : (
+                                        <span>Select date</span>
+                                      )}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                      mode="single"
+                                      selected={selectedDate}
+                                      onSelect={setSelectedDate}
+                                      initialFocus
+                                      disabled={(date) => date < new Date()}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+
+                                {/* Time Picker */}
+                                <div className="mt-4">
+                                  <Label>Time</Label>
+                                  <div className="grid grid-cols-3 gap-2 mt-2">
+                                    {/* Hour Selection */}
+                                    <Select
+                                      value={selectedHour?.toString() || ""}
+                                      onValueChange={(value) => setSelectedHour(parseInt(value))}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Hour" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {Array.from({ length: 12 }, (_, i) => i + 1).map((hour) => (
+                                          <SelectItem key={hour} value={hour.toString()}>
+                                            {hour}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+
+                                    {/* Minute Selection */}
+                                    <Select
+                                      value={selectedMinute?.toString() || ""}
+                                      onValueChange={(value) => setSelectedMinute(parseInt(value))}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Minute" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {Array.from({ length: 12 }, (_, i) => i * 5).map((minute) => (
+                                          <SelectItem key={minute} value={minute.toString()}>
+                                            {minute.toString().padStart(2, '0')}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+
+                                    {/* AM/PM Selection */}
+                                    <Select
+                                      value={selectedAmPm}
+                                      onValueChange={setSelectedAmPm}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="AM">AM</SelectItem>
+                                        <SelectItem value="PM">PM</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+
+                                {/* Preview of selected date and time */}
+                                {selectedDate && selectedHour !== null && selectedMinute !== null && (
+                                  <div className="mt-2 text-sm text-muted-foreground">
+                                    Selected: {getFormattedETA()}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           )}
 
@@ -330,7 +483,12 @@ export default function ServiceDetailPage({
                           </Button>
                           <Button
                             onClick={handleUpdateStatus}
-                            disabled={updatingStatus || !selectedStatus}
+                            disabled={
+                              updatingStatus ||
+                              !selectedStatus ||
+                              (selectedStatus !== 'completed' &&
+                                (!selectedDate || selectedHour === null || selectedMinute === null))
+                            }
                           >
                             {updatingStatus ? (
                               <>
@@ -346,230 +504,6 @@ export default function ServiceDetailPage({
                     </Dialog>
                   </div>
                 </div>
-              </CardHeader>
-
-              <CardContent>
-                <Tabs defaultValue="details">
-                  <TabsList className="mb-4">
-                    <TabsTrigger value="details">Service Details</TabsTrigger>
-                    {service.inspection && (
-                      <TabsTrigger value="inspection">Inspection Results</TabsTrigger>
-                    )}
-                    <TabsTrigger value="notes">Notes</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="details" className="space-y-6">
-                    {/* Vehicle info */}
-                    <div>
-                      <h3 className="text-lg font-medium flex items-center mb-3">
-                        <Car className="mr-2 h-5 w-5 text-primary" />
-                        Vehicle Information
-                      </h3>
-                      <div className="bg-muted/50 p-4 rounded-md grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Make & Model</p>
-                          <p className="font-medium">
-                            {service.vehicle ? `${service.vehicle.make} ${service.vehicle.model}` : 'Unknown'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Year</p>
-                          <p className="font-medium">{service.vehicle?.year || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">License Plate</p>
-                          <p className="font-medium">{service.vehicle?.licensePlate || 'N/A'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Service info */}
-                    <div>
-                      <h3 className="text-lg font-medium flex items-center mb-3">
-                        <Wrench className="mr-2 h-5 w-5 text-primary" />
-                        Service Information
-                      </h3>
-                      <div className="bg-muted/50 p-4 rounded-md">
-                        <h4 className="font-medium text-primary">
-                          {service.service?.serviceName || 'Custom Service'}
-                        </h4>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {service.service?.description || 'No description available'}
-                        </p>
-                        <div className="flex justify-between items-center mt-3">
-                          <span className="text-sm">Service Price</span>
-                          <span className="font-medium">PKR {service.service?.price?.toFixed(2) || '0.00'}</span>
-                        </div>
-                      </div>
-
-                      {/* Additional Services */}
-                      {service.additionalServices && (
-                        <div className="mt-4">
-                          <h4 className="font-medium mb-2">Additional Services</h4>
-                          {/* Handle both direct array and $values array structure, and filter out inspection services */}
-                          {(Array.isArray(service.additionalServices)
-                            ? service.additionalServices
-                            : (service.additionalServices.$values || [])
-                          )
-                            // Filter out services with category "inspection"
-                            .filter((service: any) => service.category?.toLowerCase() !== 'inspection')
-                            .map((additionalService: any, index: any) => (
-                              <div key={additionalService.serviceId || index} className="bg-muted/50 p-4 rounded-md mb-2">
-                                <h4 className="font-medium text-primary">
-                                  {additionalService.serviceName}
-                                </h4>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  {additionalService.description || 'No description available'}
-                                </p>
-                                <div className="flex justify-between items-center mt-3">
-                                  <span className="text-sm">Service Price</span>
-                                  <span className="font-medium">PKR {additionalService.price?.toFixed(2) || '0.00'}</span>
-                                </div>
-                              </div>
-                            ))}
-                          {/* Show message if no non-inspection services are found */}
-                          {(Array.isArray(service.additionalServices)
-                            ? service.additionalServices
-                            : (service.additionalServices.$values || [])
-                          ).filter((service: any) => service.category?.toLowerCase() !== 'inspection').length === 0 && (
-                              <p className="text-sm text-muted-foreground italic">No additional services</p>
-                            )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* ETA info */}
-                    {service.transferService.eta && (
-                      <div className="bg-blue-50 p-4 rounded-md">
-                        <div className="flex items-center mb-2">
-                          <Clock className="h-5 w-5 text-blue-600 mr-2" />
-                          <h3 className="font-medium text-blue-700">Estimated Completion</h3>
-                        </div>
-                        <p className="text-blue-700">
-                          This service is estimated to be completed by {formatDate(service.transferService.eta)}.
-                        </p>
-                      </div>
-                    )}
-                  </TabsContent>
-
-                  {service.inspection && (
-                    <TabsContent value="inspection" className="space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 bg-blue-50 rounded-md">
-                        <div className="flex items-center">
-                          <Calendar className="h-5 w-5 text-blue-600 mr-2" />
-                          <div>
-                            <p className="text-sm text-blue-600">Inspection Date</p>
-                            <p className="font-medium">{formatDate(service.inspection.scheduledDate)}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <Clock className="h-5 w-5 text-blue-600 mr-2" />
-                          <div>
-                            <p className="text-sm text-blue-600">Time Slot</p>
-                            <p className="font-medium">{service.inspection.timeSlot || 'Not specified'}</p>
-                          </div>
-                        </div>
-                        {getStatusBadge(service.inspection.status)}
-                      </div>
-
-                      <h3 className="text-lg font-medium flex items-center mt-4">
-                        <ClipboardCheck className="mr-2 h-5 w-5 text-primary" />
-                        Inspection Results
-                      </h3>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3">
-                        {service.inspection.engineCondition && (
-                          <div className="p-3 border rounded-md">
-                            <p className="text-sm text-muted-foreground">Engine Condition</p>
-                            <p className="font-medium">{service.inspection.engineCondition}</p>
-                          </div>
-                        )}
-                        {service.inspection.transmissionCondition && (
-                          <div className="p-3 border rounded-md">
-                            <p className="text-sm text-muted-foreground">Transmission Condition</p>
-                            <p className="font-medium">{service.inspection.transmissionCondition}</p>
-                          </div>
-                        )}
-                        {service.inspection.brakeCondition && (
-                          <div className="p-3 border rounded-md">
-                            <p className="text-sm text-muted-foreground">Brake Condition</p>
-                            <p className="font-medium">{service.inspection.brakeCondition}</p>
-                          </div>
-                        )}
-                        {service.inspection.electricalCondition && (
-                          <div className="p-3 border rounded-md">
-                            <p className="text-sm text-muted-foreground">Electrical Condition</p>
-                            <p className="font-medium">{service.inspection.electricalCondition}</p>
-                          </div>
-                        )}
-                        {service.inspection.bodyCondition && (
-                          <div className="p-3 border rounded-md">
-                            <p className="text-sm text-muted-foreground">Body Condition</p>
-                            <p className="font-medium">{service.inspection.bodyCondition}</p>
-                          </div>
-                        )}
-                        {service.inspection.tireCondition && (
-                          <div className="p-3 border rounded-md">
-                            <p className="text-sm text-muted-foreground">Tire Condition</p>
-                            <p className="font-medium">{service.inspection.tireCondition}</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {service.inspection.notes && (
-                        <div className="mt-4">
-                          <h4 className="font-medium mb-2">Inspection Notes</h4>
-                          <p className="text-sm bg-muted/50 p-3 rounded-md">
-                            {service.inspection.notes}
-                          </p>
-                        </div>
-                      )}
-                    </TabsContent>
-                  )}
-
-                  <TabsContent value="notes">
-                    <div className="p-4 bg-muted/50 rounded-md">
-                      <h3 className="font-medium mb-2 flex items-center">
-                        <FileText className="mr-2 h-4 w-4" />
-                        Service Notes
-                      </h3>
-                      <p className="text-sm whitespace-pre-wrap">
-                        {service.transferService.notes || 'No notes available for this service.'}
-                      </p>
-                    </div>
-
-                    <div className="p-4 bg-muted/50 rounded-md mt-4">
-                      <h3 className="font-medium mb-2 flex items-center">
-                        <FileText className="mr-2 h-4 w-4" />
-                        Order Notes
-                      </h3>
-                      <p className="text-sm whitespace-pre-wrap">
-                        {service.order.notes || 'No notes available for this order.'}
-                      </p>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-
-              <CardFooter className="flex justify-between border-t pt-6">
-                <Button variant="outline" onClick={() => router.back()}>
-                  Back to Services
-                </Button>
-                <Button onClick={() => setStatusDialogOpen(true)}>
-                  Update Status
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
-
-          {/* Customer info sidebar */}
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center text-lg">
-                  <User className="mr-2 h-5 w-5 text-primary" />
-                  Customer Information
-                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Customer details */}
@@ -655,12 +589,7 @@ export default function ServiceDetailPage({
                       variant={service.order.status === 'in progress' ? 'default' : 'outline'}
                       className="w-full justify-start"
                       disabled={service.order.status === 'in progress'}
-                      onClick={() => {
-                        setSelectedStatus('in progress');
-                        setStatusNotes('Service work started');
-                        setEstimatedDays('3');
-                        setStatusDialogOpen(true);
-                      }}
+                      onClick={() => handleQuickStatusUpdate('in progress', 'Service work started')}
                     >
                       <Clock4 className="mr-2 h-4 w-4" />
                       Mark as In Progress
@@ -670,12 +599,7 @@ export default function ServiceDetailPage({
                       variant={service.order.status === 'awaiting parts' ? 'default' : 'outline'}
                       className="w-full justify-start"
                       disabled={service.order.status === 'awaiting parts'}
-                      onClick={() => {
-                        setSelectedStatus('awaiting parts');
-                        setStatusNotes('Waiting for parts to arrive');
-                        setEstimatedDays('7');
-                        setStatusDialogOpen(true);
-                      }}
+                      onClick={() => handleQuickStatusUpdate('awaiting parts', 'Waiting for parts to arrive')}
                     >
                       <AlertCircle className="mr-2 h-4 w-4" />
                       Mark as Awaiting Parts
@@ -685,12 +609,7 @@ export default function ServiceDetailPage({
                       variant={service.order.status === 'completed' ? 'default' : 'outline'}
                       className="w-full justify-start"
                       disabled={service.order.status === 'completed'}
-                      onClick={() => {
-                        setSelectedStatus('completed');
-                        setStatusNotes('Service work completed successfully');
-                        setEstimatedDays('');
-                        setStatusDialogOpen(true);
-                      }}
+                      onClick={() => handleQuickStatusUpdate('completed', 'Service work completed successfully')}
                     >
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Mark as Completed

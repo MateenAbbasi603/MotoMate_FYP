@@ -108,47 +108,47 @@ namespace fyp_motomate.Controllers
         }
 
         // GET: api/Mechanics/available
-[HttpGet("available")]
-[Authorize(Roles = "super_admin,admin,service_agent")]
-public async Task<ActionResult<IEnumerable<object>>> GetAvailableMechanics()
-{
-    try
-    {
-        // Get all mechanics (users with role 'mechanic')
-        var mechanics = await _context.Users
-            .Where(u => u.Role.ToLower() == "mechanic")
-            .Select(u => new
-            {
-                u.UserId,
-                u.Name,
-                u.Email,
-                u.Phone,
-                // Get current appointments to determine availability
-                CurrentAppointments = _context.Appointments
-                    .Count(a => a.MechanicId == u.UserId && 
-                               (a.Status == "scheduled" || a.Status == "in progress"))
-            })
-            .ToListAsync();
-
-        // Add availability status based on current workload
-        var availableMechanics = mechanics.Select(m => new
+        [HttpGet("available")]
+        [Authorize(Roles = "super_admin,admin,service_agent")]
+        public async Task<ActionResult<IEnumerable<object>>> GetAvailableMechanics()
         {
-            mechanicId = m.UserId,
-            name = m.Name,
-            email = m.Email,
-            phone = m.Phone,
-            currentAppointments = m.CurrentAppointments,
-            status = m.CurrentAppointments < 3 ? "Available" : "Busy" // Threshold of 3 concurrent appointments
-        });
+            try
+            {
+                // Get all mechanics (users with role 'mechanic')
+                var mechanics = await _context.Users
+                    .Where(u => u.Role.ToLower() == "mechanic")
+                    .Select(u => new
+                    {
+                        u.UserId,
+                        u.Name,
+                        u.Email,
+                        u.Phone,
+                        // Get current appointments to determine availability
+                        CurrentAppointments = _context.Appointments
+                            .Count(a => a.MechanicId == u.UserId &&
+                                       (a.Status == "scheduled" || a.Status == "in progress"))
+                    })
+                    .ToListAsync();
 
-        return Ok(availableMechanics);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error retrieving available mechanics");
-        return StatusCode(500, new { message = "An error occurred while retrieving available mechanics", error = ex.Message });
-    }
-}
+                // Add availability status based on current workload
+                var availableMechanics = mechanics.Select(m => new
+                {
+                    mechanicId = m.UserId,
+                    name = m.Name,
+                    email = m.Email,
+                    phone = m.Phone,
+                    currentAppointments = m.CurrentAppointments,
+                    status = m.CurrentAppointments < 3 ? "Available" : "Busy" // Threshold of 3 concurrent appointments
+                });
+
+                return Ok(availableMechanics);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving available mechanics");
+                return StatusCode(500, new { message = "An error occurred while retrieving available mechanics", error = ex.Message });
+            }
+        }
 
         // GET: api/MechanicServices/5
         [HttpGet("{id}")]
@@ -335,7 +335,7 @@ public async Task<ActionResult<IEnumerable<object>>> GetAvailableMechanics()
 
                 // Update order status
                 order.Status = request.Status.ToLower();
-                
+
                 // Add notes if provided
                 if (!string.IsNullOrEmpty(request.Notes))
                 {
@@ -353,19 +353,19 @@ public async Task<ActionResult<IEnumerable<object>>> GetAvailableMechanics()
                 {
                     transferService.ETA = null;
                 }
-                else if (request.EstimatedDays.HasValue && request.EstimatedDays.Value > 0)
+                else if (!string.IsNullOrEmpty(request.ETA))
                 {
-                    // Update ETA if provided and not completing
-                    transferService.ETA = DateTime.Now.AddDays(request.EstimatedDays.Value);
+                    // Store the ETA as string
+                    transferService.ETA = request.ETA;
                 }
 
                 // Create notification for customer about status update
                 var notification = new Notification
                 {
                     UserId = order.UserId,
-                    Message = $"Your service status has been updated to '{request.Status}'" + 
-                              (request.EstimatedDays.HasValue && request.Status.ToLower() != "completed" 
-                                ? $" and is estimated to be done in {request.EstimatedDays.Value} days." 
+                    Message = $"Your service status has been updated to '{request.Status}'" +
+                              (!string.IsNullOrEmpty(request.ETA) && request.Status.ToLower() != "completed"
+                                ? $" and is estimated to be completed by {request.ETA}."
                                 : "."),
                     Status = "unread",
                     CreatedAt = DateTime.Now
@@ -374,9 +374,9 @@ public async Task<ActionResult<IEnumerable<object>>> GetAvailableMechanics()
                 _context.Notifications.Add(notification);
                 await _context.SaveChangesAsync();
 
-                return Ok(new 
-                { 
-                    success = true, 
+                return Ok(new
+                {
+                    success = true,
                     message = $"Service status updated to '{request.Status}'",
                     status = request.Status,
                     eta = transferService.ETA
@@ -388,12 +388,11 @@ public async Task<ActionResult<IEnumerable<object>>> GetAvailableMechanics()
                 return StatusCode(500, new { message = "An error occurred while updating service status", error = ex.Message });
             }
         }
-    }
-
-    public class UpdateServiceStatusRequest
-    {
-        public string Status { get; set; }
-        public string Notes { get; set; }
-        public int? EstimatedDays { get; set; }
+        public class UpdateServiceStatusRequest
+        {
+            public string Status { get; set; }
+            public string Notes { get; set; }
+            public string ETA { get; set; }
+        }
     }
 }

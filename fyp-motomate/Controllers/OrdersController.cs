@@ -1201,7 +1201,7 @@ public async Task<ActionResult<object>> CreateOrderWithInspection([FromBody] Ins
                     existingTransfer.MechanicId = mechanicId;
                     existingTransfer.Status = "transferred";
                     existingTransfer.Notes += $"\nUpdated on {DateTime.Now}: Reassigned to mechanic (ID: {mechanicId})";
-                    existingTransfer.ETA = DateTime.Now.AddDays(3); // Default ETA of 3 days
+                    existingTransfer.ETA = "";
                 }
                 else
                 {
