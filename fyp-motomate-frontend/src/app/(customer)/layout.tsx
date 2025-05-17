@@ -46,7 +46,7 @@ export default function CustomerLayout({ children }: { children: ReactNode }) {
     <AuthGuard allowedRoles={["customer"]}>
       <div className="flex min-h-screen flex-col">
         <CustomerNavbar />
-        <main className="flex-1 pt-14">
+        <main className="container mx-auto  pt-14">
           <div className="container py-6">
             {isCheckingReviews ? (
               // Show loading indicator while checking reviews

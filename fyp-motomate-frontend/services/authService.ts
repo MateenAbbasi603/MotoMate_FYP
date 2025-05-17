@@ -13,6 +13,7 @@ export interface User {
   phone: string | null;
   address: string | null;
   imgUrl: string | null;
+  createdAt?:Date |null
 }
 
 // Profile update type

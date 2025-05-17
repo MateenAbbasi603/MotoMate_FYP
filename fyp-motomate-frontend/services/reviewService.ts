@@ -105,6 +105,8 @@ const reviewService = {
   getWorkshopRating: async (): Promise<WorkshopRating> => {
     try {
       const response = await apiClient.get('/api/Reviews/WorkshopRating');
+      console.log("WORKSHOP RATING",response.data);
+      
       return response.data;
     } catch (error) {
       console.error('Error getting workshop rating:', error);
@@ -130,6 +132,8 @@ const reviewService = {
       // Update cache
       cachedPendingReviews = response.data;
       lastCheckedTime = now;
+      
+      console.log("PENDING REVIEWS",response.data);
       
       return response.data;
     } catch (error) {

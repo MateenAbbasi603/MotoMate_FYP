@@ -42,6 +42,8 @@ export const orderService = {
   getAllOrders: async () => {
     try {
       const response = await apiClient.get('/api/Orders');
+      console.log(response,"ORDER DATA");
+      
       return response.data;
     } catch (error) {
       console.error('Error fetching orders:', error);

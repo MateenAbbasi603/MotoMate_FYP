@@ -18,12 +18,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 import {
   ChevronLeft,
   Car,
@@ -40,6 +42,23 @@ import {
   ReceiptText,
   Printer,
   Download,
+  CheckCircle2,
+  Timer,
+  ShieldCheck,
+  ShieldAlert,
+  ArrowRight,
+  CircleDot,
+  ArrowUpRight,
+  CircleCheck,
+  ClipboardList,
+  Building,
+  CalendarCheck,
+  CircleDashed,
+  CalendarX,
+  FileCheck,
+  TimerOff,
+  Receipt,
+  BadgeCheck,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import apiClient from '../../../../../services/apiClient';
@@ -144,6 +163,16 @@ export default function OrderDetailPage({
     }
   };
 
+  // Format time
+  const formatTime = (timeString?: string): string => {
+    if (!timeString) return 'N/A';
+    try {
+      return format(new Date(timeString), 'h:mm a');
+    } catch (e) {
+      return timeString; // Return original string if it's not a date
+    }
+  };
+
   // Print invoice
   const handlePrintInvoice = () => {
     // Create a printable version
@@ -172,147 +201,297 @@ export default function OrderDetailPage({
     status = status?.toLowerCase() || '';
     switch (status) {
       case 'completed':
-        return 'bg-green-100 text-green-800 hover:bg-green-100';
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/40';
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-900/40';
       case 'cancelled':
-        return 'bg-red-100 text-red-800 hover:bg-red-100';
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/40';
       case 'in progress':
       case 'inprogress':
-        return 'bg-blue-100 text-blue-800 hover:bg-blue-100';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/40';
       case 'paid':
-        return 'bg-green-100 text-green-800 hover:bg-green-100';
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/40';
       case 'issued':
-        return 'bg-blue-100 text-blue-800 hover:bg-blue-100';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/40';
       case 'overdue':
-        return 'bg-red-100 text-red-800 hover:bg-red-100';
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/40';
       default:
-        return 'bg-gray-100 text-gray-800 hover:bg-gray-100';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-900/40';
+    }
+  };
+
+  // Get status icon
+  const getStatusIcon = (status: string) => {
+    status = status?.toLowerCase() || '';
+    switch (status) {
+      case 'completed':
+        return <CheckCircle2 className="h-5 w-5" />;
+      case 'pending':
+        return <Clock className="h-5 w-5" />;
+      case 'cancelled':
+        return <CalendarX className="h-5 w-5" />;
+      case 'in progress':
+      case 'inprogress':
+        return <Timer className="h-5 w-5" />;
+      case 'paid':
+        return <Receipt className="h-5 w-5" />;
+      case 'issued':
+        return <FileCheck className="h-5 w-5" />;
+      case 'overdue':
+        return <TimerOff className="h-5 w-5" />;
+      default:
+        return <CircleDashed className="h-5 w-5" />;
     }
   };
 
   if (loading) {
     return (
-      <div className="container mx-auto py-10">
-        <div className="flex items-center gap-2 mb-6">
+      <div className="container mx-auto py-10 px-4 md:px-6">
+        <div className="flex items-center gap-2 mb-8">
           <Button variant="outline" size="icon" onClick={() => router.push('/orders')}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Skeleton className="h-8 w-48" />
+          <div>
+            <Skeleton className="h-8 w-48 mb-1" />
+            <Skeleton className="h-4 w-32" />
+          </div>
         </div>
-        <Skeleton className="h-64 w-full mb-4" />
-        <Skeleton className="h-64 w-full" />
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card className="border-muted-foreground/20">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-8 w-36 mb-1" />
+                    <Skeleton className="h-4 w-48" />
+                  </div>
+                  <Skeleton className="h-6 w-28" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-12 w-full max-w-md mb-6" />
+                <div className="space-y-8">
+                  <div>
+                    <Skeleton className="h-6 w-40 mb-3" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <Skeleton className="h-32 w-full" />
+                      <Skeleton className="h-32 w-full" />
+                    </div>
+                  </div>
+                  <div>
+                    <Skeleton className="h-6 w-40 mb-3" />
+                    <Skeleton className="h-48 w-full" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div>
+            <Skeleton className="h-[400px] w-full" />
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error || !order) {
     return (
-      <div className="container mx-auto py-10">
-        <div className="flex items-center gap-2 mb-6">
+      <div className="container mx-auto py-10 px-4 md:px-6">
+        <div className="flex items-center gap-2 mb-8">
           <Button variant="outline" size="icon" onClick={() => router.push('/orders')}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-2xl font-bold">Order Details</h1>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Order Details</h1>
+            <p className="text-muted-foreground">View your service order information</p>
+          </div>
         </div>
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
+        
+        <Alert variant="destructive" className="max-w-2xl mx-auto">
+          <AlertTriangle className="h-5 w-5" />
+          <AlertTitle className="mb-2">Error Loading Order</AlertTitle>
           <AlertDescription>{error || 'Order not found'}</AlertDescription>
+          <div className="flex justify-end mt-4">
+            <Button onClick={() => router.push('/orders')} variant="outline">
+              Back to Orders
+            </Button>
+          </div>
         </Alert>
-        <div className="flex justify-center mt-6">
-          <Button onClick={() => router.push('/orders')}>
-            Back to Orders
-          </Button>
-        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto py-10">
-      <div className="flex items-center gap-2 mb-6">
-        <Button variant="outline" size="icon" onClick={() => router.push('/orders')}>
+    <div className="container mx-auto py-10 px-4 md:px-6">
+      <div className="flex items-center gap-3 mb-8">
+        <Button 
+          variant="outline" 
+          size="icon" 
+          onClick={() => router.push('/orders')}
+          className="h-9 w-9 rounded-full"
+        >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-2xl font-bold">Order Details</h1>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Order #{order.orderId}</h1>
+          <p className="text-muted-foreground">Placed on {formatDate(order.orderDate)}</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader className="pb-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-2xl">Order #{order.orderId}</CardTitle>
-                  <CardDescription>
-                    Placed on {formatDate(order.orderDate)}
-                  </CardDescription>
+        <div className="lg:col-span-2 space-y-6">
+          {/* Main Card */}
+          <Card className="border-muted-foreground/20 overflow-hidden">
+            <CardHeader className="pb-4 flex flex-row items-start justify-between bg-muted/30">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge className={getStatusBadgeStyle(order.status) + " capitalize"}>
+                    <span className="flex items-center gap-1.5">
+                      {getStatusIcon(order.status)}
+                      <span>{order.status}</span>
+                    </span>
+                  </Badge>
+                  {invoice && (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800">
+                      <Receipt className="h-3 w-3 mr-1" />
+                      Invoice Available
+                    </Badge>
+                  )}
                 </div>
-                <Badge className={getStatusBadgeStyle(order.status)}>
-                  {order.status}
-                </Badge>
+                <CardTitle className="text-2xl">Service Order</CardTitle>
+                <CardDescription>
+                  Reference ID: {order.orderId}
+                </CardDescription>
+              </div>
+              
+              <div className="flex flex-col items-end mt-0.5">
+                <span className="text-sm text-muted-foreground">Total Amount</span>
+                <span className="text-xl font-bold">PKR {order.totalAmount.toFixed(2)}</span>
               </div>
             </CardHeader>
 
-            <CardContent>
-              <Tabs defaultValue="details" value={currentTab} onValueChange={setCurrentTab}>
-                <TabsList className="mb-4">
-                  <TabsTrigger value="details">Order Details</TabsTrigger>
+            <CardContent className="pt-6">
+              <Tabs defaultValue="details" value={currentTab} onValueChange={setCurrentTab} className="w-full">
+                <TabsList className="w-full grid grid-cols-3 mb-6 p-1 rounded-lg bg-muted/40">
+                  <TabsTrigger 
+                    value="details" 
+                    className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Order Details
+                  </TabsTrigger>
                   {order.includesInspection && order.inspection && (
-                    <TabsTrigger value="inspection">Inspection</TabsTrigger>
+                    <TabsTrigger 
+                      value="inspection" 
+                      className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                    >
+                      <ShieldCheck className="h-4 w-4 mr-2" />
+                      Inspection Results
+                    </TabsTrigger>
                   )}
                   {invoice && (
-                    <TabsTrigger value="invoice" data-value="invoice">Invoice</TabsTrigger>
+                    <TabsTrigger 
+                      value="invoice" 
+                      data-value="invoice"
+                      className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                    >
+                      <ReceiptText className="h-4 w-4 mr-2" />
+                      Invoice
+                    </TabsTrigger>
                   )}
                 </TabsList>
 
-                <TabsContent value="details" className="space-y-6">
+                <TabsContent value="details" className="space-y-8">
                   {/* Vehicle info */}
                   <div>
-                    <h3 className="text-lg font-medium flex items-center mb-3">
+                    <h3 className="text-lg font-medium flex items-center mb-4">
                       <Car className="mr-2 h-5 w-5 text-primary" />
                       Vehicle Information
                     </h3>
-                    <div className="bg-muted/50 p-4 rounded-md grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Make & Model</p>
-                        <p className="font-medium">
-                          {order.vehicle ? `${order.vehicle.make} ${order.vehicle.model}` : 'Unknown'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Year</p>
-                        <p className="font-medium">{order.vehicle?.year || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">License Plate</p>
-                        <p className="font-medium">{order.vehicle?.licensePlate || 'N/A'}</p>
+                    <div className="bg-muted/30 p-5 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-5 hover:bg-muted/40 transition-colors">
+                      {order.vehicle && (
+                        <div className="flex items-start gap-4">
+                          <div className="bg-primary/10 p-3 rounded-full flex-shrink-0">
+                            <Car className="h-6 w-6 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-lg font-medium">{order.vehicle.make} {order.vehicle.model}</p>
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <Badge variant="outline" className="rounded-md font-normal">
+                                {order.vehicle.year}
+                              </Badge>
+                              <Badge variant="outline" className="rounded-md font-normal uppercase">
+                                {order.vehicle.licensePlate}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex flex-col justify-between h-full space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Registration No.</span>
+                          <span className="font-medium">{order.vehicle?.licensePlate || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Model Year</span>
+                          <span className="font-medium">{order.vehicle?.year || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Vehicle ID</span>
+                          <span className="font-medium">{order.vehicleId}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Service info */}
                   <div>
-                    <h3 className="text-lg font-medium flex items-center mb-3">
+                    <h3 className="text-lg font-medium flex items-center mb-4">
                       <Wrench className="mr-2 h-5 w-5 text-primary" />
                       Service Information
                     </h3>
-                    <div className="bg-muted/50 p-4 rounded-md">
-                      <h4 className="font-medium text-primary">
-                        {order.service?.serviceName || 'Custom Service'}
-                      </h4>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {order.service?.description || 'No description available'}
-                      </p>
+                    <div className="bg-muted/30 p-5 rounded-lg hover:bg-muted/40 transition-colors">
+                      <div className="flex items-start gap-4 mb-4">
+                        <div className="bg-primary/10 p-3 rounded-full flex-shrink-0">
+                          {order.service?.category?.toLowerCase() === 'inspection' ? (
+                            <ShieldCheck className="h-6 w-6 text-primary" />
+                          ) : order.service?.category?.toLowerCase() === 'repair' ? (
+                            <Wrench className="h-6 w-6 text-primary" />
+                          ) : (
+                            <ClipboardCheck className="h-6 w-6 text-primary" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-medium text-primary">
+                            {order.service?.serviceName || 'Custom Service'}
+                          </h4>
+                          <p className="text-muted-foreground mt-1">
+                            {order.service?.description || 'No description available'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <Separator className="my-4" />
+                      
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Service Category</span>
+                        <Badge className="capitalize">
+                          {order.service?.category || 'Service'}
+                        </Badge>
+                      </div>
+                      
                       <div className="flex justify-between items-center mt-3">
-                        <span className="text-sm">Service Price</span>
+                        <span className="text-sm font-medium">Service Price</span>
                         <span className="font-medium">PKR {order.service?.price?.toFixed(2) || '0.00'}</span>
                       </div>
 
                       {order.includesInspection && (
-                        <div className="flex justify-between items-center mt-2">
-                          <span className="text-sm">Includes Inspection</span>
-                          <Badge variant="outline" className="bg-blue-50 text-blue-800">
+                        <div className="flex justify-between items-center mt-3">
+                          <span className="text-sm font-medium">Includes Inspection</span>
+                          <Badge variant="outline" className="bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                            <ShieldCheck className="h-3.5 w-3.5 mr-1" />
                             Yes
                           </Badge>
                         </div>
@@ -321,47 +500,58 @@ export default function OrderDetailPage({
 
                     {/* Additional Services */}
                     {order.additionalServices && order.additionalServices.length > 0 && (
-                      <div className="mt-4">
-                        <h4 className="font-medium mb-2">Additional Services</h4>
-                        {order.additionalServices.map((service: any, index: number) => (
-                          <div key={service.serviceId || index} className="bg-muted/50 p-4 rounded-md mb-2">
-                            <h4 className="font-medium text-primary">
-                              {service.serviceName}
-                            </h4>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {service.description || 'No description available'}
-                            </p>
-                            <div className="flex justify-between items-center mt-3">
-                              <span className="text-sm">Service Price</span>
-                              <span className="font-medium">PKR {service.price?.toFixed(2) || '0.00'}</span>
+                      <div className="mt-6">
+                        <h4 className="font-medium mb-3 flex items-center">
+                          <ClipboardList className="h-4 w-4 mr-2 text-primary" />
+                          Additional Services
+                        </h4>
+                        <div className="space-y-3">
+                          {order.additionalServices.map((service: any, index: number) => (
+                            <div key={service.serviceId || index} className="bg-muted/30 p-4 rounded-lg hover:bg-muted/40 transition-colors">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h5 className="font-medium text-primary">
+                                    {service.serviceName}
+                                  </h5>
+                                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                    {service.description || 'No description available'}
+                                  </p>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                  <span className="font-medium">PKR {service.price?.toFixed(2) || '0.00'}</span>
+                                  <Badge variant="outline" className="mt-1 capitalize text-xs">
+                                    {service.category || 'service'}
+                                  </Badge>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
 
                   {/* Payment info */}
                   <div>
-                    <h3 className="text-lg font-medium flex items-center mb-3">
+                    <h3 className="text-lg font-medium flex items-center mb-4">
                       <DollarSign className="mr-2 h-5 w-5 text-primary" />
-                      Payment Information
+                      Payment Summary
                     </h3>
-                    <div className="bg-muted/50 p-4 rounded-md">
-                      <div className="flex justify-between items-center pb-2 border-b">
+                    <div className="bg-muted/30 p-5 rounded-lg hover:bg-muted/40 transition-colors">
+                      <div className="flex justify-between items-center pb-3 border-b">
                         <span>Main Service</span>
                         <span>PKR {order.service?.price?.toFixed(2) || '0.00'}</span>
                       </div>
 
                       {order.includesInspection && order.inspection && (
-                        <div className="flex justify-between items-center py-2 border-b">
+                        <div className="flex justify-between items-center py-3 border-b">
                           <span>Inspection Fee</span>
                           <span>PKR {order.inspection.price?.toFixed(2) || '0.00'}</span>
                         </div>
                       )}
 
                       {order.additionalServices && order.additionalServices.length > 0 && (
-                        <div className="flex justify-between items-center py-2 border-b">
+                        <div className="flex justify-between items-center py-3 border-b">
                           <span>Additional Services</span>
                           <span>
                             PKR {order.additionalServices
@@ -371,21 +561,58 @@ export default function OrderDetailPage({
                         </div>
                       )}
 
-                      <div className="flex justify-between items-center pt-2 font-medium">
+                      <div className="flex justify-between items-center pt-3 font-medium text-lg">
                         <span>Total Amount</span>
-                        <span>PKR {order.totalAmount?.toFixed(2) || '0.00'}</span>
+                        <span className="text-primary">PKR {order.totalAmount?.toFixed(2) || '0.00'}</span>
                       </div>
+                      
+                      {invoice && (
+                        <div className="mt-4 pt-4 border-t border-dashed">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium">Payment Status</span>
+                            <Badge 
+                              className={
+                                invoice.invoice.status === 'paid' ? 
+                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
+                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                              }
+                            >
+                              {invoice.invoice.status === 'paid' ? (
+                                <span className="flex items-center gap-1.5">
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  <span>Paid</span>
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1.5">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  <span>Pending</span>
+                                </span>
+                              )}
+                            </Badge>
+                          </div>
+                          {invoice.invoice.status !== 'paid' && (
+                            <Button
+                              variant="default"
+                              className="w-full mt-3 bg-green-600 hover:bg-green-700"
+                              onClick={() => router.push(`/invoice/pay/${invoice.invoice.invoiceId}`)}
+                            >
+                              <DollarSign className="mr-2 h-4 w-4" />
+                              Pay Now
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Notes section */}
                   {order.notes && (
-                    <div className="p-4 bg-muted/50 rounded-md">
-                      <h3 className="font-medium mb-2 flex items-center">
-                        <FileText className="mr-2 h-4 w-4" />
+                    <div className="bg-muted/30 p-5 rounded-lg hover:bg-muted/40 transition-colors">
+                      <h3 className="font-medium mb-3 flex items-center">
+                        <FileText className="mr-2 h-5 w-5 text-primary" />
                         Order Notes
                       </h3>
-                      <p className="text-sm">
+                      <p className="text-muted-foreground">
                         {order.notes}
                       </p>
                     </div>
@@ -393,79 +620,147 @@ export default function OrderDetailPage({
                 </TabsContent>
 
                 {order.includesInspection && order.inspection && (
-                  <TabsContent value="inspection" className="space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 bg-blue-50 rounded-md">
-                      <div className="flex items-center">
-                        <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+                  <TabsContent value="inspection" className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 p-5 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                      <div className="flex items-center gap-4">
+                        <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full">
+                          <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                        </div>
                         <div>
-                          <p className="text-sm text-blue-600">Inspection Date</p>
-                          <p className="font-medium">{formatDate(order.inspection.scheduledDate)}</p>
+                          <p className="text-sm text-blue-600 dark:text-blue-400">Inspection Date</p>
+                          <p className="font-medium text-blue-900 dark:text-blue-300">{formatDate(order.inspection.scheduledDate)}</p>
                         </div>
                       </div>
-                      <div className="flex items-center">
-                        <Clock className="h-5 w-5 text-blue-600 mr-2" />
+                      <div className="flex items-center gap-4">
+                        <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full">
+                          <Clock className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                        </div>
                         <div>
-                          <p className="text-sm text-blue-600">Time Slot</p>
-                          <p className="font-medium">{order.inspection.timeSlot || 'Not specified'}</p>
+                          <p className="text-sm text-blue-600 dark:text-blue-400">Time Slot</p>
+                          <p className="font-medium text-blue-900 dark:text-blue-300">{order.inspection.timeSlot || 'Not specified'}</p>
                         </div>
                       </div>
-                      <Badge className={getStatusBadgeStyle(order.inspection.status)}>
-                        {order.inspection.status}
+                      <Badge className={getStatusBadgeStyle(order.inspection.status) + " capitalize"}>
+                        <span className="flex items-center gap-1.5">
+                          {getStatusIcon(order.inspection.status)}
+                          <span>{order.inspection.status}</span>
+                        </span>
                       </Badge>
                     </div>
 
-                    <h3 className="text-lg font-medium flex items-center mt-4">
-                      <ClipboardCheck className="mr-2 h-5 w-5 text-primary" />
-                      Inspection Results
-                    </h3>
+                    <div>
+                      <h3 className="text-lg font-medium flex items-center mb-4">
+                        <ClipboardCheck className="mr-2 h-5 w-5 text-primary" />
+                        Inspection Results
+                      </h3>
 
-                    {order.inspection.status === 'completed' ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Body Condition</p>
-                          <p className="font-medium">{order.inspection.bodyCondition || 'Not inspected'}</p>
+                      {order.inspection.status === 'completed' ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
+                            <p className="text-sm text-muted-foreground mb-1">Body Condition</p>
+                            <p className="font-medium flex items-center gap-1.5">
+                              <CircleDot className="h-3.5 w-3.5 text-primary" />
+                              {order.inspection.bodyCondition || 'Not inspected'}
+                            </p>
+                          </div>
+                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
+                            <p className="text-sm text-muted-foreground mb-1">Engine Condition</p>
+                            <p className="font-medium flex items-center gap-1.5">
+                              <CircleDot className="h-3.5 w-3.5 text-primary" />
+                              {order.inspection.engineCondition || 'Not inspected'}
+                            </p>
+                          </div>
+                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
+                            <p className="text-sm text-muted-foreground mb-1">Electrical Condition</p>
+                            <p className="font-medium flex items-center gap-1.5">
+                              <CircleDot className="h-3.5 w-3.5 text-primary" />
+                              {order.inspection.electricalCondition || 'Not inspected'}
+                            </p>
+                          </div>
+                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
+                            <p className="text-sm text-muted-foreground mb-1">Tire Condition</p>
+                            <p className="font-medium flex items-center gap-1.5">
+                            <CircleDot className="h-3.5 w-3.5 text-primary" />
+                            {order.inspection.tireCondition || 'Not inspected'}
+                          </p>
                         </div>
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Engine Condition</p>
-                          <p className="font-medium">{order.inspection.engineCondition || 'Not inspected'}</p>
-                        </div>
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Electrical Condition</p>
-                          <p className="font-medium">{order.inspection.electricalCondition || 'Not inspected'}</p>
-                        </div>
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Tire Condition</p>
-                          <p className="font-medium">{order.inspection.tireCondition || 'Not inspected'}</p>
-                        </div>
-                        <div className="p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">Brake Condition</p>
-                          <p className="font-medium">{order.inspection.brakeCondition || 'Not inspected'}</p>
+                        <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
+                          <p className="text-sm text-muted-foreground mb-1">Brake Condition</p>
+                          <p className="font-medium flex items-center gap-1.5">
+                            <CircleDot className="h-3.5 w-3.5 text-primary" />
+                            {order.inspection.brakeCondition || 'Not inspected'}
+                          </p>
                         </div>
                         {order.inspection.transmissionCondition && (
-                          <div className="p-3 border rounded-md">
-                            <p className="text-sm text-muted-foreground">Transmission Condition</p>
-                            <p className="font-medium">{order.inspection.transmissionCondition}</p>
+                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
+                            <p className="text-sm text-muted-foreground mb-1">Transmission Condition</p>
+                            <p className="font-medium flex items-center gap-1.5">
+                              <CircleDot className="h-3.5 w-3.5 text-primary" />
+                              {order.inspection.transmissionCondition}
+                            </p>
                           </div>
                         )}
                       </div>
                     ) : (
-                      <div className="p-6 bg-muted/30 rounded-md text-center">
-                        <p className="text-muted-foreground">
-                          {order.inspection.status === 'pending'
-                            ? 'Your vehicle inspection is scheduled but has not been completed yet.'
-                            : order.inspection.status === 'in progress'
-                              ? 'Your vehicle is currently being inspected.'
-                              : `Inspection status: ${order.inspection.status}`}
-                        </p>
+                      <div className="flex flex-col items-center justify-center p-8 bg-muted/30 rounded-lg text-center">
+                        {order.inspection.status === 'pending' ? (
+                          <>
+                            <div className="mb-4 bg-yellow-100 dark:bg-yellow-900/30 p-3 rounded-full">
+                              <Clock className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />
+                            </div>
+                            <h4 className="text-lg font-medium mb-2">Inspection Scheduled</h4>
+                            <p className="text-muted-foreground max-w-md">
+                              Your vehicle inspection is scheduled but has not been completed yet.
+                              We'll notify you once the inspection is complete.
+                            </p>
+                          </>
+                        ) : order.inspection.status === 'in progress' ? (
+                          <>
+                            <div className="mb-4 bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full">
+                              <Timer className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <h4 className="text-lg font-medium mb-2">Inspection In Progress</h4>
+                            <p className="text-muted-foreground max-w-md">
+                              Your vehicle is currently being inspected by our technicians.
+                              Results will be available soon.
+                            </p>
+                          </>
+                        ) : order.inspection.status === 'cancelled' ? (
+                          <>
+                            <div className="mb-4 bg-red-100 dark:bg-red-900/30 p-3 rounded-full">
+                              <CalendarX className="h-8 w-8 text-red-600 dark:text-red-400" />
+                            </div>
+                            <h4 className="text-lg font-medium mb-2">Inspection Cancelled</h4>
+                            <p className="text-muted-foreground max-w-md">
+                              This inspection was cancelled. Please contact customer service
+                              if you need to reschedule.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="mb-4 bg-muted p-3 rounded-full">
+                              <CircleDashed className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                            <h4 className="text-lg font-medium mb-2">Inspection Status: {order.inspection.status}</h4>
+                            <p className="text-muted-foreground max-w-md">
+                              The current status of your inspection is {order.inspection.status}.
+                            </p>
+                          </>
+                        )}
                       </div>
                     )}
-
+   </div>
                     {order.inspection.notes && (
-                      <div className="mt-4">
-                        <h4 className="font-medium mb-2">Inspection Notes</h4>
-                        <p className="text-sm bg-muted/50 p-3 rounded-md">
-                          {order.inspection.notes}
-                        </p>
+                      <div className="mt-6">
+                        <h4 className="font-medium mb-3 flex items-center">
+                          <FileText className="h-4 w-4 mr-2 text-primary" />
+                          Inspection Notes
+                        </h4>
+                        <div className="bg-muted/30 p-4 rounded-lg">
+                          <p className="text-muted-foreground whitespace-pre-line">
+                            {order.inspection.notes}
+                          </p>
+                        </div>
                       </div>
                     )}
                   </TabsContent>
@@ -473,107 +768,127 @@ export default function OrderDetailPage({
 
                 {invoice && (
                   <TabsContent value="invoice">
-                    <div className="p-4 bg-white rounded-md border border-gray-200 mb-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-medium flex items-center">
-                          <ReceiptText className="mr-2 h-5 w-5 text-primary" />
-                          Invoice #{invoice.invoice.invoiceId}
-                        </h3>
-                        <Badge className={getStatusBadgeStyle(invoice.invoice.status)}>
-                          {invoice.invoice.status}
+                    <div className="p-6 bg-white dark:bg-muted rounded-lg border border-muted-foreground/20 shadow-sm mb-4">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-primary/10 rounded-full">
+                            <ReceiptText className="h-6 w-6 text-primary" />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-semibold">Invoice #{invoice.invoice.invoiceId}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {formatDate(invoice.invoice.invoiceDate)}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge className={getStatusBadgeStyle(invoice.invoice.status) + " capitalize px-3 py-1.5"}>
+                          <span className="flex items-center gap-1.5">
+                            {getStatusIcon(invoice.invoice.status)}
+                            <span>{invoice.invoice.status}</span>
+                          </span>
                         </Badge>
                       </div>
 
                       {/* Invoice Details */}
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                          <div className="bg-gray-50 p-4 rounded-md">
-                            <h3 className="text-sm font-medium mb-2 flex items-center">
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="bg-muted/30 p-4 rounded-lg">
+                            <h3 className="text-sm font-medium mb-3 flex items-center">
                               <User className="h-4 w-4 mr-2 text-primary" />
                               Customer Information
                             </h3>
-                            <div className="space-y-1 text-sm">
-                              <p><span className="font-medium">Name:</span> {invoice.customer?.name || 'N/A'}</p>
-                              <p><span className="font-medium">Email:</span> {invoice.customer?.email || 'N/A'}</p>
-                              <p><span className="font-medium">Phone:</span> {invoice.customer?.phone || 'N/A'}</p>
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Name</span>
+                                <span className="font-medium">{invoice.customer?.name || 'N/A'}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Email</span>
+                                <span className="font-medium">{invoice.customer?.email || 'N/A'}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Phone</span>
+                                <span className="font-medium">{invoice.customer?.phone || 'N/A'}</span>
+                              </div>
                               {invoice.customer?.address && (
-                                <p><span className="font-medium">Address:</span> {invoice.customer.address}</p>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-muted-foreground">Address</span>
+                                  <span className="font-medium text-right max-w-[200px]">{invoice.customer.address}</span>
+                                </div>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex flex-col justify-between">
-                            <div className="bg-gray-50 p-4 rounded-md">
-                              <h3 className="text-sm font-medium mb-2">Invoice Information</h3>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex justify-between mb-1">
-                                  <span>Issue Date:</span>
-                                  <span>{formatDate(invoice.invoice.invoiceDate)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Due Date:</span>
-                                  <span className={invoice.invoice.status === 'overdue' ? 'text-red-500 font-medium' : ''}>
-                                    {formatDate(invoice.invoice.dueDate)}
-                                  </span>
-                                </div>
+                          <div className="bg-muted/30 p-4 rounded-lg">
+                            <h3 className="text-sm font-medium mb-3">Invoice Information</h3>
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Issue Date</span>
+                                <span className="font-medium">{formatDate(invoice.invoice.invoiceDate)}</span>
                               </div>
-                            </div>
-
-                            <div className="mt-4 flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex-1"
-                                onClick={() => setInvoiceDialogOpen(true)}
-                              >
-                                <ReceiptText className="mr-2 h-4 w-4" />
-                                View Full Invoice
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex-1"
-                              >
-                                <Download className="mr-2 h-4 w-4" />
-                                Download
-                              </Button>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Due Date</span>
+                                <span className={
+                                  invoice.invoice.status === 'overdue' 
+                                    ? 'text-red-500 font-medium' 
+                                    : 'font-medium'
+                                }>
+                                  {formatDate(invoice.invoice.dueDate)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Order ID</span>
+                                <span className="font-medium">{invoice.invoice.orderId}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Status</span>
+                                <Badge variant="outline" className={
+                                  invoice.invoice.status === 'paid'
+                                    ? 'bg-green-50 text-green-700 border-green-200'
+                                    : invoice.invoice.status === 'overdue'
+                                      ? 'bg-red-50 text-red-700 border-red-200'
+                                      : 'bg-blue-50 text-blue-700 border-blue-200'
+                                }>
+                                  {invoice.invoice.status}
+                                </Badge>
+                              </div>
                             </div>
                           </div>
                         </div>
 
                         {/* Invoice Summary */}
                         <div>
-                          <h3 className="text-sm font-medium mb-2">Summary</h3>
-                          <div className="border rounded-md overflow-hidden">
+                          <h3 className="text-sm font-medium mb-3">Summary</h3>
+                          <div className="border rounded-lg overflow-hidden shadow-sm">
                             <table className="w-full text-sm">
-                              <thead className="bg-gray-50">
+                              <thead className="bg-muted/40">
                                 <tr>
-                                  <th className="text-left px-4 py-2">Description</th>
-                                  <th className="text-right px-4 py-2">Amount</th>
+                                  <th className="text-left p-3 font-medium">Description</th>
+                                  <th className="text-right p-3 font-medium">Amount</th>
                                 </tr>
                               </thead>
-                              <tbody>
-                                <tr className="border-t">
-                                  <td className="px-4 py-2">Subtotal</td>
-                                  <td className="px-4 py-2 text-right">
+                              <tbody className="divide-y">
+                                <tr>
+                                  <td className="p-3">Subtotal</td>
+                                  <td className="p-3 text-right">
                                     PKR {typeof invoice?.invoice?.subTotal === 'number'
                                       ? invoice.invoice.subTotal.toFixed(2)
                                       : parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0').toFixed(2)}
                                   </td>
                                 </tr>
-                                <tr className="border-t">
-                                  <td className="px-4 py-2">
+                                <tr>
+                                  <td className="p-3">
                                     Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
                                   </td>
-                                  <td className="px-4 py-2 text-right">
+                                  <td className="p-3 text-right">
                                     PKR {typeof invoice?.invoice?.taxAmount === 'number'
                                       ? invoice.invoice.taxAmount.toFixed(2)
                                       : (parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0') * 0.18).toFixed(2)}
                                   </td>
                                 </tr>
-                                <tr className="border-t font-medium">
-                                  <td className="px-4 py-2">Total</td>
-                                  <td className="px-4 py-2 text-right">
+                                <tr className="bg-muted/20">
+                                  <td className="p-3 font-semibold">Total</td>
+                                  <td className="p-3 text-right font-semibold text-primary">
                                     PKR {typeof invoice?.invoice?.totalAmount === 'number'
                                       ? invoice.invoice.totalAmount.toFixed(2)
                                       : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
@@ -584,13 +899,41 @@ export default function OrderDetailPage({
                           </div>
                         </div>
 
+                        {/* Invoice Actions */}
+                        <div className="flex flex-wrap gap-3">
+                          <Button
+                            variant="outline"
+                            className="flex-1 border-muted-foreground/20"
+                            onClick={() => setInvoiceDialogOpen(true)}
+                          >
+                            <ReceiptText className="mr-2 h-4 w-4" />
+                            View Full Invoice
+                          </Button>
+                          
+                          <Button
+                            variant="outline"
+                            className="flex-1 border-muted-foreground/20"
+                            onClick={handlePrintInvoice}
+                          >
+                            <Printer className="mr-2 h-4 w-4" />
+                            Print
+                          </Button>
+                          
+                          <Button
+                            variant="outline"
+                            className="flex-1 border-muted-foreground/20"
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            Download
+                          </Button>
+                        </div>
+
                         {/* Pay Now Button (if not paid) */}
                         {invoice.invoice.status !== 'paid' && (
                           <Button
                             variant="default"
-                            className="w-full bg-green-600 hover:bg-green-700"
+                            className="w-full bg-green-600 hover:bg-green-700 mt-3"
                             onClick={() => router.push(`/invoice/pay/${invoice.invoice.invoiceId}`)}
-
                           >
                             <DollarSign className="mr-2 h-4 w-4" />
                             Pay Now
@@ -603,10 +946,11 @@ export default function OrderDetailPage({
               </Tabs>
             </CardContent>
 
-            <CardFooter className="flex justify-between pt-4 border-t">
+            <CardFooter className="flex justify-between pt-4 border-t bg-muted/10">
               <Button
                 variant="outline"
                 onClick={() => router.push('/orders')}
+                className="border-muted-foreground/20 hover:border-muted-foreground/40"
               >
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Back to Orders
@@ -622,167 +966,195 @@ export default function OrderDetailPage({
         </div>
 
         {/* Sidebar */}
-        <div className="lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg">
-                <User className="mr-2 h-5 w-5 text-primary" />
-                Order Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Status info */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Current Status:</span>
-                  <Badge className={getStatusBadgeStyle(order.status)}>
-                    {order.status}
-                  </Badge>
-                </div>
+        <div>
+          <div className="space-y-6 sticky top-6">
+            <Card className="border-muted-foreground/20 overflow-hidden">
+              <CardHeader className="bg-muted/30 pb-3">
+                <CardTitle className="flex items-center text-lg">
+                  <FileCheck className="mr-2 h-5 w-5 text-primary" />
+                  Order Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-5 space-y-6">
+                {/* Status info */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Current Status</span>
+                    <Badge className={getStatusBadgeStyle(order.status) + " capitalize"}>
+                      {order.status}
+                    </Badge>
+                  </div>
 
-                {/* Invoice section - Show if invoice exists */}
-                {invoice && (
-                  <div className="bg-white p-4 rounded-md border border-gray-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-medium flex items-center text-primary">
-                        <ReceiptText className="mr-2 h-4 w-4" />
-                        Invoice #{invoice.invoice.invoiceId}
-                      </h3>
-                      <Badge className={getStatusBadgeStyle(invoice.invoice.status)}>
-                        {invoice.invoice.status}
-                      </Badge>
-                    </div>
-
-                    <div className="flex justify-between items-center text-sm pt-2 mb-2">
-                      <span className="font-medium">Total Amount:</span>
-                      <span className="font-bold">
-                        PKR {typeof invoice?.invoice?.totalAmount === 'number'
-                          ? invoice.invoice.totalAmount.toFixed(2)
-                          : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
-                      </span>
-                    </div>
-
-                    <div className="text-xs text-muted-foreground mb-4">
-                      <div className="flex justify-between mb-1">
-                        <span>Issue Date:</span>
-                        <span>{formatDate(invoice.invoice.invoiceDate)}</span>
+                  {/* Invoice section - Show if invoice exists */}
+                  {invoice && (
+                    <div className="p-4 rounded-lg border border-muted-foreground/20 bg-muted/10 shadow-sm hover:shadow-md transition-all duration-300">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-medium flex items-center text-primary">
+                          <ReceiptText className="mr-2 h-4 w-4" />
+                          Invoice #{invoice.invoice.invoiceId}
+                        </h3>
+                        <Badge className={getStatusBadgeStyle(invoice.invoice.status) + " capitalize"}>
+                          {invoice.invoice.status}
+                        </Badge>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Due Date:</span>
-                        <span className={invoice.invoice.status === 'overdue' ? 'text-red-500 font-medium' : ''}>
-                          {formatDate(invoice.invoice.dueDate)}
+
+                      <div className="flex justify-between items-center text-sm pt-2 mb-2">
+                        <span className="font-medium">Total Amount:</span>
+                        <span className="font-bold text-primary">
+                          PKR {typeof invoice?.invoice?.totalAmount === 'number'
+                            ? invoice.invoice.totalAmount.toFixed(2)
+                            : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
                         </span>
                       </div>
-                    </div>
 
-                    <div className="space-y-2">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="w-full"
-                        onClick={handleViewInvoice}
-                      >
-                        <ReceiptText className="mr-2 h-4 w-4" />
-                        View Full Invoice
-                      </Button>
+                      <div className="text-xs text-muted-foreground mb-4">
+                        <div className="flex justify-between mb-1">
+                          <span>Issue Date:</span>
+                          <span>{formatDate(invoice.invoice.invoiceDate)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Due Date:</span>
+                          <span className={invoice.invoice.status === 'overdue' ? 'text-red-500 font-medium' : ''}>
+                            {formatDate(invoice.invoice.dueDate)}
+                          </span>
+                        </div>
+                      </div>
 
-                      {invoice.invoice.status !== 'paid' && (
+                      <div className="space-y-2">
                         <Button
-                          variant="default"
+                          variant="outline"
                           size="sm"
-                          className="w-full bg-green-600 hover:bg-green-700"
-                          onClick={() => router.push(`/invoice/pay/${invoice.invoice.invoiceId}`)}
-
+                          className="w-full group border-muted-foreground/20"
+                          onClick={handleViewInvoice}
                         >
-                          <DollarSign className="mr-2 h-4 w-4" />
-                          Pay Now
+                          <ReceiptText className="mr-2 h-4 w-4 group-hover:text-primary transition-colors" />
+                          <span className="group-hover:text-primary transition-colors">View Full Invoice</span>
                         </Button>
+
+                        {invoice.invoice.status !== 'paid' && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="w-full bg-green-600 hover:bg-green-700"
+                            onClick={() => router.push(`/invoice/pay/${invoice.invoice.invoiceId}`)}
+                          >
+                            <DollarSign className="mr-2 h-4 w-4" />
+                            Pay Now
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Status timeline */}
+                  <div className="pt-2">
+                    <h4 className="text-sm font-medium mb-4">Order Timeline</h4>
+                    <div className="space-y-0">
+                      <div className="relative border-l-2 pl-4 pb-6 border-green-500">
+                        <div className="absolute w-4 h-4 bg-green-500 rounded-full -left-[9px] top-0 ring-4 ring-green-50 dark:ring-green-900/20"></div>
+                        <p className="text-sm font-medium">Order Placed</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(order.orderDate)}
+                        </p>
+                      </div>
+
+                      {order.includesInspection && order.inspection && (
+                        <div className={`relative border-l-2 pl-4 pb-6 
+                          ${order.inspection.status === 'pending' 
+                            ? 'border-yellow-500' 
+                            : order.inspection.status === 'completed' 
+                              ? 'border-green-500' 
+                              : order.inspection.status === 'in progress' 
+                                ? 'border-blue-500' 
+                                : 'border-gray-300'}`}>
+                          <div className={`absolute w-4 h-4 rounded-full -left-[9px] top-0 ring-4
+                            ${order.inspection.status === 'pending' 
+                              ? 'bg-yellow-500 ring-yellow-50 dark:ring-yellow-900/20' 
+                              : order.inspection.status === 'completed' 
+                                ? 'bg-green-500 ring-green-50 dark:ring-green-900/20' 
+                                : order.inspection.status === 'in progress' 
+                                  ? 'bg-blue-500 ring-blue-50 dark:ring-blue-900/20' 
+                                  : 'bg-gray-300 ring-gray-50 dark:ring-gray-900/20'}`}>
+                          </div>
+                          <p className="text-sm font-medium">
+                            Inspection {order.inspection.status === 'completed' 
+                              ? 'Completed' 
+                              : order.inspection.status === 'in progress' 
+                                ? 'In Progress' 
+                                : 'Scheduled'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(order.inspection.scheduledDate)}
+                          </p>
+                        </div>
+                      )}
+
+                      {order.status === 'completed' && (
+                        <div className="relative border-l-2 pl-4 pb-6 border-green-500">
+                          <div className="absolute w-4 h-4 bg-green-500 rounded-full -left-[9px] top-0 ring-4 ring-green-50 dark:ring-green-900/20"></div>
+                          <p className="text-sm font-medium">Order Completed</p>
+                          <p className="text-xs text-muted-foreground">
+                            Your order has been completed
+                          </p>
+                        </div>
+                      )}
+
+                      {invoice && (
+                        <div className="relative border-l-2 pl-4 pb-6 border-blue-500">
+                          <div className="absolute w-4 h-4 bg-blue-500 rounded-full -left-[9px] top-0 ring-4 ring-blue-50 dark:ring-blue-900/20"></div>
+                          <p className="text-sm font-medium">Invoice Issued</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(invoice.invoice.invoiceDate)}
+                          </p>
+                        </div>
+                      )}
+
+                      {invoice && invoice.invoice.status === 'paid' && (
+                        <div className="relative border-l-2 pl-4 pb-6 border-green-500">
+                          <div className="absolute w-4 h-4 bg-green-500 rounded-full -left-[9px] top-0 ring-4 ring-green-50 dark:ring-green-900/20"></div>
+                          <p className="text-sm font-medium">Payment Received</p>
+                          <p className="text-xs text-muted-foreground">
+                            Thank you for your payment
+                          </p>
+                        </div>
+                      )}
+
+                      {order.status === 'cancelled' && (
+                        <div className="relative border-l-2 pl-4 pb-6 border-red-500">
+                          <div className="absolute w-4 h-4 bg-red-500 rounded-full -left-[9px] top-0 ring-4 ring-red-50 dark:ring-red-900/20"></div>
+                          <p className="text-sm font-medium">Order Cancelled</p>
+                        </div>
                       )}
                     </div>
                   </div>
-                )}
-
-                {/* Status timeline */}
-                <div className="space-y-4">
-                  <div className="relative border-l-2 pl-4 pb-2 pt-1 border-green-500">
-                    <div className="absolute w-3 h-3 bg-green-500 rounded-full -left-[7px] top-2"></div>
-                    <p className="text-sm font-medium">Order Placed</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(order.orderDate)}
-                    </p>
-                  </div>
-
-                  {order.includesInspection && order.inspection && (
-                    <div className={`relative border-l-2 pl-4 pb-2 pt-1 ${order.inspection.status === 'pending' ? 'border-yellow-500' : order.inspection.status === 'completed' ? 'border-green-500' : order.inspection.status === 'in progress' ? 'border-blue-500' : 'border-gray-500'}`}>
-                      <div className={`absolute w-3 h-3 rounded-full -left-[7px] top-2 ${order.inspection.status === 'pending' ? 'bg-yellow-500' : order.inspection.status === 'completed' ? 'bg-green-500' : order.inspection.status === 'in progress' ? 'bg-blue-500' : 'bg-gray-500'}`}></div>
-                      <p className="text-sm font-medium">Inspection {order.inspection.status === 'completed' ? 'Completed' : order.inspection.status === 'in progress' ? 'In Progress' : 'Scheduled'}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(order.inspection.scheduledDate)}
-                      </p>
-                    </div>
-                  )}
-
-                  {order.status === 'completed' && (
-                    <div className="relative border-l-2 pl-4 pb-2 pt-1 border-green-500">
-                      <div className="absolute w-3 h-3 bg-green-500 rounded-full -left-[7px] top-2"></div>
-                      <p className="text-sm font-medium">Order Completed</p>
-                      <p className="text-xs text-muted-foreground">
-                        Your order has been completed
-                      </p>
-                    </div>
-                  )}
-
-                  {invoice && (
-                    <div className="relative border-l-2 pl-4 pb-2 pt-1 border-blue-500">
-                      <div className="absolute w-3 h-3 bg-blue-500 rounded-full -left-[7px] top-2"></div>
-                      <p className="text-sm font-medium">Invoice Issued</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(invoice.invoice.invoiceDate)}
-                      </p>
-                    </div>
-                  )}
-
-                  {invoice && invoice.invoice.status === 'paid' && (
-                    <div className="relative border-l-2 pl-4 pb-2 pt-1 border-green-500">
-                      <div className="absolute w-3 h-3 bg-green-500 rounded-full -left-[7px] top-2"></div>
-                      <p className="text-sm font-medium">Payment Received</p>
-                      <p className="text-xs text-muted-foreground">
-                        Thank you for your payment
-                      </p>
-                    </div>
-                  )}
-
-                  {order.status === 'cancelled' && (
-                    <div className="relative border-l-2 pl-4 pb-2 pt-1 border-red-500">
-                      <div className="absolute w-3 h-3 bg-red-500 rounded-full -left-[7px] top-2"></div>
-                      <p className="text-sm font-medium">Order Cancelled</p>
-                    </div>
-                  )}
                 </div>
-              </div>
 
-              {/* Contact information */}
-              <div className="border-t pt-4">
-                <h3 className="font-medium mb-3">Contact Information</h3>
-                <div className="space-y-2">
-                  <div className="flex items-start">
-                    <Phone className="h-4 w-4 text-muted-foreground mt-0.5 mr-2" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Phone</p>
-                      <p className="text-sm">+1 (234) 567-8900</p>
+                {/* Contact information */}
+                <div className="pt-4 border-t">
+                  <h3 className="font-medium text-sm mb-4 flex items-center">
+                    <Building className="h-4 w-4 mr-2 text-primary" />
+                    Contact Information
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-start group">
+                      <Phone className="h-4 w-4 text-muted-foreground mt-0.5 mr-3 group-hover:text-primary transition-colors" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Phone</p>
+                        <p className="text-sm font-medium group-hover:text-primary transition-colors">+1 (234) 567-8900</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-start">
-                    <Mail className="h-4 w-4 text-muted-foreground mt-0.5 mr-2" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Email</p>
-                      <p className="text-sm">support@motomate.com</p>
+                    <div className="flex items-start group">
+                      <Mail className="h-4 w-4 text-muted-foreground mt-0.5 mr-3 group-hover:text-primary transition-colors" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Email</p>
+                        <p className="text-sm font-medium group-hover:text-primary transition-colors">support@motomate.com</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
 
@@ -790,63 +1162,90 @@ export default function OrderDetailPage({
       {invoice && (
         <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex justify-between items-center">
-                <span>Invoice #{invoice.invoice.invoiceId}</span>
-                <Badge className={getStatusBadgeStyle(invoice.invoice.status)}>
+            <DialogHeader className="border-b pb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-full">
+                    <ReceiptText className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl">Invoice #{invoice.invoice.invoiceId}</DialogTitle>
+                    <DialogDescription>
+                      Issued on {formatDate(invoice.invoice.invoiceDate)}
+                    </DialogDescription>
+                  </div>
+                </div>
+                <Badge className={getStatusBadgeStyle(invoice.invoice.status) + " capitalize"}>
                   {invoice.invoice.status}
                 </Badge>
-              </DialogTitle>
-              <DialogDescription>
-                Issued on {formatDate(invoice.invoice.invoiceDate)}
-              </DialogDescription>
+              </div>
             </DialogHeader>
 
             <div id="invoice-printable" className="p-4">
               {/* Customer & Vehicle Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div className="bg-gray-50 p-4 rounded-md">
-                  <h3 className="text-sm font-medium mb-2 flex items-center">
+                <div className="bg-muted/30 p-4 rounded-lg">
+                  <h3 className="text-sm font-medium mb-3 flex items-center">
                     <User className="h-4 w-4 mr-2 text-primary" />
                     Customer Information
                   </h3>
-                  <div className="space-y-1 text-sm">
-                    <p><span className="font-medium">Name:</span> {invoice.customer?.name || 'N/A'}</p>
-                    <p><span className="font-medium">Email:</span> {invoice.customer?.email || 'N/A'}</p>
-                    <p><span className="font-medium">Phone:</span> {invoice.customer?.phone || 'N/A'}</p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Name</span>
+                      <span className="font-medium">{invoice.customer?.name || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Email</span>
+                      <span className="font-medium">{invoice.customer?.email || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Phone</span>
+                      <span className="font-medium">{invoice.customer?.phone || 'N/A'}</span>
+                    </div>
                     {invoice.customer?.address && (
-                      <p><span className="font-medium">Address:</span> {invoice.customer.address}</p>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Address</span>
+                        <span className="font-medium text-right max-w-[200px]">{invoice.customer.address}</span>
+                      </div>
                     )}
                   </div>
                 </div>
 
-                <div className="bg-gray-50 p-4 rounded-md">
-                  <h3 className="text-sm font-medium mb-2 flex items-center">
+                <div className="bg-muted/30 p-4 rounded-lg">
+                  <h3 className="text-sm font-medium mb-3 flex items-center">
                     <Car className="h-4 w-4 mr-2 text-primary" />
                     Vehicle Information
                   </h3>
-                  <div className="space-y-1 text-sm">
-                    <p>
-                      <span className="font-medium">Make & Model:</span>
-                      {invoice.vehicle ? `${invoice.vehicle.make} ${invoice.vehicle.model}` : 'N/A'}
-                    </p>
-                    <p><span className="font-medium">Year:</span> {invoice.vehicle?.year || 'N/A'}</p>
-                    <p><span className="font-medium">License Plate:</span> {invoice.vehicle?.licensePlate || 'N/A'}</p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Make & Model</span>
+                      <span className="font-medium">
+                        {invoice.vehicle ? `${invoice.vehicle.make} ${invoice.vehicle.model}` : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Year</span>
+                      <span className="font-medium">{invoice.vehicle?.year || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">License Plate</span>
+                      <span className="font-medium">{invoice.vehicle?.licensePlate || 'N/A'}</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Invoice Items Table */}
               <div className="mb-6">
-                <h3 className="text-sm font-medium mb-2">Service Details</h3>
-                <div className="border rounded-md overflow-x-auto">
+                <h3 className="text-sm font-medium mb-3">Service Details</h3>
+                <div className="border rounded-lg overflow-hidden shadow-sm">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-muted/30">
                       <tr>
-                        <th className="text-left px-4 py-2">Description</th>
-                        <th className="text-center px-4 py-2">Qty</th>
-                        <th className="text-right px-4 py-2">Unit Price</th>
-                        <th className="text-right px-4 py-2">Total</th>
+                        <th className="text-left p-3 font-medium">Description</th>
+                        <th className="text-center p-3 font-medium">Qty</th>
+                        <th className="text-right p-3 font-medium">Unit Price</th>
+                        <th className="text-right p-3 font-medium">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -862,15 +1261,15 @@ export default function OrderDetailPage({
 
                         if (items.length > 0) {
                           return items.map((item: any, index: number) => (
-                            <tr key={index} className="hover:bg-gray-50">
-                              <td className="px-4 py-2">{item.description}</td>
-                              <td className="px-4 py-2 text-center">{item.quantity}</td>
-                              <td className="px-4 py-2 text-right">
+                            <tr key={index} className="hover:bg-muted/10">
+                              <td className="px-4 py-3">{item.description}</td>
+                              <td className="px-4 py-3 text-center">{item.quantity}</td>
+                              <td className="px-4 py-3 text-right">
                                 PKR {typeof item.unitPrice === 'number'
                                   ? item.unitPrice.toFixed(2)
                                   : parseFloat(item.unitPrice || '0').toFixed(2)}
                               </td>
-                              <td className="px-4 py-2 text-right">
+                              <td className="px-4 py-3 text-right font-medium">
                                 PKR {typeof item.totalPrice === 'number'
                                   ? item.totalPrice.toFixed(2)
                                   : parseFloat(item.totalPrice || '0').toFixed(2)}
@@ -880,7 +1279,7 @@ export default function OrderDetailPage({
                         } else {
                           return (
                             <tr>
-                              <td colSpan={4} className="px-4 py-2 text-center text-gray-500">
+                              <td colSpan={4} className="px-4 py-3 text-center text-muted-foreground">
                                 No items found
                               </td>
                             </tr>
@@ -888,101 +1287,139 @@ export default function OrderDetailPage({
                         }
                       })()}
                     </tbody>
-                    <tfoot className="bg-gray-50">
+                    <tfoot className="bg-muted/20">
                       <tr>
-                        <td colSpan={3} className="px-4 py-2 text-right font-medium">Subtotal</td>
-                        <td className="px-4 py-2 text-right">
-                          PKR {typeof invoice?.invoice?.subTotal === 'number'
-                            ? invoice.invoice.subTotal.toFixed(2)
-                            : parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0').toFixed(2)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td colSpan={3} className="px-4 py-2 text-right font-medium">
-                          Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
-                        </td>
-                        <td className="px-4 py-2 text-right">
-                          PKR {typeof invoice?.invoice?.taxAmount === 'number'
-                            ? invoice.invoice.taxAmount.toFixed(2)
-                            : (parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0') * 0.18).toFixed(2)}
-                        </td>
-                      </tr>
-                      <tr className="font-bold">
-                        <td colSpan={3} className="px-4 py-2 text-right">Total Amount</td>
-                        <td className="px-4 py-2 text-right">
-                          PKR {typeof invoice?.invoice?.totalAmount === 'number'
-                            ? invoice.invoice.totalAmount.toFixed(2)
-                            : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                      <td colSpan={3} className="px-4 py-3 text-right font-medium">Subtotal</td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        PKR {typeof invoice?.invoice?.subTotal === 'number'
+                          ? invoice.invoice.subTotal.toFixed(2)
+                          : parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0').toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td colSpan={3} className="px-4 py-3 text-right font-medium">
+                        Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        PKR {typeof invoice?.invoice?.taxAmount === 'number'
+                          ? invoice.invoice.taxAmount.toFixed(2)
+                          : (parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0') * 0.18).toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="border-t-2">
+                      <td colSpan={3} className="px-4 py-3 text-right font-semibold">Total Amount</td>
+                      <td className="px-4 py-3 text-right font-semibold text-primary">
+                        PKR {typeof invoice?.invoice?.totalAmount === 'number'
+                          ? invoice.invoice.totalAmount.toFixed(2)
+                          : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
+            </div>
 
-              {/* Notes & Payment Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div>
-                  <h3 className="text-sm font-medium mb-2">Notes</h3>
-                  <p className="text-sm bg-gray-50 p-3 rounded-md">
+            {/* Notes & Payment Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <h3 className="text-sm font-medium mb-3">Notes</h3>
+                <div className="bg-muted/30 p-4 rounded-lg min-h-[100px]">
+                  <p className="text-sm text-muted-foreground whitespace-pre-line">
                     {invoice.invoice.notes || 'No notes provided.'}
                   </p>
                 </div>
-                <div>
-                  <h3 className="text-sm font-medium mb-2">Payment Terms</h3>
-                  <p className="text-sm bg-gray-50 p-3 rounded-md">
-                    Due on {formatDate(invoice.invoice.dueDate)}
-                  </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium mb-3">Payment Information</h3>
+                <div className="bg-muted/30 p-4 rounded-lg space-y-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Payment Status</span>
+                    <Badge 
+                      className={
+                        invoice.invoice.status === 'paid' 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
+                          : invoice.invoice.status === 'overdue'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                      }
+                    >
+                      {invoice.invoice.status}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Due Date</span>
+                    <span className={
+                      invoice.invoice.status === 'overdue' 
+                        ? 'font-medium text-red-600 dark:text-red-400' 
+                        : 'font-medium'
+                    }>
+                      {formatDate(invoice.invoice.dueDate)}
+                    </span>
+                  </div>
                   {invoice.mechanic && (
-                    <div className="mt-4">
-                      <h3 className="text-sm font-medium mb-2">Service Performed By</h3>
-                      <p className="text-sm bg-gray-50 p-3 rounded-md">
-                        {invoice.mechanic.name} - {invoice.mechanic.phone}
-                      </p>
+                    <div className="pt-3 mt-3 border-t">
+                      <p className="text-xs text-muted-foreground mb-1">Service Performed By</p>
+                      <div className="flex items-center gap-2">
+                        <User className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-sm font-medium">{invoice.mechanic.name}</span>
+                      </div>
+                      {invoice.mechanic.phone && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <Phone className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-sm">{invoice.mechanic.phone}</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
-
-              {/* Footer */}
-              <div className="text-center text-gray-500 text-xs mt-6">
-                <p>Thank you for choosing MotoMate Auto Services</p>
-                <p>For any queries regarding this invoice, please contact us.</p>
-              </div>
             </div>
 
-            <DialogFooter className="flex gap-2 flex-wrap sm:flex-nowrap">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={handlePrintInvoice}
-              >
-                <Printer className="mr-2 h-4 w-4" />
-                Print Invoice
-              </Button>
+            {/* Footer */}
+            <div className="text-center border-t pt-4 mt-6">
+              <div className="flex items-center justify-center mb-2">
+                <BadgeCheck className="h-5 w-5 text-primary mr-2" />
+                <h4 className="font-medium">Thank you for choosing MotoMate Auto Services</h4>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                For any queries regarding this invoice, please contact our customer service.
+              </p>
+            </div>
+          </div>
 
-              <Button
-                variant="outline"
-                className="flex-1"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Download PDF
-              </Button>
+          <DialogFooter className="flex flex-wrap sm:flex-nowrap gap-3 mt-4 pt-4 border-t">
+            <Button
+              variant="outline"
+              className="flex-1 border-muted-foreground/20 hover:border-primary/30"
+              onClick={handlePrintInvoice}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Print Invoice
+            </Button>
 
-              {invoice.invoice.status !== 'paid' && (
-                <Button
-                  variant="default"
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                  onClick={() => router.push(`/invoice/pay/${invoice.invoice.invoiceId}`)}
-                >
-                  <DollarSign className="mr-2 h-4 w-4" />
-                  Pay Now
-                </Button>
-              )}
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-    </div>
-  );
+            <Button
+              variant="outline"
+              className="flex-1 border-muted-foreground/20 hover:border-primary/30"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download PDF
+            </Button>
+
+            {invoice.invoice.status !== 'paid' && (
+              <Button
+                variant="default"
+                className="flex-1 bg-green-600 hover:bg-green-700"
+                onClick={() => router.push(`/invoice/pay/${invoice.invoice.invoiceId}`)}
+              >
+                <DollarSign className="mr-2 h-4 w-4" />
+                Pay Now
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )}
+  </div>
+  
+);
 }

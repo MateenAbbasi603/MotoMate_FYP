@@ -1,749 +1,532 @@
-'use client'
 
-import React, { useEffect, useState } from 'react'
-import ReviewGuard from '@/components/ReviewGuard'
+// app/dashboard/page.tsx
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card'
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger
-} from '@/components/ui/tabs'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { useRouter } from 'next/navigation'
-import {
-  CalendarClock,
   Car,
-  CarFront,
-  CheckCircle,
-  ChevronRight,
-  ClipboardList,
-  Clock,
-  DollarSign,
-  FileCheck,
-  LayoutDashboard,
-  Wrench,
-  AlertCircle,
-  Settings,
-  UserSquare,
-  RefreshCw,
   Calendar,
-  PlusCircle,
-  History
-} from 'lucide-react'
-import { toast } from 'sonner'
-import orderApi from '../../../../services/orderApi'
+  ArrowRight,
+  FileText,
+  Bell,
+  Star,
+  ShieldCheck,
+  CarFront,
+  Clock,
+  Wrench,
+  CheckCircle2,
+  AlertTriangle
+} from "lucide-react";
 
-// Type definitions based on your backend models
-interface Appointment {
-  appointmentId: number
-  orderId: number
-  appointmentDate: string
-  timeSlot: string
-  status: string
-  vehicle: {
-    make: string
-    model: string
-    year: number
-    licensePlate: string
-  }
-  service: {
-    serviceName: string
-    category: string
-    price: number
-  }
-  mechanic: {
-    name: string
-    phone: string
-  }
+
+
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import orderService from "../../../../services/orderService";
+import { getNotifications } from "../../../../services/notificationServices";
+import authService from "../../../../services/authService";
+import reviewService from "../../../../services/reviewService";
+import { Progress } from "@/components/ui/progress";
+
+interface DashboardStatType {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  status?: "success" | "warning" | "error" | "default";
+  description?: string;
 }
 
-interface Vehicle {
-  vehicleId: number
-  make: string
-  model: string
-  year: number
-  licensePlate: string
-}
+const CustomerDashboard = () => {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [pendingReviews, setPendingReviews] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [vehicleCount, setVehicleCount] = useState(0);
+  const [orderCount, setOrderCount] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [workshopRating, setWorkshopRating] = useState<number>(0);
 
-interface Service {
-  serviceId: number
-  serviceName: string
-  category: string
-  price: number
-  description: string
-  subCategory: string
-}
-
-interface Order {
-  orderId: number
-  status: string
-  totalAmount: number
-  orderDate: string
-  service: {
-    serviceName: string
-    category: string
-    price: number
-  }
-  vehicle: {
-    make: string
-    model: string
-    year: number
-    licensePlate: string
-  }
-  inspection?: {
-    scheduledDate: string
-    status: string
-    timeSlot: string
-  }
-}
-
-interface User {
-  userId: number
-  name: string
-  email: string
-  phone: string
-  role: string
-}
-
-interface DashboardStats {
-  pendingAppointments: number
-  completedServices: number
-  activeVehicles: number
-  totalSpent: number
-}
-
-export default function DashboardPage() {
-  const router = useRouter()
-
-  // State for user data and loading states
-  const [user, setUser] = useState<User | any>(null)
-  const [loading, setLoading] = useState(true)
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
-    pendingAppointments: 0,
-    completedServices: 0,
-    activeVehicles: 0,
-    totalSpent: 0
-  })
-
-  // State for different data sections
-  const [appointments, setAppointments] = useState<any[]>([])
-  const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([])
-  const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [recentOrders, setRecentOrders] = useState<Order[]>([])
-  const [serviceHistory, setServiceHistory] = useState<Order[]>([])
-
-  // Fetch user profile
   useEffect(() => {
- const data  = orderApi.getCurrentUser()
-
- console.log("DATATA TATR ",data);
- 
-
- setUser(data)
-  }, [router, toast])
-
-  // Fetch dashboard data
-  useEffect(() => {
-    if (!user) return
-
-    const token = localStorage.getItem('token')
+    
+    // Check authentication
+    if (!authService.isAuthenticated()) {
+      router.push("/login");
+      return;
+    }
 
     const fetchDashboardData = async () => {
-      setLoading(true)
-
       try {
-        // Fetch appointments
-        const appointmentsResponse = await fetch('/api/appointments', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+        setLoading(true);
 
-        if (appointmentsResponse.ok) {
-          const appointmentsData = await appointmentsResponse.json()
-          setAppointments(appointmentsData)
+        // Get current user
+        const userData = await authService.getCurrentUser();
+        setUser(userData);
 
-          // Filter upcoming appointments
-          const upcoming = appointmentsData.filter((apt: Appointment) =>
-            apt.status !== 'completed' && apt.status !== 'cancelled'
-          )
-          setUpcomingAppointments(upcoming)
+        // Get notifications
+        const notificationsData = await getNotifications();
+        setNotifications(notificationsData.slice(0, 5)); // Display only 5 latest notifications
 
-          // Update stats
-          setDashboardStats(prev => ({
-            ...prev,
-            pendingAppointments: upcoming.length
-          }))
-        }
+        // Get recent orders
+        const ordersData = await orderService.getAllOrders();
+        const filteredOrders = Array.isArray(ordersData)
+          ? ordersData.filter((order: any) => order.userId === userData.userId)
+          : [];
 
-        // Fetch vehicles
+        setRecentOrders(filteredOrders.slice(0, 3)); // Display only 3 recent orders
+        setOrderCount(filteredOrders.length);
+
+        // Get pending reviews
+        const { orders: reviewOrders } = await reviewService.getPendingReviews();
+        setPendingReviews(reviewOrders);
+
+        // Get workshop rating
+        const rating = await reviewService.getWorkshopRating();
+        setWorkshopRating(rating.averageRating || 0);
+
+        // Count vehicles
         const vehiclesResponse = await fetch('/api/vehicles', {
           headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
 
         if (vehiclesResponse.ok) {
-          const vehiclesData = await vehiclesResponse.json()
-          setVehicles(vehiclesData)
-
-          // Update stats
-          setDashboardStats(prev => ({
-            ...prev,
-            activeVehicles: vehiclesData.length
-          }))
+          const vehiclesData = await vehiclesResponse.json();
+          setVehicleCount(Array.isArray(vehiclesData) ? vehiclesData.length : 0);
         }
 
-        // Fetch orders
-        const ordersResponse = await fetch('/api/orders', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-
-        if (ordersResponse.ok) {
-          const ordersData = await ordersResponse.json()
-
-          // Sort by date, newest first
-          const sortedOrders = [...ordersData].sort((a, b) =>
-            new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()
-          )
-
-          setRecentOrders(sortedOrders.slice(0, 5)) // Get 5 most recent orders
-
-          // Filter completed orders for service history
-          const completed = ordersData.filter((order: Order) => order.status === 'completed')
-          setServiceHistory(completed)
-
-          // Calculate total spent and completed services
-          const totalAmount = ordersData.reduce((sum: number, order: Order) => sum + order.totalAmount, 0)
-
-          // Update stats
-          setDashboardStats(prev => ({
-            ...prev,
-            completedServices: completed.length,
-            totalSpent: totalAmount
-          }))
-        }
+        // Count reviews
+        setReviewCount(reviewOrders.length);
       } catch (error) {
-        console.error('Error fetching dashboard data:', error)
-        toast.error('Failed to load dashboard data. Please try again.',)
+        console.error("Error fetching dashboard data:", error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
+    };
+
+    fetchDashboardData();
+  }, [router]);
+
+  // Define dashboard stats based on loaded data
+  const dashboardStats: DashboardStatType[] = [
+    {
+      title: "Vehicles",
+      value: vehicleCount,
+      icon: <Car className="h-6 w-6 text-blue-500" />,
+      status: "default",
+      description: "Registered vehicles"
+    },
+    {
+      title: "Orders",
+      value: orderCount,
+      icon: <FileText className="h-6 w-6 text-purple-500" />,
+      status: "default",
+      description: "Total service orders"
+    },
+    {
+      title: "Pending Reviews",
+      value: pendingReviews.length,
+      icon: <Star className="h-6 w-6 text-amber-500" />,
+      status: pendingReviews.length > 0 ? "warning" : "success",
+      description: pendingReviews.length > 0 ? "Reviews needed" : "All reviewed"
+    },
+    {
+      title: "Workshop Rating",
+      value: workshopRating.toFixed(1),
+      icon: <ShieldCheck className="h-6 w-6 text-green-500" />,
+      status: "default",
+      description: "Out of 5.0"
     }
+  ];
 
-    fetchDashboardData()
-  }, [user, toast])
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'in progress':
+        return 'bg-blue-100 text-blue-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
-  // Helper function to format date
+  const getStatusIcon = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
+      case 'in progress':
+        return <Wrench className="h-4 w-4 text-blue-600" />;
+      case 'pending':
+        return <Clock className="h-4 w-4 text-yellow-600" />;
+      case 'cancelled':
+        return <AlertTriangle className="h-4 w-4 text-red-600" />;
+      default:
+        return null;
+    }
+  };
+
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
       month: 'short',
-      day: 'numeric'
-    })
-  }
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
 
-  // Helper function to get status badge
-  const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { color: string, icon: React.ReactNode }> = {
-      pending: { color: 'bg-yellow-500', icon: <Clock className="h-3 w-3" /> },
-      scheduled: { color: 'bg-blue-500', icon: <CalendarClock className="h-3 w-3" /> },
-      'in progress': { color: 'bg-purple-500', icon: <RefreshCw className="h-3 w-3" /> },
-      completed: { color: 'bg-green-500', icon: <CheckCircle className="h-3 w-3" /> },
-      cancelled: { color: 'bg-red-500', icon: <AlertCircle className="h-3 w-3" /> }
-    }
-
-    const defaultStyle = { color: 'bg-gray-500', icon: <Clock className="h-3 w-3" /> }
-    const style = statusMap[status.toLowerCase()] || defaultStyle
-
+  if (loading) {
     return (
-      <Badge variant="outline" className={`${style.color} text-white flex items-center gap-1`}>
-        {style.icon}
-        <span className="capitalize">{status}</span>
-      </Badge>
-    )
-  }
-
-  if (loading && !user) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-12 w-12 rounded-full border-4 border-t-blue-500 border-b-transparent border-l-transparent border-r-transparent animate-spin"></div>
-          <p className="text-lg font-medium">Loading your dashboard...</p>
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-8 w-64 mb-6" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-32 w-full rounded-lg" />
+          ))}
         </div>
+        <Skeleton className="h-64 w-full rounded-lg mt-6" />
       </div>
-    )
+    );
   }
 
   return (
-    <ReviewGuard>
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Page Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">
-              Welcome back, {user?.name || 'User'}
-            </p>
-          </div>
-          <div className="mt-4 md:mt-0 flex items-center gap-2">
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Welcome back, {user?.name || 'Customer'}
+          </p>
+        </div>
+        <Button
+          onClick={() => router.push('/dashboard/new-service')}
+          className="mt-4 md:mt-0 bg-gradient-to-r from-blue-600 to-indigo-600"
+        >
+          Book a Service
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {dashboardStats.map((stat, index) => (
+          <Card key={index} className="overflow-hidden transition-all hover:shadow-md">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {stat.title}
+                </CardTitle>
+                <div className="p-2 rounded-full bg-muted">
+                  {stat.icon}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stat.value}</div>
+              <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
+
+              {stat.title === "Workshop Rating" && (
+                <div className="flex items-center mt-2">
+                  {[...Array(5)].map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`h-4 w-4 ${i < Math.round(workshopRating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {stat.status === "warning" && (
+                <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 mt-2">
+                  Action needed
+                </Badge>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Tabs defaultValue="orders" className="w-full">
+        <TabsList className="grid grid-cols-3 w-full max-w-md">
+          <TabsTrigger value="orders">Orders</TabsTrigger>
+          <TabsTrigger value="reviews">Reviews</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+        </TabsList>
+
+        {/* Orders Tab */}
+        <TabsContent value="orders" className="space-y-4 mt-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Recent Orders</h2>
             <Button
               variant="outline"
-              onClick={() => router.push('/vehicles/new')}
-              className="flex items-center gap-2"
+              size="sm"
+              onClick={() => router.push('/dashboard/orders')}
             >
-              <Car className="h-4 w-4" />
-              Add Vehicle
-            </Button>
-            <Button
-              onClick={() => router.push('/appointments/new')}
-              className="flex items-center gap-2"
-            >
-              <PlusCircle className="h-4 w-4" />
-              New Order
+              View All
             </Button>
           </div>
-        </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Pending Orders
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">
-                  {dashboardStats.pendingAppointments}
-                </div>
-                <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                  <CalendarClock className="h-6 w-6 text-blue-500" />
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="pt-0">
-              <Button variant="ghost" size="sm" className="px-0 text-blue-500" onClick={() => router.push('/appointments')}>
-                View all Orders
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Completed Services
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">
-                  {dashboardStats.completedServices}
-                </div>
-                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                  <Wrench className="h-6 w-6 text-green-500" />
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="pt-0">
-              <Button variant="ghost" size="sm" className="px-0 text-green-500" onClick={() => router.push('/history')}>
-                View service history
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Registered Vehicles
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">
-                  {dashboardStats.activeVehicles}
-                </div>
-                <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
-                  <CarFront className="h-6 w-6 text-orange-500" />
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="pt-0">
-              <Button variant="ghost" size="sm" className="px-0 text-orange-500" onClick={() => router.push('/vehicles')}>
-                Manage vehicles
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Spent
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">
-                  ${dashboardStats.totalSpent.toFixed(2)}
-                </div>
-                <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
-                  <DollarSign className="h-6 w-6 text-purple-500" />
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="pt-0">
-              <Button variant="ghost" size="sm" className="px-0 text-purple-500" onClick={() => router.push('/payments')}>
-                View payment history
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-
-        {/* Upcoming Appointments */}
-        <div className="mb-8">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Upcoming Orders</CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push('/appointments')}
-                >
-                  View All
-                </Button>
-              </div>
-              <CardDescription>
-                Your scheduled service Orders
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {upcomingAppointments.length > 0 ? (
-                <div className="space-y-4">
-                  {upcomingAppointments.slice(0, 3).map((appointment) => (
-                    <div
-                      key={appointment.appointmentId}
-                      className="flex flex-col lg:flex-row lg:items-center justify-between p-4 rounded-lg border"
-                    >
-                      <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4 lg:mb-0">
-                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <Calendar className="h-5 w-5 text-blue-500" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{appointment.service?.serviceName || 'Service Appointment'}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {appointment.vehicle?.make} {appointment.vehicle?.model} ({appointment.vehicle?.year})
-                          </p>
-                        </div>
+          {recentOrders.length > 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {recentOrders.map((order: any) => (
+                <Card key={order.orderId} className="overflow-hidden hover:shadow-md transition-all">
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg">Order #{order.orderId}</CardTitle>
+                        <CardDescription>{formatDate(order.orderDate)}</CardDescription>
                       </div>
-
-                      <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                        <div className="flex flex-col">
-                          <p className="text-sm font-medium">{formatDate(appointment.appointmentDate)}</p>
-                          <p className="text-sm text-muted-foreground">{appointment.timeSlot}</p>
+                      <Badge className={getStatusColor(order.status)}>
+                        <div className="flex items-center space-x-1">
+                          {getStatusIcon(order.status)}
+                          <span>{order.status}</span>
                         </div>
-                        <div>
-                          {getStatusBadge(appointment.status)}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => router.push(`/appointments/${appointment.appointmentId}`)}
-                        >
-                          Details
-                        </Button>
-                      </div>
+                      </Badge>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <CalendarClock className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="font-medium text-lg mb-1">No upcoming Orders</h3>
-                  <p className="text-muted-foreground mb-4">Schedule a new appointment for your vehicle.</p>
-                  <Button
-                    onClick={() => router.push('/appointments/new')}
-                    className="flex items-center gap-2"
-                  >
-                    <PlusCircle className="h-4 w-4" />
-                    New Appointment
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Orders and Vehicles */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Recent Orders */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Orders</CardTitle>
-              <CardDescription>
-                Your most recent service orders
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {recentOrders.length > 0 ? (
-                <div className="space-y-4">
-                  {recentOrders.slice(0, 4).map((order) => (
-                    <div
-                      key={order.orderId}
-                      className="flex items-start justify-between p-4 rounded-lg border"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <ClipboardList className="h-4 w-4 text-muted-foreground" />
-                          <p className="font-medium">Order #{order.orderId}</p>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {order.vehicle?.make} {order.vehicle?.model}
-                        </p>
-                        <p className="text-sm font-medium mt-1">
-                          {order.service?.serviceName || 'Service Order'}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">
-                            {formatDate(order.orderDate)}
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex items-center text-sm">
+                        <CarFront className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <span>
+                          {order.vehicle
+                            ? `${order.vehicle.make} ${order.vehicle.model} (${order.vehicle.year})`
+                            : 'Vehicle information not available'}
+                        </span>
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <Wrench className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <span>
+                          {order.service
+                            ? order.service.serviceName
+                            : order.includesInspection
+                              ? 'Inspection'
+                              : 'Service information not available'}
+                        </span>
+                      </div>
+                      <div className="mt-3">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Progress</span>
+                          <span className="font-medium">
+                            {
+                              order.status === 'completed' ? '100%' :
+                                order.status === 'in progress' ? '60%' :
+                                  order.status === 'pending' ? '20%' : '0%'
+                            }
                           </span>
                         </div>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2">
-                        <p className="font-medium">${order.totalAmount.toFixed(2)}</p>
-                        {getStatusBadge(order.status)}
+                        <Progress
+                          value={
+                            order.status === 'completed' ? 100 :
+                              order.status === 'in progress' ? 60 :
+                                order.status === 'pending' ? 20 : 0
+                          }
+                          className="h-2"
+                        />
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <ClipboardList className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="font-medium text-lg mb-1">No recent orders</h3>
-                  <p className="text-muted-foreground">Orders will appear here when you place them.</p>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => router.push('/orders')}
-              >
-                View All Orders
-              </Button>
-            </CardFooter>
-          </Card>
-
-          {/* Your Vehicles */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Your Vehicles</CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push('/vehicles/new')}
-                >
-                  Add Vehicle
-                </Button>
-              </div>
-              <CardDescription>
-                Registered vehicles for service
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {vehicles.length > 0 ? (
-                <div className="space-y-4">
-                  {vehicles.slice(0, 4).map((vehicle) => (
-                    <div
-                      key={vehicle.vehicleId}
-                      className="flex items-center justify-between p-4 rounded-lg border"
+                  </CardContent>
+                  <CardFooter className="pt-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => router.push(`/dashboard/orders/${order.orderId}`)}
                     >
-                      <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
-                          <CarFront className="h-5 w-5 text-slate-500" />
-                        </div>
-                        <div>
-                          <p className="font-medium">
-                            {vehicle.make} {vehicle.model} ({vehicle.year})
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {vehicle.licensePlate}
-                          </p>
-                        </div>
-                      </div>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => router.push(`/vehicles/${vehicle.vehicleId}`)}
-                      >
-                        Details
-                        <ChevronRight className="h-4 w-4 ml-1" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Car className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="font-medium text-lg mb-1">No vehicles registered</h3>
-                  <p className="text-muted-foreground mb-4">Add your first vehicle to get started.</p>
-                  <Button
-                    onClick={() => router.push('/vehicles/new')}
-                    className="flex items-center gap-2"
-                  >
-                    <Car className="h-4 w-4" />
-                    Add Vehicle
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => router.push('/vehicles')}
-              >
-                Manage All Vehicles
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-
-        {/* Service History */}
-        <div className="mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Service History</CardTitle>
-              <CardDescription>
-                Past services for your vehicles
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {serviceHistory.length > 0 ? (
-                <div className="rounded-md border">
-                  <div className="grid grid-cols-5 bg-slate-50 p-4 font-medium text-sm">
-                    <div>Date</div>
-                    <div>Vehicle</div>
-                    <div>Service</div>
-                    <div>Status</div>
-                    <div className="text-right">Amount</div>
-                  </div>
-                  {serviceHistory.slice(0, 5).map((order, index) => (
-                    <React.Fragment key={order.orderId}>
-                      {index > 0 && <hr />}
-                      <div className="grid grid-cols-5 p-4 text-sm">
-                        <div className="flex items-center">
-                          {formatDate(order.orderDate)}
-                        </div>
-                        <div>
-                          {order.vehicle?.make} {order.vehicle?.model}
-                        </div>
-                        <div>
-                          {order.service?.serviceName || 'Maintenance Service'}
-                        </div>
-                        <div>
-                          {getStatusBadge(order.status)}
-                        </div>
-                        <div className="text-right font-medium">
-                          ${order.totalAmount.toFixed(2)}
-                        </div>
-                      </div>
-                    </React.Fragment>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <History className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="font-medium text-lg mb-1">No service history</h3>
-                  <p className="text-muted-foreground">
-                    Your completed services will appear here.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => router.push('/history')}
-              >
-                View Full Service History
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-
-        {/* Quick Links */}
-        <div className="mb-8">
-          <h2 className="text-xl font-bold mb-4">Quick Links</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="group hover:border-blue-500 transition-colors cursor-pointer" onClick={() => router.push('/appointments/new')}>
-              <CardHeader className="p-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-500 transition-colors">
-                    <CalendarClock className="h-4 w-4 text-blue-500 group-hover:text-white transition-colors" />
-                  </div>
-                  <CardTitle className="text-base">Schedule Service</CardTitle>
-                </div>
-              </CardHeader>
+                      View Details
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="border-dashed border-2">
+              <CardContent className="flex flex-col items-center justify-center p-6">
+                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium">No orders yet</h3>
+                <p className="text-sm text-muted-foreground text-center mt-1 mb-4">
+                  You haven't placed any service orders yet.
+                </p>
+                <Button onClick={() => router.push('/dashboard/new-service')}>
+                  Book Your First Service
+                </Button>
+              </CardContent>
             </Card>
+          )}
+        </TabsContent>
 
-            <Card className="group hover:border-green-500 transition-colors cursor-pointer" onClick={() => router.push('/vehicles/new')}>
-              <CardHeader className="p-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center group-hover:bg-green-500 transition-colors">
-                    <Car className="h-4 w-4 text-green-500 group-hover:text-white transition-colors" />
-                  </div>
-                  <CardTitle className="text-base">Add Vehicle</CardTitle>
-                </div>
-              </CardHeader>
-            </Card>
-
-            <Card className="group hover:border-purple-500 transition-colors cursor-pointer" onClick={() => router.push('/history')}>
-              <CardHeader className="p-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center group-hover:bg-purple-500 transition-colors">
-                    <History className="h-4 w-4 text-purple-500 group-hover:text-white transition-colors" />
-                  </div>
-                  <CardTitle className="text-base">Service History</CardTitle>
-                </div>
-              </CardHeader>
-            </Card>
-
-            <Card className="group hover:border-orange-500 transition-colors cursor-pointer" onClick={() => router.push('/profile')}>
-              <CardHeader className="p-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center group-hover:bg-orange-500 transition-colors">
-                    <UserSquare className="h-4 w-4 text-orange-500 group-hover:text-white transition-colors" />
-                  </div>
-                  <CardTitle className="text-base">My Profile</CardTitle>
-                </div>
-              </CardHeader>
-            </Card>
+        {/* Reviews Tab */}
+        <TabsContent value="reviews" className="space-y-4 mt-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Pending Reviews</h2>
+            {pendingReviews.length > 0 && (
+              <Badge className="bg-amber-100 text-amber-800">
+                {pendingReviews.length} pending
+              </Badge>
+            )}
           </div>
+
+          {pendingReviews.length > 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {pendingReviews.map((review: any) => (
+                <Card key={review.orderId} className="overflow-hidden hover:shadow-md transition-all">
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg">Order #{review.orderId}</CardTitle>
+                        <CardDescription>{formatDate(review.orderDate)}</CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex items-center text-sm">
+                        <CarFront className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <span>
+                          {review.vehicle
+                            ? `${review.vehicle.make} ${review.vehicle.model} (${review.vehicle.year})`
+                            : 'Vehicle information not available'}
+                        </span>
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <Wrench className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <span>
+                          {review.service
+                            ? review.service.serviceName
+                            : 'Service information not available'}
+                        </span>
+                      </div>
+                      {review.mechanic && (
+                        <div className="flex items-center text-sm">
+                          <Star className="h-4 w-4 mr-2 text-muted-foreground" />
+                          <span>Mechanic: {review.mechanic.name}</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                  <CardFooter className="pt-0">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => router.push(`/dashboard/reviews/${review.orderId}`)}
+                    >
+                      Leave a Review
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="border-dashed border-2">
+              <CardContent className="flex flex-col items-center justify-center p-6">
+                <Star className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium">No pending reviews</h3>
+                <p className="text-sm text-muted-foreground text-center mt-1">
+                  You have reviewed all your completed services.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Notifications Tab */}
+        <TabsContent value="notifications" className="space-y-4 mt-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Recent Notifications</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push('/dashboard/notifications')}
+            >
+              View All
+            </Button>
+          </div>
+
+          {notifications.length > 0 ? (
+            <div className="space-y-4">
+              {notifications.map((notification: any) => (
+                <Alert key={notification.notificationId} className="hover:bg-muted/50 transition-colors">
+                  <Bell className="h-4 w-4" />
+                  <AlertTitle className="text-base font-medium">
+                    {notification.status === 'unread' && (
+                      <Badge className="bg-blue-100 text-blue-800 mr-2">New</Badge>
+                    )}
+                    Notification
+                  </AlertTitle>
+                  <AlertDescription className="mt-1">
+                    {notification.message}
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {formatDate(notification.createdAt)}
+                    </p>
+                  </AlertDescription>
+                </Alert>
+              ))}
+            </div>
+          ) : (
+            <Card className="border-dashed border-2">
+              <CardContent className="flex flex-col items-center justify-center p-6">
+                <Bell className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium">No notifications</h3>
+                <p className="text-sm text-muted-foreground text-center mt-1">
+                  You have no new notifications at this time.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Quick Actions */}
+      <div className="mt-6">
+        <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="overflow-hidden hover:shadow-md transition-all cursor-pointer"
+            onClick={() => router.push('/dashboard/new-service')}>
+            <CardContent className="p-6 flex flex-col items-center justify-center">
+              <Calendar className="h-8 w-8 text-blue-500 mb-3" />
+              <h3 className="font-medium text-center">Book Service</h3>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden hover:shadow-md transition-all cursor-pointer"
+            onClick={() => router.push('/dashboard/vehicles')}>
+            <CardContent className="p-6 flex flex-col items-center justify-center">
+              <Car className="h-8 w-8 text-green-500 mb-3" />
+              <h3 className="font-medium text-center">My Vehicles</h3>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden hover:shadow-md transition-all cursor-pointer"
+            onClick={() => router.push('/dashboard/orders')}>
+            <CardContent className="p-6 flex flex-col items-center justify-center">
+              <FileText className="h-8 w-8 text-purple-500 mb-3" />
+              <h3 className="font-medium text-center">Order History</h3>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden hover:shadow-md transition-all cursor-pointer"
+            onClick={() => router.push('/dashboard/profile')}>
+            <CardContent className="p-6 flex flex-col items-center justify-center">
+              <ShieldCheck className="h-8 w-8 text-amber-500 mb-3" />
+              <h3 className="font-medium text-center">My Profile</h3>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </ReviewGuard>
-  )
-}
+    </div>
+  );
+};
+
+export default CustomerDashboard;

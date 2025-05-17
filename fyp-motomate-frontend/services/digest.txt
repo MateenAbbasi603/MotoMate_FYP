@@ -1,0 +1,1343 @@
+Directory structure:
+└── services/
+    ├── apiClient.ts
+    ├── authService.ts
+    ├── inventoryService.ts
+    ├── invoiceService.ts
+    ├── mechanicService.ts
+    ├── notificationServices.ts
+    ├── orderApi.ts
+    ├── orderService.ts
+    ├── reviewService.ts
+    ├── serviceApi.ts
+    └── timeSlotService.ts
+
+================================================
+File: apiClient.ts
+================================================
+import axios, { AxiosResponse } from 'axios';
+import { toast } from 'sonner';
+
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+
+// Function to transform response data by removing $ prefix from properties
+const transformResponse = (data: any): any => {
+  if (Array.isArray(data)) {
+    return data.map(transformResponse);
+  }
+  
+  if (data && typeof data === 'object') {
+    const transformed: any = {};
+    
+    for (const [key, value] of Object.entries(data)) {
+      // Remove $ prefix from keys
+      const newKey = key.startsWith('$') ? key.slice(1) : key;
+      
+      // If the value is 'values' and it's an array, transform its contents
+      if (newKey === 'values' && Array.isArray(value)) {
+        transformed[newKey] = value.map(transformResponse);
+      } else {
+        // Recursively transform nested objects/arrays
+        transformed[newKey] = transformResponse(value);
+      }
+    }
+    
+    // If this object has a 'values' property, return just the values array
+    if (transformed.values && Array.isArray(transformed.values)) {
+      return transformed.values;
+    }
+    
+    return transformed;
+  }
+  
+  return data;
+};
+
+// Create axios instance with default config
+const apiClient = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add request interceptor for authentication
+apiClient.interceptors.request.use(
+  (config) => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for data transformation and error handling
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => {
+    // Transform the response data
+    response.data = transformResponse(response.data);
+    return response;
+  },
+  (error) => {
+    if (axios.isAxiosError(error)) {
+      // Handle 401 Unauthorized errors
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+
+      // Transform error response data if it exists
+      if (error.response?.data) {
+        error.response.data = transformResponse(error.response.data);
+      }
+
+      // Handle other errors
+      const errorMessage = error.response?.data?.message || 'An error occurred';
+      toast.error(errorMessage);
+    } else {
+      toast.error('An unexpected error occurred');
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default apiClient; 
+
+
+================================================
+File: authService.ts
+================================================
+// services/authService.ts
+import apiClient from './apiClient';
+
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+// User type definition
+export interface User {
+  userId: number;
+  username: string;
+  email: string;
+  role: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  imgUrl: string | null;
+}
+
+// Profile update type
+export interface UpdateProfileData {
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  imgUrl?: string;
+}
+
+// Password change type
+export interface ChangePasswordData {
+  currentPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
+}
+
+// Helper to get auth token from local storage
+const getAuthToken = (): string | null => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('token');
+  }
+  return null;
+};
+
+// Helper to configure request with auth header
+const authHeader = (): Record<string, string> => {
+  const token = getAuthToken();
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+};
+
+const authService = {
+  // Login user
+  login: async (username: string, password: string) => {
+    const response = await apiClient.post('/api/auth/login', {
+      username,
+      password
+    });
+    if (response.data.token) {
+      localStorage.setItem('token', response.data.token);
+    }
+    return response.data;
+  },
+
+  // Register user
+  register: async (userData: any) => {
+    const response = await apiClient.post('/api/auth/register', userData);
+    return response.data;
+  },
+
+  // Logout user
+  logout: () => {
+    localStorage.removeItem('token');
+  },
+
+  // Check if user is authenticated
+  isAuthenticated: (): boolean => {
+    return !!localStorage.getItem('token');
+  },
+
+  // Get current user profile
+  getCurrentUser: async (): Promise<User> => {
+    const response = await apiClient.get('/api/auth/me');
+    console.log(response.data);
+    
+    return response.data;
+  },
+
+  // Update user profile
+  updateProfile: async (userData: UpdateProfileData) => {
+    const response = await apiClient.put('/api/auth/update', userData);
+    return response.data;
+  },
+
+  // Change password
+  changePassword: async (passwordData: ChangePasswordData) => {
+    const response = await apiClient.post('/api/auth/change-password', passwordData);
+    return response.data;
+  },
+
+  // Request password reset
+  requestPasswordReset: async (email: string) => {
+    const response = await apiClient.post('/api/auth/reset-password', { email });
+    return response.data;
+  },
+
+  // Reset password with token
+  resetPassword: async (token: string, newPassword: string) => {
+    const response = await apiClient.post('/api/auth/reset-password/confirm', {
+      token,
+      newPassword
+    });
+    return response.data;
+  }
+};
+
+export default authService;
+
+
+================================================
+File: inventoryService.ts
+================================================
+    // services/inventoryService.ts
+import { InventoryFormData, InventoryItem } from '../types/inventoryTypes';
+import apiClient from './apiClient';
+
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+const inventoryService = {
+  // Get all inventory items
+  getAllInventory: async (): Promise<InventoryItem[]> => {
+    try {
+      const response = await apiClient.get('/api/Inventory');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching inventory:', error);
+      throw error;
+    }
+  },
+
+  // Get a specific inventory item by ID
+  getInventoryById: async (id: number): Promise<InventoryItem> => {
+    try {
+      const response = await apiClient.get(`/api/Inventory/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching inventory item ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Create a new inventory item
+  createInventory: async (inventoryData: InventoryFormData): Promise<InventoryItem> => {
+    try {
+      const response = await apiClient.post('/api/Inventory', inventoryData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating inventory item:', error);
+      throw error;
+    }
+  },
+
+  // Update an existing inventory item
+  updateInventory: async (id: number, inventoryData: InventoryFormData): Promise<InventoryItem> => {
+    try {
+      const response = await apiClient.put(`/api/Inventory/${id}`, {
+        toolId: id,
+        ...inventoryData
+      });
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating inventory item ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Delete an inventory item
+  deleteInventory: async (id: number): Promise<void> => {
+    try {
+      await apiClient.delete(`/api/Inventory/${id}`);
+    } catch (error) {
+      console.error(`Error deleting inventory item ${id}:`, error);
+      throw error;
+    }
+  }
+};
+
+export default inventoryService;
+
+
+================================================
+File: invoiceService.ts
+================================================
+// services/invoiceService.ts
+import axios from 'axios';
+
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+
+const invoiceService = {
+    generateFromOrder: async (orderId: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('Authentication token not found');
+            }
+
+            const response = await axios.post(
+                `${API_URL}/api/Invoices/generate-from-order/${orderId}`,
+                {},
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                }
+            );
+
+            return response.data;
+        } catch (error: any) {
+            // Check if it's a server error with response data
+            if (error.response && error.response.data) {
+                console.error('Server error:', error.response.data);
+                throw error;
+            }
+            console.error('Error generating invoice:', error);
+            throw error;
+        }
+    },
+
+    getInvoiceById: async (invoiceId: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('Authentication token not found');
+            }
+
+            const response = await axios.get(
+                `${API_URL}/api/Invoices/${invoiceId}`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                }
+            );
+
+
+            console.log(response.data);
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching invoice:', error);
+            throw error;
+        }
+    }
+};
+
+export default invoiceService;
+
+
+================================================
+File: mechanicService.ts
+================================================
+import axios from 'axios';
+
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+
+const mechanicService = {
+  // Get all services assigned to the mechanic
+  getMechanicServices: async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication token not found');
+    }
+
+    const response = await axios.get(
+      `${API_URL}/api/MechanicServices`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    return response.data;
+  },
+
+  // Get details of a specific service
+  getServiceDetails: async (id: string) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication token not found');
+    }
+
+    const response = await axios.get(
+      `${API_URL}/api/MechanicServices/${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    return response.data;
+  },
+
+  // Update service status
+  updateServiceStatus: async (id: string, payload: any) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication token not found');
+    }
+
+    const response = await axios.put(
+      `${API_URL}/api/MechanicServices/${id}/update-status`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    return response.data;
+  }
+};
+
+export default mechanicService;
+
+
+================================================
+File: notificationServices.ts
+================================================
+import axios from 'axios';
+import { Notification } from '../types/notifications';
+
+// Create axios instance
+const API = axios.create({
+    baseURL: 'http://localhost:5177',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
+
+// Add a request interceptor to include the auth token
+API.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+// Get all notifications for the logged-in user
+export const getNotifications = async (): Promise<Notification[]> => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Authentication required');
+        }
+
+        const response = await API.get('/api/notifications');
+        return response.data;
+    } catch (error) {
+        console.error('Error fetching notifications:', error);
+        throw error;
+    }
+};
+
+// Get only unread notifications
+export const getUnreadNotifications = async (): Promise<Notification[]> => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Authentication required');
+        }
+
+        const response = await API.get('/api/notifications/unread');
+        return response.data;
+    } catch (error) {
+        console.error('Error fetching unread notifications:', error);
+        throw error;
+    }
+};
+
+// Mark a notification as read
+export const markNotificationAsRead = async (
+    notificationId: number
+): Promise<void> => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Authentication required');
+        }
+
+        await API.put(`/api/notifications/${notificationId}/markasread`);
+    } catch (error) {
+        console.error('Error marking notification as read:', error);
+        throw error;
+    }
+};
+
+// Mark all notifications as read
+export const markAllNotificationsAsRead = async (): Promise<void> => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Authentication required');
+        }
+
+        await API.put('/api/notifications/markallasread');
+    } catch (error) {
+        console.error('Error marking all notifications as read:', error);
+        throw error;
+    }
+};
+
+// Delete a notification
+export const deleteNotification = async (
+    notificationId: number
+): Promise<void> => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Authentication required');
+        }
+
+        await API.delete(`/api/notifications/${notificationId}`);
+    } catch (error) {
+        console.error('Error deleting notification:', error);
+        throw error;
+    }
+};
+
+
+================================================
+File: orderApi.ts
+================================================
+// services/api.ts
+import apiClient from './apiClient';
+
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+// Helper to get auth token from local storage
+const getAuthToken = (): string | null => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('token');
+  }
+  return null;
+};
+
+// Helper to configure request with auth header
+const authHeader = (): Record<string, string> => {
+  const token = getAuthToken();
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+};
+
+// Type definitions
+export interface User {
+  userId: number;
+  username: string;
+  email: string;
+  role: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  imgUrl: string | null;
+}
+
+export interface Vehicle {
+  vehicleId: number;
+  userId: number;
+  make: string;
+  model: string;
+  year: number;
+  licensePlate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Service {
+  serviceId: number;
+  serviceName: string;
+  category: string;
+  price: number;
+  description: string;
+}
+
+export interface Inspection {
+  inspectionId: number;
+  userId: number;
+  vehicleId: number;
+  scheduledDate: string;
+  status: string;
+  notes: string;
+  createdAt: string;
+  completedAt: string | null;
+  engineCondition: string | null;
+  transmissionCondition: string | null;
+  brakeCondition: string | null;
+  electricalCondition: string | null;
+  bodyCondition: string | null;
+  tireCondition: string | null;
+}
+
+export interface Order {
+  orderId: number;
+  userId: number;
+  vehicleId: number;
+  serviceId: number | null;
+  inspectionId: number;
+  orderDate: string;
+  status: string;
+  totalAmount: number;
+  notes: string;
+  vehicle?: Vehicle;
+  service?: Service;
+  inspection?: Inspection;
+}
+
+// Request types
+export interface CreateOrderRequest {
+  vehicleId: number;
+  serviceId?: number | null;
+  inspectionDate: string;
+  notes?: string;
+}
+
+export interface UpdateOrderRequest {
+  status?: string;
+  serviceId?: number;
+  totalAmount?: number;
+  notes?: string;
+}
+
+const orderApi = {
+  // Authentication
+  login: async (username: string, password: string): Promise<any> => {
+    try {
+      const response = await apiClient.post('/api/auth/login', {
+        username,
+        password
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
+  },
+
+  register: async (userData: any): Promise<any> => {
+    try {
+      const response = await apiClient.post('/api/auth/register', userData);
+      return response.data;
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    }
+  },
+
+  getCurrentUser: async (): Promise<User> => {
+    try {
+      const response = await apiClient.get('/api/auth/me', {
+        headers: authHeader()
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get current user error:', error);
+      throw error;
+    }
+  },
+
+  // Vehicles
+  getUserVehicles: async (): Promise<Vehicle[]> => {
+    try {
+      const response = await apiClient.get('/api/vehicles', {
+        headers: authHeader()
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get vehicles error:', error);
+      throw error;
+    }
+  },
+
+  getVehicleById: async (id: number): Promise<Vehicle> => {
+    try {
+      const response = await apiClient.get(`/api/vehicles/${id}`, {
+        headers: authHeader()
+      });
+      return response.data;
+    } catch (error) {
+      console.error(`Get vehicle ${id} error:`, error);
+      throw error;
+    }
+  },
+
+  createVehicle: async (vehicleData: any): Promise<Vehicle> => {
+    try {
+      const response = await apiClient.post('/api/vehicles', vehicleData, {
+        headers: {
+          ...authHeader(),
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Create vehicle error:', error);
+      throw error;
+    }
+  },
+
+  updateVehicle: async (id: number, vehicleData: any): Promise<Vehicle> => {
+    try {
+      const response = await apiClient.put(`/api/vehicles/${id}`, vehicleData, {
+        headers: {
+          ...authHeader(),
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error(`Update vehicle ${id} error:`, error);
+      throw error;
+    }
+  },
+
+  deleteVehicle: async (id: number): Promise<void> => {
+    try {
+      await apiClient.delete(`/api/vehicles/${id}`, {
+        headers: authHeader()
+      });
+    } catch (error) {
+      console.error(`Delete vehicle ${id} error:`, error);
+      throw error;
+    }
+  },
+
+  // Services
+  getAllServices: async (): Promise<Service[]> => {
+    try {
+      const response = await apiClient.get('/api/services');
+      return response.data;
+    } catch (error) {
+      console.error('Get services error:', error);
+      throw error;
+    }
+  },
+
+  getServiceById: async (id: number): Promise<Service> => {
+    try {
+      const response = await apiClient.get(`/api/services/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Get service ${id} error:`, error);
+      throw error;
+    }
+  },
+
+  getServicesByCategory: async (category: string): Promise<Service[]> => {
+    try {
+      const response = await apiClient.get(`/api/services/category/${category}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Get services by category ${category} error:`, error);
+      throw error;
+    }
+  },
+
+  // Orders
+  getAllOrders: async () => {
+    const response = await apiClient.get('/api/orders');
+    return response.data;
+  },
+
+  getOrderById: async (id: number) => {
+    const response = await apiClient.get(`/api/orders/${id}`);
+    return response.data;
+  },
+
+  createOrder: async (orderData: any) => {
+    const response = await apiClient.post('/api/orders', orderData);
+    return response.data;
+  },
+
+  updateOrder: async (id: number, orderData: any) => {
+    const response = await apiClient.put(`/api/orders/${id}`, orderData);
+    return response.data;
+  },
+
+  deleteOrder: async (id: number) => {
+    await apiClient.delete(`/api/orders/${id}`);
+  },
+
+  // Orders with Inspection
+  createOrderWithInspection: async (orderData: any) => {
+    const response = await apiClient.post('/api/orders/CreateWithInspection', orderData);
+    return response.data;
+  },
+
+  getUserOrders: async () => {
+    const response = await apiClient.get('/api/orders/user');
+    return response.data;
+  },
+
+  // Combined details
+  getCombinedDetails: async (userId: number, vehicleId: number, serviceId?: number) => {
+    const params = new URLSearchParams();
+    params.append('userId', userId.toString());
+    params.append('vehicleId', vehicleId.toString());
+    if (serviceId) {
+      params.append('serviceId', serviceId.toString());
+    }
+    
+    const response = await apiClient.get(`/api/Detail/combined-details?${params}`);
+    return response.data;
+  }
+};
+
+export default orderApi;
+
+
+================================================
+File: orderService.ts
+================================================
+// services/orderService.js
+import axios from 'axios';
+
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+
+// Create axios instance with default config
+const apiClient = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add auth token to requests if available
+apiClient.interceptors.request.use(
+  (config) => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Handle common errors
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
+
+// Order service functions
+export const orderService = {
+  // Get all orders
+  getAllOrders: async () => {
+    try {
+      const response = await apiClient.get('/api/Orders');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      throw error;
+    }
+  },
+
+  // Get order by ID
+  getOrderById: async (id:any) => {
+    try {
+      const response = await apiClient.get(`/api/Orders/${id}`);
+      console.log(response.data ,"GET ORDER DETAILS");
+      
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching order ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Update order
+  updateOrder: async (id: number, orderData: any) => {
+    try {
+      // Ensure notes is an empty string if undefined/null
+      const dataToUpdate = {
+        ...orderData,
+        notes: orderData.notes || ''
+      };
+      
+      const response = await apiClient.put(`/api/Orders/${id}`, dataToUpdate);
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating order ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Delete order
+  deleteOrder: async (id:any) => {
+    try {
+      const response = await apiClient.delete(`/api/Orders/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error deleting order ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Create order with inspection
+  createOrderWithInspection: async (orderData:any) => {
+    try {
+      const response = await apiClient.post('/api/Orders/CreateWithInspection', orderData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating order with inspection:', error);
+      throw error;
+    }
+  }
+};
+
+export default orderService;
+
+
+================================================
+File: reviewService.ts
+================================================
+// src/services/reviewService.ts
+
+import apiClient from "./apiClient";
+
+
+export interface ReviewSubmission {
+  orderId: number;
+  mechanicRating: number;
+  mechanicComments?: string;
+  workshopRating?: number;
+  workshopComments?: string;
+}
+
+export interface MechanicRating {
+  mechanicId: number;
+  mechanicName: string;
+  totalReviews: number;
+  averageRating: number;
+}
+
+export interface WorkshopRating {
+  totalReviews: number;
+  averageRating: number;
+}
+
+export interface PendingReviewOrder {
+  orderId: number;
+  status: string;
+  orderDate: string;
+  totalAmount: number;
+  vehicle: {
+    vehicleId: number;
+    make: string;
+    model: string;
+    year: number;
+    licensePlate: string;
+  };
+  service?: {
+    serviceId: number;
+    serviceName: string;
+    category: string;
+    price: number;
+    description?: string;
+  };
+  mechanic?: {
+    mechanicId: number;
+    name: string;
+  };
+}
+
+export interface PendingReviewsResponse {
+  success: boolean;
+  pendingReviewCount: number;
+  orders: PendingReviewOrder[];
+}
+
+let cachedPendingReviews: PendingReviewsResponse | null = null;
+let lastCheckedTime = 0;
+const CACHE_EXPIRATION = 60000; // 1 minute cache
+
+const reviewService = {
+  // Submit a review for an order
+  submitReview: async (review: ReviewSubmission) => {
+    try {
+      const response = await apiClient.post('/api/Reviews/SubmitOrderReview', review);
+      
+      // Invalidate cache after submitting a review
+      cachedPendingReviews = null;
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      throw error;
+    }
+  },
+
+  // Check if the user has already reviewed an order
+  hasReviewed: async (orderId: number) => {
+    try {
+      const response = await apiClient.get(`/api/Reviews/HasReviewed/${orderId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking if order is reviewed:', error);
+      return { success: false, hasReviewed: false };
+    }
+  },
+
+  // Get the rating for a specific mechanic
+  getMechanicRating: async (mechanicId: number): Promise<MechanicRating> => {
+    try {
+      const response = await apiClient.get(`/api/Reviews/MechanicRating/${mechanicId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting mechanic rating:', error);
+      return {
+        mechanicId,
+        mechanicName: 'Unknown',
+        totalReviews: 0,
+        averageRating: 0
+      };
+    }
+  },
+
+  // Get the overall workshop rating
+  getWorkshopRating: async (): Promise<WorkshopRating> => {
+    try {
+      const response = await apiClient.get('/api/Reviews/WorkshopRating');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting workshop rating:', error);
+      return {
+        totalReviews: 0,
+        averageRating: 0
+      };
+    }
+  },
+
+  // Get orders that need review - with caching
+  getPendingReviews: async (forceRefresh = false): Promise<PendingReviewsResponse> => {
+    const now = Date.now();
+    
+    // Use cached data if available and not expired
+    if (!forceRefresh && cachedPendingReviews && (now - lastCheckedTime < CACHE_EXPIRATION)) {
+      return cachedPendingReviews;
+    }
+    
+    try {
+      const response = await apiClient.get('/api/Reviews/PendingReviews');
+      
+      // Update cache
+      cachedPendingReviews = response.data;
+      lastCheckedTime = now;
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error getting pending reviews:', error);
+      
+      // Return empty data on error
+      return {
+        success: false,
+        pendingReviewCount: 0,
+        orders: []
+      };
+    }
+  },
+
+  // Check if user has any pending reviews - optimized for quick checks
+  checkPendingReviews: async (): Promise<boolean> => {
+    try {
+      const { pendingReviewCount } = await reviewService.getPendingReviews();
+      return pendingReviewCount > 0;
+    } catch (error) {
+      console.error('Error checking pending reviews:', error);
+      return false;
+    }
+  },
+  
+  // Clear the cache
+  clearCache: () => {
+    cachedPendingReviews = null;
+    lastCheckedTime = 0;
+  }
+};
+
+export default reviewService;
+
+
+================================================
+File: serviceApi.ts
+================================================
+// services/serviceApi.ts
+import apiClient from './apiClient';
+
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+// Helper to get auth token from local storage
+const getAuthToken = (): string | null => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('token');
+  }
+  return null;
+};
+
+// Helper to configure request with auth header
+const authHeader = (): Record<string, string> => {
+  const token = getAuthToken();
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+};
+
+// Service type definition
+export interface Service {
+  serviceId: number;
+  serviceName: string;
+  category: 'repair' | 'maintenance' | 'inspection';
+  price: number;
+  description: string;
+  subCategory:string;
+}
+
+// Service creation/update type
+export interface ServiceFormData {
+  serviceName: string;
+  category: 'repair' | 'maintenance' | 'inspection';
+  price: number;
+  description: string;
+  subCategory:string | undefined
+}
+
+const serviceApi = {
+  // Get all services (accessible to everyone)
+  getAllServices: async (): Promise<Service[]> => {
+    const response = await apiClient.get('/api/services');
+    return response.data;
+  },
+
+  // Get service by ID (accessible to everyone)
+  getServiceById: async (id: number): Promise<Service> => {
+    const response = await apiClient.get(`/api/services/${id}`);
+    return response.data;
+  },
+
+  // Create new service (admin only)
+  createService: async (serviceData: ServiceFormData): Promise<Service> => {
+    const response = await apiClient.post('/api/services', serviceData);
+    return response.data;
+  },
+
+  // Update existing service (admin only)
+  updateService: async (id: number, serviceData: ServiceFormData): Promise<Service> => {
+    const response = await apiClient.put(`/api/services/${id}`, serviceData);
+    return response.data;
+  },
+
+  // Delete service (admin only)
+  deleteService: async (id: number): Promise<void> => {
+    await apiClient.delete(`/api/services/${id}`);
+  },
+
+  // Get services by category (accessible to everyone)
+  getServicesByCategory: async (category: string): Promise<Service[]> => {
+    const response = await apiClient.get(`/api/services/category/${category}`);
+    return response.data;
+  },
+};
+
+export default serviceApi;
+
+
+================================================
+File: timeSlotService.ts
+================================================
+// services/timeSlotService.ts
+import apiClient from './apiClient';
+
+export interface TimeSlotInfo {
+  timeSlot: string;
+  availableSlots: number;
+  totalSlots: number;
+}
+
+export const timeSlotService = {
+  getAvailableTimeSlots: async (date: Date): Promise<string[]> => {
+    const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+
+    const response = await apiClient.get('/api/TimeSlots/Available', {
+      params: { date: formattedDate }
+    });
+
+    if (response.data.success) {
+      return response.data.availableSlots;
+    } else {
+      throw new Error(response.data.message || 'Failed to fetch available time slots');
+    }
+  },
+
+  getTimeSlotsInfo: async (date: Date): Promise<TimeSlotInfo[]> => {
+    try {
+      // Make sure we're only passing the date portion to avoid timezone issues
+      const dateISO = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        12, 0, 0 // Set to noon to avoid timezone issues
+      ).toISOString();
+      
+      console.log("Fetching time slots for date ISO:", dateISO);
+      console.log("Date object being used:", date);
+
+      const formattedDate = dateISO.split('T')[0]; // Format as YYYY-MM-DD
+
+      console.log(`Requesting time slots for date: ${formattedDate}`);
+      
+      const response = await apiClient.get('/api/TimeSlots/Info', {
+        params: { date: formattedDate }
+      });
+
+      if (response.data.success) {
+        // Add extra logging to inspect the response
+        console.log("Time slots data received:", response.data);
+        return response.data.timeSlotInfos;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch time slot information');
+      }
+    } catch (error) {
+      console.error("Error in getTimeSlotsInfo:", error);
+      return []; // Return empty array instead of throwing to avoid disrupting the UI
+    }
+  },
+
+  isTimeSlotAvailable: async (date: Date, timeSlot: string): Promise<boolean> => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      // Make sure we're only passing the date portion to avoid timezone issues
+      const dateISO = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        12, 0, 0 // Set to noon to avoid timezone issues
+      ).toISOString();
+      
+      const formattedDate = dateISO.split('T')[0]; // Format as YYYY-MM-DD
+
+      const response = await apiClient.get('/api/TimeSlots/IsAvailable', {
+        params: {
+          date: formattedDate,
+          timeSlot
+        },
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.success) {
+        return response.data.isAvailable;
+      } else {
+        throw new Error(response.data.message || 'Failed to check time slot availability');
+      }
+    } catch (error) {
+      console.error('Error checking time slot availability:', error);
+      throw error;
+    }
+  },
+
+  getTimeSlotAvailableCount: async (date: Date, timeSlot: string): Promise<number> => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      // Make sure we're only passing the date portion to avoid timezone issues
+      const dateISO = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        12, 0, 0 // Set to noon to avoid timezone issues
+      ).toISOString();
+      
+      const formattedDate = dateISO.split('T')[0]; // Format as YYYY-MM-DD
+
+      const response = await apiClient.get('/api/TimeSlots/IsAvailable', {
+        params: {
+          date: formattedDate,
+          timeSlot
+        },
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.success) {
+        return response.data.availableCount;
+      } else {
+        throw new Error(response.data.message || 'Failed to get time slot available count');
+      }
+    } catch (error) {
+      console.error('Error getting time slot available count:', error);
+      return 0;
+    }
+  }
+};
+
+export default timeSlotService;
+
