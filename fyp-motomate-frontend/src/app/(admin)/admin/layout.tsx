@@ -7,7 +7,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     <AuthGuard allowedRoles={["super_admin", "admin", "service_agent", "mechanic", "finance_officer"]}>
       <div className="flex min-h-screen flex-col">
         <AdminNavbar />
-        <main className="flex-1 pt-14">
+        <main className="container mx-auto pt-14">
           <div className="container py-6">
             {children}
           </div>
