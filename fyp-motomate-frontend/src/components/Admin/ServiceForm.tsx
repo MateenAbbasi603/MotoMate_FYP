@@ -6,7 +6,20 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
-import { ArrowLeft, Save, Loader2, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  Loader2,
+  Wrench,
+  CheckCircle,
+  ShieldAlert,
+  DollarSign,
+  ClipboardList,
+  PenLine,
+  Plus,
+  CircleDashed,
+  XCircle
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +49,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import serviceApi, { ServiceFormData } from "../../../services/serviceApi";
 
 // Service form schema
@@ -69,12 +85,33 @@ interface ServiceFormProps {
   serviceId?: number; // Optional for edit mode
 }
 
+// Category icons
+const categoryIcons = {
+  repair: <Wrench className="h-5 w-5" />,
+  maintenance: <CheckCircle className="h-5 w-5" />,
+  inspection: <ShieldAlert className="h-5 w-5" />,
+};
+
+// Predefined subcategories for inspections
+const predefinedSubcategories = [
+  { value: "EngineInspection", label: "Engine Inspection" },
+  { value: "TransmissionInspection", label: "Transmission Inspection" },
+  { value: "BrakeInspection", label: "Brake Inspection" },
+  { value: "ElectricalInspection", label: "Electrical Inspection" },
+  { value: "BodyInspection", label: "Body Inspection" },
+  { value: "TireInspection", label: "Tire Inspection" },
+  { value: "InteriorInspection", label: "Interior Inspection" },
+  { value: "SuspensionInspection", label: "Suspension Inspection" },
+  { value: "TiresInspection", label: "Tires Inspection" },
+];
+
 export default function ServiceForm({ serviceId }: ServiceFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showSubcategory, setShowSubcategory] = useState(false);
   const [useCustomSubcategory, setUseCustomSubcategory] = useState(false);
+  const [subcategoryTab, setSubcategoryTab] = useState<string>("predefined");
 
   const router = useRouter();
   const isEditMode = !!serviceId;
@@ -93,6 +130,7 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
 
   const category = form.watch("category");
   const subCategory = form.watch("subCategory");
+  const price = form.watch("price");
 
   // Update useEffect to show/hide subcategory field based on category
   useEffect(() => {
@@ -126,12 +164,12 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
         if (service.category === "inspection" && service.subCategory) {
           setShowSubcategory(true);
           // Check if subCategory is one of the predefined ones
-          const predefinedSubcategories = [
-            "EngineInspection", "TransmissionInspection", "BrakeInspection",
-            "ElectricalInspection", "BodyInspection", "TireInspection",
-            "InteriorInspection", "SuspensionInspection", "TiresInspection"
-          ];
-          setUseCustomSubcategory(!predefinedSubcategories.includes(service.subCategory));
+          const isPredefined = predefinedSubcategories.some(
+            item => item.value === service.subCategory
+          );
+
+          setUseCustomSubcategory(!isPredefined);
+          setSubcategoryTab(isPredefined ? "predefined" : "custom");
         }
       } catch (error) {
         console.error("Error fetching service:", error);
@@ -180,20 +218,40 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
     }
   }
 
+  const handleSubcategoryTabChange = (value: string) => {
+    setSubcategoryTab(value);
+    setUseCustomSubcategory(value === "custom");
+    form.setValue("subCategory", ""); // Reset subcategory on tab change
+  };
+
+  // Category selection card
+  const CategoryCard = ({ value, label, icon, selected }: { value: string, label: string, icon: React.ReactNode, selected: boolean }) => (
+    <div
+      className={`border rounded-lg p-4 flex flex-col items-center gap-2 cursor-pointer transition-all
+                ${selected ? 'border-primary bg-primary/5 shadow-sm' : 'border-border hover:border-primary/30 hover:bg-accent/50'}`}
+      onClick={() => form.setValue("category", value as "repair" | "maintenance" | "inspection")}
+    >
+      <div className={`p-2 rounded-full ${selected ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+        {icon}
+      </div>
+      <span className="font-medium text-sm">{label}</span>
+    </div>
+  );
+
   if (isLoading) {
     return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center">
+      <Card className="w-full max-w-4xl mx-auto shadow-md">
+        <CardHeader className="border-b bg-muted/30">
+          <CardTitle className="flex items-center text-xl">
             <Loader2 className="h-5 w-5 animate-spin mr-2" />
             Loading Service Data
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-6 space-y-6">
           {Array(4).fill(0).map((_, index) => (
             <div key={index} className="space-y-2">
-              <div className="h-5 w-32 bg-gray-200 rounded animate-pulse" />
-              <div className="h-10 w-full bg-gray-200 rounded animate-pulse" />
+              <div className="h-5 w-32 bg-muted rounded animate-pulse" />
+              <div className="h-10 w-full bg-muted rounded animate-pulse" />
             </div>
           ))}
         </CardContent>
@@ -202,218 +260,271 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>{isEditMode ? "Edit Service" : "Create New Service"}</CardTitle>
-        <CardDescription>
-          {isEditMode
-            ? "Update service details and pricing information."
-            : "Fill in the details to create a new service."}
-        </CardDescription>
+    <Card className="w-full max-w-4xl mx-auto shadow-md">
+      <CardHeader className="border-b bg-card">
+        <div className="flex items-center justify-between">
+          <div>
+            <Badge variant={isEditMode ? "outline" : "default"} className="mb-2">
+              {isEditMode ? "Editing Service" : "New Service"}
+            </Badge>
+            <CardTitle className="text-2xl font-bold">
+              {isEditMode ? "Edit Service" : "Create New Service"}
+            </CardTitle>
+            <CardDescription className="mt-1.5 text-muted-foreground">
+              {isEditMode
+                ? "Update service details and pricing information."
+                : "Fill in the details to create a new service."}
+            </CardDescription>
+          </div>
+          <div className={`rounded-full p-3 ${isEditMode ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
+            }`}>
+            {isEditMode ? <PenLine size={24} /> : <Plus size={24} />}
+          </div>
+        </div>
       </CardHeader>
-      <CardContent>
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="serviceName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Service Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Oil Change" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    The name of the service as shown to customers.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a category" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="repair">Repair</SelectItem>
-                      <SelectItem value="maintenance">Maintenance</SelectItem>
-                      <SelectItem value="inspection">Inspection</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    The type of service being offered.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {showSubcategory && (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Button
-                    type="button"
-                    variant={useCustomSubcategory ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setUseCustomSubcategory(true)}
-                  >
-                    Custom
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={useCustomSubcategory ? "outline" : "default"}
-                    size="sm"
-                    onClick={() => setUseCustomSubcategory(false)}
-                  >
-                    Predefined
-                  </Button>
-                </div>
-
-                {useCustomSubcategory ? (
-                  <FormField
-                    control={form.control}
-                    name="subCategory"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Custom Subcategory</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Enter custom subcategory"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Enter a custom subcategory for this inspection service.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                ) : (
-                  <FormField
-                    control={form.control}
-                    name="subCategory"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Subcategory</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value || ""}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a subcategory" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="EngineInspection">Engine Inspection</SelectItem>
-                            <SelectItem value="TransmissionInspection">Transmission Inspection</SelectItem>
-                            <SelectItem value="BrakeInspection">Brake Inspection</SelectItem>
-                            <SelectItem value="ElectricalInspection">Electrical Inspection</SelectItem>
-                            <SelectItem value="BodyInspection">Body Inspection</SelectItem>
-                            <SelectItem value="TireInspection">Tire Inspection</SelectItem>
-                            <SelectItem value="InteriorInspection">Interior Inspection</SelectItem>
-                            <SelectItem value="SuspensionInspection">Suspension Inspection</SelectItem>
-                            <SelectItem value="TiresInspection">Tires Inspection</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          Select a predefined subcategory for this inspection service.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-              </div>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <CardContent className="p-6 space-y-6">
+            {error && (
+              <Alert variant="destructive" className="mb-6">
+                <XCircle className="h-4 w-4 mr-2" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
 
-            <FormField
-              control={form.control}
-              name="price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Price (PKR)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="49.99"
-                      {...field}
-                      onChange={(e) => {
-                        field.onChange(e.target.value === "" ? "" : Number(e.target.value));
-                      }}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    The price of the service in PKR.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left column */}
+              <div className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="serviceName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center text-base font-medium">
+                        <ClipboardList className="h-4 w-4 mr-2" />
+                        Service Name
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. Oil Change"
+                          {...field}
+                          className="transition-all focus-visible:ring-primary/30 focus-visible:ring-offset-2"
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs text-muted-foreground">
+                        The name of the service as shown to customers.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Detailed description of the service..."
-                      className="resize-none"
-                      rows={5}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    A detailed description of what the service includes.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
+                <div className="space-y-4">
+                  <FormLabel className="flex items-center text-base font-medium">
+                    <Wrench className="h-4 w-4 mr-2" />
+                    Category
+                  </FormLabel>
+                  <div className="grid grid-cols-3 gap-3">
+                    {(["repair", "maintenance", "inspection"] as const).map((cat) => (
+                      <CategoryCard
+                        key={cat}
+                        value={cat}
+                        label={cat.charAt(0).toUpperCase() + cat.slice(1)}
+                        icon={categoryIcons[cat]}
+                        selected={category === cat}
+                      />
+                    ))}
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={() => <></>} // Hidden field, handled by cards
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center text-base font-medium">
+                        <DollarSign className="h-4 w-4 mr-2" />
+                        Price (PKR)
+                      </FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-3 flex items-center text-muted-foreground pointer-events-none">
+                            PKR
+                          </span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            className="pl-12 transition-all focus-visible:ring-primary/30 focus-visible:ring-offset-2"
+                            {...field}
+                            onChange={(e) => {
+                              field.onChange(e.target.value === "" ? "" : Number(e.target.value));
+                            }}
+                          />
+                        </div>
+                      </FormControl>
+                      <div className="flex justify-between items-center mt-1">
+                        <FormDescription className="text-xs text-muted-foreground">
+                          The price of the service in PKR.
+                        </FormDescription>
+                        <Badge variant="outline" className={`${price > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                          }`}>
+                          {price > 0 ? `PKR ${price.toFixed(2)}` : 'No price set'}
+                        </Badge>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Right column */}
+              <div className="space-y-6">
+                {showSubcategory && (
+                  <div className="space-y-4">
+                    <FormLabel className="flex items-center text-base font-medium">
+                      <ShieldAlert className="h-4 w-4 mr-2" />
+                      Inspection Subcategory
+                    </FormLabel>
+                    <Tabs value={subcategoryTab} onValueChange={handleSubcategoryTabChange} className="w-full">
+                      <TabsList className="grid w-full grid-cols-2 mb-4">
+                        <TabsTrigger value="predefined" className="flex items-center">
+                          <CheckCircle className="h-3.5 w-3.5 mr-2" />
+                          Predefined
+                        </TabsTrigger>
+                        <TabsTrigger value="custom" className="flex items-center">
+                          <PenLine className="h-3.5 w-3.5 mr-2" />
+                          Custom
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="predefined">
+                        <FormField
+                          control={form.control}
+                          name="subCategory"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Select
+                                  onValueChange={field.onChange}
+                                  value={field.value || ""}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger className="transition-all focus-visible:ring-primary/30 focus-visible:ring-offset-2">
+                                      <SelectValue placeholder="Select a subcategory" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {predefinedSubcategories.map(item => (
+                                      <SelectItem key={item.value} value={item.value}>
+                                        {item.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormControl>
+                              <FormDescription className="text-xs text-muted-foreground">
+                                Select a predefined subcategory for this inspection service.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </TabsContent>
+
+                      <TabsContent value="custom">
+                        <FormField
+                          control={form.control}
+                          name="subCategory"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input
+                                  placeholder="Enter custom subcategory"
+                                  className="transition-all focus-visible:ring-primary/30 focus-visible:ring-offset-2"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormDescription className="text-xs text-muted-foreground">
+                                Enter a custom subcategory for this inspection service.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center text-base font-medium">
+                        <ClipboardList className="h-4 w-4 mr-2" />
+                        Description
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Detailed description of the service..."
+                          className="min-h-32 resize-none transition-all focus-visible:ring-primary/30 focus-visible:ring-offset-2"
+                          {...field}
+                        />
+                      </FormControl>
+                      <div className="flex justify-between items-center mt-1">
+                        <FormDescription className="text-xs text-muted-foreground">
+                          A detailed description of what the service includes.
+                        </FormDescription>
+                        <span className="text-xs text-muted-foreground">
+                          {field.value.length} / 500 characters
+                        </span>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+          </CardContent>
+
+          <Separator />
+
+          <CardFooter className="p-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push("/admin/services")}
+              className="w-full sm:w-auto"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Services
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full sm:w-auto gap-2 font-medium shadow-sm"
+            >
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : isEditMode ? (
+                <Save className="mr-2 h-4 w-4" />
+              ) : (
+                <Plus className="mr-2 h-4 w-4" />
               )}
-            />
-          </form>
-        </Form>
-      </CardContent>
-      <CardFooter className="flex justify-between">
-        <Button
-          variant="outline"
-          onClick={() => router.push("/admin/services")}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Services
-        </Button>
-        <Button
-          onClick={form.handleSubmit(onSubmit)}
-          disabled={isSubmitting}
-        >
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          <Save className="mr-2 h-4 w-4" />
-          {isEditMode ? "Update Service" : "Create Service"}
-        </Button>
-      </CardFooter>
+              {isEditMode ? "Update Service" : "Create Service"}
+            </Button>
+          </CardFooter>
+        </form>
+      </Form>
     </Card>
   );
 }

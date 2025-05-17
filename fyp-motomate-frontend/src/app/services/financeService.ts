@@ -45,6 +45,7 @@ export interface Payment {
   customer: {
     name: string;
     email: string;
+    phone:string
   };
 }
 
