@@ -4,21 +4,21 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Wrench, 
-  UserCheck, 
-  Users, 
-  AlertCircle, 
-  Mail, 
-  Phone, 
-  Star, 
-  CheckCircle, 
-  Calendar, 
+import {
+  Wrench,
+  UserCheck,
+  Users,
+  AlertCircle,
+  Mail,
+  Phone,
+  Star,
+  CheckCircle,
+  Calendar,
   Activity,
   Briefcase,
   LineChart
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import AuthGuard from "../../../../../AuthGuard";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -45,19 +45,31 @@ export default function MechanicsPage() {
   const [mechanics, setMechanics] = useState<Mechanic[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+
+  const activeTab = searchParams.get('tab') || 'active';
+
+
+  const handleTabChange = (value: string) => {
+    // Update the URL with the new tab value
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', value);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
+
 
   useEffect(() => {
     const fetchMechanics = async () => {
       try {
         setLoading(true);
         setError(null);
-        
+
         // Get auth token
         const token = localStorage.getItem('token');
         if (!token) {
           throw new Error("Authentication required");
         }
-        
+
         // Fetch mechanics from API
         const response = await axios.get(
           `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Users/mechanics`,
@@ -67,9 +79,9 @@ export default function MechanicsPage() {
             }
           }
         );
-        
+
         console.log(response.data, "RESPONSE");
-        
+
         // Handle potential nested data structure
         let mechanicsData = [];
         if (response.data && response.data.$values) {
@@ -80,7 +92,7 @@ export default function MechanicsPage() {
           console.error("Unexpected data format:", response.data);
           mechanicsData = [];
         }
-        
+
         setMechanics(mechanicsData);
       } catch (err) {
         console.error("Failed to fetch mechanics:", err);
@@ -114,7 +126,7 @@ export default function MechanicsPage() {
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating - fullStars >= 0.5;
     const totalStars = 5;
-    
+
     return (
       <div className="flex items-center gap-1">
         <span className="font-medium text-sm mr-1">{rating.toFixed(1)}</span>
@@ -160,7 +172,8 @@ export default function MechanicsPage() {
           </Alert>
         )}
 
-        <Tabs defaultValue="active" className="space-y-6">
+        <Tabs defaultValue="active" value={activeTab}
+          onValueChange={handleTabChange} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="active" className="flex items-center gap-2">
               <Wrench className="h-4 w-4" />
@@ -214,10 +227,11 @@ export default function MechanicsPage() {
                     {mechanics.map((mechanic) => {
                       const availability = getAvailabilityStatus(mechanic);
                       return (
-                        <Card key={mechanic.userId} className="overflow-hidden border-l-4 hover:shadow-md transition-shadow duration-200" style={{ borderLeftColor: 
-                          availability.variant === 'success' ? '#10b981' : 
-                          availability.variant === 'warning' ? '#f59e0b' : 
-                          '#ef4444'
+                        <Card key={mechanic.userId} className="overflow-hidden border-l-4 hover:shadow-md transition-shadow duration-200" style={{
+                          borderLeftColor:
+                            availability.variant === 'success' ? '#10b981' :
+                              availability.variant === 'warning' ? '#f59e0b' :
+                                '#ef4444'
                         }}>
                           <div className="p-6">
                             <div className="flex items-center gap-4">
@@ -229,17 +243,17 @@ export default function MechanicsPage() {
                               <div>
                                 <h3 className="font-medium text-lg">{mechanic.name}</h3>
                                 <Badge variant={availability.variant === 'success' ? 'outline' : 'secondary'} className={`
-                                  ${availability.variant === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                    availability.variant === 'warning' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                    'bg-red-50 text-red-700 border-red-200'}
+                                  ${availability.variant === 'success' ? 'bg-green-50 text-green-700 border-green-200' :
+                                    availability.variant === 'warning' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                      'bg-red-50 text-red-700 border-red-200'}
                                 `}>
                                   {availability.status}
                                 </Badge>
                               </div>
                             </div>
-                            
+
                             <Separator className="my-4" />
-                            
+
                             <div className="space-y-3">
                               <div className="flex items-center gap-2">
                                 <Mail className="h-4 w-4 text-muted-foreground" />
@@ -249,7 +263,7 @@ export default function MechanicsPage() {
                                 <Phone className="h-4 w-4 text-muted-foreground" />
                                 <span className="text-sm">{mechanic.phone || 'Not provided'}</span>
                               </div>
-                              
+
                               {mechanic.performance && (
                                 <>
                                   <div className="flex items-center gap-2">
@@ -265,8 +279,8 @@ export default function MechanicsPage() {
                                         <span className="text-xs text-muted-foreground">Completed Jobs</span>
                                         <span className="text-xs font-medium">{mechanic.performance.completedJobs}/{mechanic.performance.totalJobs}</span>
                                       </div>
-                                      <Progress 
-                                        value={(mechanic.performance.completedJobs / Math.max(1, mechanic.performance.totalJobs)) * 100} 
+                                      <Progress
+                                        value={(mechanic.performance.completedJobs / Math.max(1, mechanic.performance.totalJobs)) * 100}
                                         className="h-2"
                                       />
                                     </div>
@@ -276,8 +290,8 @@ export default function MechanicsPage() {
                             </div>
                           </div>
                           <CardFooter className="bg-muted/20 px-6 py-3 flex justify-end">
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               size="sm"
                               className="transition-all hover:bg-primary hover:text-primary-foreground"
                               onClick={() => router.push(`/admin/users/${mechanic.userId}`)}
@@ -296,7 +310,7 @@ export default function MechanicsPage() {
                     <p className="text-muted-foreground max-w-md mx-auto mb-6">
                       There are no mechanics registered in the system yet. Add a mechanic to get started.
                     </p>
-                    <Button 
+                    <Button
                       onClick={() => router.push("/admin/users/create")}
                       className="gap-2"
                     >
@@ -367,7 +381,7 @@ export default function MechanicsPage() {
                               </div>
                               <p className="text-2xl font-bold">{mechanic.performance?.totalJobs || 0}</p>
                             </div>
-                            
+
                             <div className="p-3 bg-muted/30 rounded-md">
                               <div className="flex items-center gap-2 mb-1">
                                 <CheckCircle className="h-4 w-4 text-green-500" />
@@ -375,21 +389,21 @@ export default function MechanicsPage() {
                               </div>
                               <p className="text-2xl font-bold">{mechanic.performance?.completedJobs || 0}</p>
                             </div>
-                            
+
                             <div className="p-3 bg-muted/30 rounded-md">
                               <div className="flex items-center gap-2 mb-1">
                                 <LineChart className="h-4 w-4 text-blue-500" />
                                 <span className="text-sm font-medium">Completion Rate</span>
                               </div>
                               <p className="text-2xl font-bold">
-                                {mechanic.performance 
-                                  ? `${Math.round((mechanic.performance.completedJobs / Math.max(1, mechanic.performance.totalJobs)) * 100)}%` 
+                                {mechanic.performance
+                                  ? `${Math.round((mechanic.performance.completedJobs / Math.max(1, mechanic.performance.totalJobs)) * 100)}%`
                                   : '0%'
                                 }
                               </p>
                             </div>
                           </div>
-                          
+
                           {mechanic.performance && (
                             <div className="mt-4">
                               <div className="mb-2">
@@ -399,12 +413,12 @@ export default function MechanicsPage() {
                                     {mechanic.performance.completedJobs}/{mechanic.performance.totalJobs}
                                   </span>
                                 </div>
-                                <Progress 
-                                  value={(mechanic.performance.completedJobs / Math.max(1, mechanic.performance.totalJobs)) * 100} 
+                                <Progress
+                                  value={(mechanic.performance.completedJobs / Math.max(1, mechanic.performance.totalJobs)) * 100}
                                   className="h-2 mt-1"
                                 />
                               </div>
-                              
+
                               <div className="mt-3">
                                 <div className="mb-1 text-sm text-muted-foreground">Customer Satisfaction</div>
                                 {renderStarRating(mechanic.performance.rating)}
@@ -413,8 +427,8 @@ export default function MechanicsPage() {
                           )}
                         </CardContent>
                         <CardFooter className="bg-muted/20 pt-2 flex justify-end">
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => router.push(`/admin/users/${mechanic.userId}`)}
                             className="gap-1 text-xs"
@@ -457,7 +471,7 @@ export default function MechanicsPage() {
                   <p className="text-muted-foreground max-w-md mx-auto mb-6">
                     There are no active or upcoming service appointments scheduled with mechanics.
                   </p>
-                  <Button 
+                  <Button
                     onClick={() => router.push("/admin/appointments/create")}
                     className="gap-2"
                   >

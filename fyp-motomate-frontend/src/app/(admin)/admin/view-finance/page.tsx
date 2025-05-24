@@ -48,6 +48,7 @@ import {
   MonthlyReport
 } from "@/app/services/financeService";
 import { format, parseISO } from "date-fns";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function FinancePage() {
   const [loading, setLoading] = useState(true);
@@ -60,6 +61,19 @@ export default function FinancePage() {
   const [apiErrors, setApiErrors] = useState<Record<string, any>>({});
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const searchParams = useSearchParams();
+  const router =useRouter()
+
+  const activeTab = searchParams.get('tab') || 'active';
+
+
+  const handleTabChange = (value: string) => {
+    // Update the URL with the new tab value
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', value);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
+
 
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, i) => (currentYear - i).toString());
@@ -392,7 +406,8 @@ export default function FinancePage() {
         </div>
 
         {/* Main Content Tabs */}
-        <Tabs defaultValue="invoices" className="space-y-6">
+        <Tabs defaultValue="invoices" value={activeTab}
+          onValueChange={handleTabChange} className="space-y-6">
           <div className="flex justify-between items-center">
             <TabsList className="bg-muted/50 p-1">
               <TabsTrigger value="invoices" className="gap-2 data-[state=active]:bg-background">
