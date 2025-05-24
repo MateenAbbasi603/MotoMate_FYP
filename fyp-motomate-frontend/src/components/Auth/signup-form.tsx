@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DisabledCountrySelect, PhoneInput } from "../ui/phone-input";
 
 // Updated schema to match our .NET API requirements
 const formSchema = z.object({
@@ -119,11 +120,11 @@ export function SignupForm() {
       );
 
       console.log("Registration successful:", response.data);
-      
+
       if (response.data.success) {
         // Save token if you want to automatically log in the user
         // localStorage.setItem('token', response.data.token);
-        
+
         toast.success("Account created successfully!");
         router.push("/login");
       } else {
@@ -132,7 +133,7 @@ export function SignupForm() {
       }
     } catch (error) {
       console.error("Registration error:", error);
-      
+
       if (axios.isAxiosError(error) && error.response) {
         console.error("API response error:", error.response.data);
         setError(error.response.data.message || "Failed to create account");
@@ -176,9 +177,9 @@ export function SignupForm() {
               }}
             >
               {({ open }) => (
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => open()}
                   className="mb-2"
                 >
@@ -239,9 +240,21 @@ export function SignupForm() {
           name="phone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Phone Number</FormLabel>
+              <FormLabel className="text-sm font-medium">
+                Phone Number
+              </FormLabel>
               <FormControl>
-                <Input placeholder="1234567890" {...field} />
+                <div className="relative">
+                  <PhoneInput
+                    className="pl-10"
+                    placeholder="Enter phone number"
+                    defaultCountry="PK"
+                    countries={["PK"]}
+                    countrySelectComponent={DisabledCountrySelect}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
