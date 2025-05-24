@@ -3,19 +3,19 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  DollarSign, 
-  CreditCard, 
-  FileText, 
-  TrendingUp, 
-  Loader2, 
-  AlertCircle, 
-  ArrowUpRight, 
-  CheckCircle2, 
-  Calendar, 
-  Clock, 
-  XCircle, 
-  BarChart3, 
+import {
+  DollarSign,
+  CreditCard,
+  FileText,
+  TrendingUp,
+  Loader2,
+  AlertCircle,
+  ArrowUpRight,
+  CheckCircle2,
+  Calendar,
+  Clock,
+  XCircle,
+  BarChart3,
   CalendarRange,
   ArrowUp,
   ArrowDown,
@@ -24,7 +24,16 @@ import {
   BadgeCheck,
   CreditCard as CreditCardIcon,
   ExternalLink,
-  Search
+  Search,
+  Trash2,
+  Plus,
+  ChevronUp,
+  ChevronDown,
+  Landmark,
+  BarChart,
+  PercentIcon,
+  BarChart2,
+  Eye,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +58,24 @@ import {
 } from "@/app/services/financeService";
 import { format, parseISO } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { getReports } from "../../../../../services/reportServie";
+import { toast } from "sonner";
+
+// Add these interfaces to your file
+interface Report {
+  reportId: number;
+  reportName: string;
+  reportType: string;
+  reportCategory: string;
+  startDate: string;
+  endDate: string;
+  totalRevenue: number;
+  totalTax: number;
+  totalInvoices: number;
+  generatedAt: string;
+  generatedByName: string;
+}
 
 export default function FinancePage() {
   const [loading, setLoading] = useState(true);
@@ -62,7 +89,14 @@ export default function FinancePage() {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const searchParams = useSearchParams();
-  const router =useRouter()
+  const router = useRouter()
+  const [reports, setReports] = useState<Report[]>([]);
+  const [reportsSearchTerm, setReportsSearchTerm] = useState<string>("");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const activeTab = searchParams.get('tab') || 'active';
 
@@ -74,6 +108,90 @@ export default function FinancePage() {
     router.replace(`?${params.toString()}`, { scroll: false });
   };
 
+  useEffect(() => {
+    fetchReports();
+  }, [currentPage]);
+
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const response = await getReports(currentPage, 10);
+      setReports(response.reports);
+      setTotalPages(response.totalPages);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to fetch reports");
+    } finally {
+      setLoading(false);
+    }
+  };
+  // Add these helper functions for the reports
+
+  // Function to filter reports based on search term and category
+  const filteredReports = reports.filter(report => {
+    const matchesSearch =
+      reportsSearchTerm === "" ||
+      report.reportName.toLowerCase().includes(reportsSearchTerm.toLowerCase()) ||
+      report.reportType.toLowerCase().includes(reportsSearchTerm.toLowerCase());
+
+    const matchesCategory =
+      filterCategory === "all" ||
+      report.reportCategory.toLowerCase() === filterCategory.toLowerCase();
+
+    return matchesSearch && matchesCategory;
+  });
+
+  // Function to get color styling based on report category
+  const getReportCategoryColor = (category: string): string => {
+    switch (category.toLowerCase()) {
+      case 'revenue':
+        return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900';
+      case 'saleswithtax':
+        return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900';
+      case 'saleswithouttax':
+        return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-900';
+      case 'tax':
+        return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-900';
+      case 'expense':
+        return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900';
+      default:
+        return 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
+    }
+  };
+
+  // Function to get appropriate icon based on report category
+  const getReportCategoryIcon = (category: string) => {
+    switch (category.toLowerCase()) {
+      case 'revenue':
+        return <ChevronUp className="h-3 w-3" />;
+      case 'saleswithtax':
+        return <BarChart className="h-3 w-3" />;
+      case 'saleswithouttax':
+        return <BarChart2 className="h-3 w-3" />;
+      case 'tax':
+        return <PercentIcon className="h-3 w-3" />;
+      case 'expense':
+        return <ChevronDown className="h-3 w-3" />;
+      default:
+        return <Landmark className="h-3 w-3" />;
+    }
+  };
+
+  // Function to handle report deletion
+  const handleDeleteReport = (reportId: number) => {
+    // In production, you would call your API to delete the report
+    // For now, we'll just update the state
+    setReports(reports.filter(report => report.reportId !== reportId));
+
+    // Recalculate total pages
+    const updatedReports = reports.filter(report => report.reportId !== reportId);
+    setTotalPages(Math.ceil(updatedReports.length / ITEMS_PER_PAGE));
+
+    // If current page is now empty, go to previous page
+    const lastItemOnPage = currentPage * ITEMS_PER_PAGE;
+    if (lastItemOnPage > updatedReports.length && currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
 
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, i) => (currentYear - i).toString());
@@ -190,7 +308,7 @@ export default function FinancePage() {
   // Get status badge variant
   const getStatusBadge = (invoice: Invoice) => {
     const status = invoice.status?.toLowerCase();
-    
+
     if (status === "paid") return "success";
     if (invoice.isOverdue || status === "overdue") return "destructive";
     if (status === "issued") return "warning";
@@ -201,7 +319,7 @@ export default function FinancePage() {
   // Get status icon
   const getStatusIcon = (invoice: Invoice) => {
     const status = invoice.status?.toLowerCase();
-    
+
     if (status === "paid") return <CheckCircle2 className="h-4 w-4" />;
     if (invoice.isOverdue || status === "overdue") return <AlertCircle className="h-4 w-4" />;
     if (status === "issued") return <FileText className="h-4 w-4" />;
@@ -222,16 +340,16 @@ export default function FinancePage() {
 
   // Filter invoices by search term and status
   const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch = 
-      searchTerm === "" || 
+    const matchesSearch =
+      searchTerm === "" ||
       invoice.invoiceId.toString().includes(searchTerm) ||
       (invoice.customer?.name && invoice.customer.name.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesStatus = 
-      filterStatus === "all" || 
+
+    const matchesStatus =
+      filterStatus === "all" ||
       invoice.status.toLowerCase() === filterStatus.toLowerCase() ||
       (filterStatus === "overdue" && invoice.isOverdue);
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -324,16 +442,7 @@ export default function FinancePage() {
               Monitor revenue, track payments, and analyze financial performance
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" className="gap-2 shadow-sm">
-              <FileText className="h-4 w-4" />
-              Generate Report
-            </Button>
-            <Button className="gap-2 shadow-sm">
-              <CreditCardIcon className="h-4 w-4" />
-              New Invoice
-            </Button>
-          </div>
+        
         </div>
 
         {/* Financial Summary Cards */}
@@ -436,7 +545,7 @@ export default function FinancePage() {
                       View and manage the latest invoices in the system
                     </CardDescription>
                   </div>
-                  
+
                   <div className="flex flex-wrap gap-3">
                     <div className="relative w-[240px]">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -448,7 +557,7 @@ export default function FinancePage() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
                     </div>
-                    
+
                     <Select value={filterStatus} onValueChange={setFilterStatus}>
                       <SelectTrigger className="w-[140px] gap-2">
                         <Filter className="h-4 w-4" />
@@ -465,7 +574,7 @@ export default function FinancePage() {
                   </div>
                 </div>
               </CardHeader>
-              
+
               <CardContent className="p-0">
                 {invoices.length === 0 ? (
                   <div className="h-[300px] flex items-center justify-center border-t rounded-md">
@@ -544,14 +653,14 @@ export default function FinancePage() {
                               {formatCurrency(invoice.totalAmount)}
                             </TableCell>
                             <TableCell>
-                              <Badge 
-                                variant="outline" 
+                              <Badge
+                                variant="outline"
                                 className={`flex items-center gap-1 w-fit shadow-sm
-                                  ${invoice.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : 
+                                  ${invoice.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' :
                                     invoice.isOverdue ? 'bg-red-50 text-red-700 border-red-200' :
-                                    invoice.status === 'issued' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                    invoice.status === 'cancelled' ? 'bg-gray-50 text-gray-700 border-gray-200' :
-                                    'bg-blue-50 text-blue-700 border-blue-200'
+                                      invoice.status === 'issued' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                        invoice.status === 'cancelled' ? 'bg-gray-50 text-gray-700 border-gray-200' :
+                                          'bg-blue-50 text-blue-700 border-blue-200'
                                   }`
                                 }
                               >
@@ -579,7 +688,7 @@ export default function FinancePage() {
                   </div>
                 )}
               </CardContent>
-              
+
               {filteredInvoices.length > 0 && (
                 <CardFooter className="border-t p-4 flex justify-between bg-muted/10">
                   <div className="text-sm text-muted-foreground">
@@ -605,7 +714,7 @@ export default function FinancePage() {
                       Track the latest payment transactions
                     </CardDescription>
                   </div>
-                  
+
                   <div className="flex flex-wrap gap-3">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -622,7 +731,7 @@ export default function FinancePage() {
                         <DropdownMenuItem>All Time</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    
+
                     <Button variant="outline" className="gap-2">
                       <Filter className="h-4 w-4" />
                       Filter
@@ -630,7 +739,7 @@ export default function FinancePage() {
                   </div>
                 </div>
               </CardHeader>
-              
+
               <CardContent className="p-0">
                 {payments.length === 0 ? (
                   <div className="h-[300px] flex items-center justify-center border-t rounded-md">
@@ -677,21 +786,21 @@ export default function FinancePage() {
                               {formatCurrency(payment.amount)}
                             </TableCell>
                             <TableCell>
-                              <Badge 
-                                variant="outline" 
+                              <Badge
+                                variant="outline"
                                 className={`flex items-center gap-1 w-fit shadow-sm 
-                                  ${payment.method === 'Cash' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                    payment.method === 'Credit Card' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
-                                    payment.method === 'Bank Transfer' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                                    'bg-gray-50 text-gray-700 border-gray-200'
+                                  ${payment.method === 'Cash' ? 'bg-green-50 text-green-700 border-green-200' :
+                                    payment.method === 'Credit Card' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                      payment.method === 'Bank Transfer' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                        'bg-gray-50 text-gray-700 border-gray-200'
                                   }`
                                 }
                               >
-                                {payment.method === 'Cash' ? 
-                                  <DollarSign className="h-3 w-3" /> : 
-                                  payment.method === 'Credit Card' ? 
-                                  <CreditCardIcon className="h-3 w-3" /> :
-                                  <BankIcon className="h-3 w-3" />
+                                {payment.method === 'Cash' ?
+                                  <DollarSign className="h-3 w-3" /> :
+                                  payment.method === 'Credit Card' ?
+                                    <CreditCardIcon className="h-3 w-3" /> :
+                                    <BankIcon className="h-3 w-3" />
                                 }
                                 <span>{payment.method}</span>
                               </Badge>
@@ -702,17 +811,17 @@ export default function FinancePage() {
                               </Link>
                             </TableCell>
                             <TableCell>
-                              <Badge 
-                                variant="outline" 
+                              <Badge
+                                variant="outline"
                                 className={`flex items-center gap-1 w-fit shadow-sm
-                                  ${payment.amount >= payment.invoiceTotal ? 
-                                    'bg-green-50 text-green-700 border-green-200' : 
+                                  ${payment.amount >= payment.invoiceTotal ?
+                                    'bg-green-50 text-green-700 border-green-200' :
                                     'bg-amber-50 text-amber-700 border-amber-200'
                                   }`
                                 }
                               >
-                                {payment.amount >= payment.invoiceTotal ? 
-                                  <BadgeCheck className="h-3 w-3" /> : 
+                                {payment.amount >= payment.invoiceTotal ?
+                                  <BadgeCheck className="h-3 w-3" /> :
                                   <PartialIcon className="h-3 w-3" />
                                 }
                                 <span>{payment.amount >= payment.invoiceTotal ? "Full Payment" : "Partial"}</span>
@@ -732,7 +841,7 @@ export default function FinancePage() {
                   </div>
                 )}
               </CardContent>
-              
+
               {payments.length > 0 && (
                 <CardFooter className="border-t p-4 flex justify-between bg-muted/10">
                   <div className="text-sm text-muted-foreground">
@@ -749,161 +858,154 @@ export default function FinancePage() {
 
           {/* Reports Tab */}
           <TabsContent value="reports" className="space-y-0 mt-0">
-            <Card className="shadow-sm border border-border/50">
-              <CardHeader className="bg-card border-b">
-                <div className="flex flex-col md:flex-row justify-between gap-4">
-                  <div>
-                    <CardTitle className="text-xl">Financial Reports</CardTitle>
-                    <CardDescription>
-                      Monthly breakdown of revenue and invoice analytics
-                    </CardDescription>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-3 items-center">
-                    <div className="w-36">
-                      <Select value={selectedYear} onValueChange={handleYearChange}>
-                        <SelectTrigger className="bg-card border-border/50 shadow-sm">
-                          <SelectValue placeholder="Select year" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {yearOptions.map((year) => (
-                            <SelectItem key={year} value={year}>{year}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <Button variant="outline" className="gap-2 shadow-sm">
-                      <FileText className="h-4 w-4" />
-                      Export Report
-                    </Button>
-                  </div>
-                </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Generated Reports
+                </CardTitle>
+                <CardDescription>
+                  View and manage all generated financial reports
+                </CardDescription>
               </CardHeader>
-              
-              <CardContent className="p-0">
-                {!report || !report.monthlyData || !Array.isArray(report.monthlyData) ? (
-                  <div className="h-[300px] flex items-center justify-center border-t rounded-md">
-                    <div className="text-center">
-                      <div className="mx-auto w-16 h-16 flex items-center justify-center rounded-full bg-muted/30 mb-4">
-                        <BarChart3 className="h-8 w-8 text-muted-foreground" />
-                      </div>
-                      <h3 className="text-lg font-semibold mb-1">No Report Data Available</h3>
-                      <p className="text-muted-foreground mb-4">No financial data available for {selectedYear}</p>
-                      
-                      <div className="flex flex-wrap gap-2 justify-center">
-                        {yearOptions.map((year) => (
-                          <Button 
-                            key={year} 
-                            variant={year === selectedYear ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setSelectedYear(year)}
-                          >
-                            {year}
-                          </Button>
-                        ))}
-                      </div>
+              <CardContent>
+                {filteredReports.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="mx-auto w-16 h-16 flex items-center justify-center rounded-full bg-muted/30 mb-4">
+                      <FileText className="h-8 w-8 text-muted-foreground" />
                     </div>
+                    <h3 className="text-lg font-semibold mb-1">No Reports Found</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {searchTerm || filterCategory !== 'all' ?
+                        'No reports match your current filters' :
+                        'Generate your first financial report to get started'
+                      }
+                    </p>
+                    {!searchTerm && filterCategory === 'all' && (
+                      <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
+                        <DialogTrigger asChild>
+                          <Button>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Generate First Report
+                          </Button>
+                        </DialogTrigger>
+                      </Dialog>
+                    )}
                   </div>
                 ) : (
-                  <div className="overflow-auto">
-                    <div className="p-4 border-b bg-muted/10">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="flex flex-col">
-                          <span className="text-sm text-muted-foreground mb-1">Total Revenue</span>
-                          <span className="text-2xl font-bold">{formatCurrency(report.totalRevenue)}</span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-sm text-muted-foreground mb-1">Total Invoices</span>
-                          <span className="text-2xl font-bold">{report.invoiceCount}</span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-sm text-muted-foreground mb-1">Average per Invoice</span>
-                          <span className="text-2xl font-bold">
-                            {report.invoiceCount > 0
-                              ? formatCurrency(report.totalRevenue / report.invoiceCount)
-                              : '-'
-                            }
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    
+                  <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
-                        <TableRow className="bg-muted/30 hover:bg-muted/30">
-                          <TableHead>Month</TableHead>
+                        <TableRow>
+                          <TableHead>Report Name</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Period</TableHead>
                           <TableHead className="text-right">Revenue</TableHead>
                           <TableHead className="text-right">Invoices</TableHead>
-                          <TableHead className="text-right">Avg. per Invoice</TableHead>
-                          <TableHead className="text-right">% of Total</TableHead>
+                          <TableHead>Generated</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {report.monthlyData.map((month) => (
-                          <TableRow key={month.month} className="group">
-                            <TableCell className="font-medium">
-                              {month.monthName}
+                        {filteredReports.map((report) => (
+                          <TableRow key={report.reportId}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{report.reportName}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  {report.reportType} Report
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`${getReportCategoryColor(report.reportCategory)} font-medium`}
+                              >
+                                <span className="flex items-center gap-1">
+                                  {getReportCategoryIcon(report.reportCategory)}
+                                  {report.reportCategory === 'SalesWithTax' ? 'Sales + Tax' :
+                                    report.reportCategory === 'SalesWithoutTax' ? 'Sales - Tax' :
+                                      report.reportCategory}
+                                </span>
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                <div>{new Date(report.startDate).toLocaleDateString()}</div>
+                                <div className="text-muted-foreground">
+                                  to {new Date(report.endDate).toLocaleDateString()}
+                                </div>
+                              </div>
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency(month.revenue)}
+                              <div className="font-medium">{formatCurrency(report.totalRevenue)}</div>
+                              {report.totalTax > 0 && (
+                                <div className="text-sm text-muted-foreground">
+                                  Tax: {formatCurrency(report.totalTax)}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="text-right">
-                              {month.count}
+                              <div className="font-medium">{report.totalInvoices}</div>
+                              <div className="text-sm text-muted-foreground">invoices</div>
                             </TableCell>
-                            <TableCell className="text-right">
-                              {month.count > 0
-                                ? formatCurrency(month.revenue / month.count)
-                                : '-'
-                              }
+                            <TableCell>
+                              <div className="text-sm">
+                                <div>{new Date(report.generatedAt).toLocaleDateString()}</div>
+                                <div className="text-muted-foreground">
+                                  by {report.generatedByName}
+                                </div>
+                              </div>
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <div className="w-16 bg-muted rounded-full h-2 overflow-hidden">
-                                  <div 
-                                    className="bg-primary h-full"
-                                    style={{ 
-                                      width: `${report.totalRevenue > 0 ? (month.revenue / report.totalRevenue) * 100 : 0}%` 
-                                    }}
-                                  />
-                                </div>
-                                <span>
-                                  {report.totalRevenue > 0 
-                                    ? `${((month.revenue / report.totalRevenue) * 100).toFixed(1)}%` 
-                                    : '0%'
-                                  }
-                                </span>
+                                <Link href={`/admin/view-finance/reports/${report.reportId}`}>
+                                  <Button variant="outline" size="sm">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </Link>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDeleteReport(report.reportId)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
                             </TableCell>
                           </TableRow>
                         ))}
-                        <TableRow className="bg-muted/50 font-medium border-t-2">
-                          <TableCell className="font-bold">Total</TableCell>
-                          <TableCell className="text-right font-bold">{formatCurrency(report.totalRevenue)}</TableCell>
-                          <TableCell className="text-right font-bold">{report.invoiceCount}</TableCell>
-                          <TableCell className="text-right font-bold">
-                            {report.invoiceCount > 0
-                              ? formatCurrency(report.totalRevenue / report.invoiceCount)
-                              : '-'
-                            }
-                          </TableCell>
-                          <TableCell className="text-right font-bold">100%</TableCell>
-                        </TableRow>
                       </TableBody>
                     </Table>
                   </div>
                 )}
               </CardContent>
-              
-              {report && report.monthlyData && Array.isArray(report.monthlyData) && report.monthlyData.length > 0 && (
-                <CardFooter className="border-t p-4 flex justify-between bg-muted/10">
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <CardFooter className="border-t flex justify-between items-center">
                   <div className="text-sm text-muted-foreground">
-                    Showing financial report for {selectedYear}
+                    Page {currentPage} of {totalPages}
                   </div>
-                  <Button variant="outline" className="gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    View Detailed Analytics
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </CardFooter>
               )}
             </Card>
@@ -916,14 +1018,14 @@ export default function FinancePage() {
 
 // Helper icon components
 const BankIcon = ({ className }: { className?: string }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
     className={className}
   >
     <rect x="3" y="10" width="18" height="8" rx="2" />
@@ -936,14 +1038,14 @@ const BankIcon = ({ className }: { className?: string }) => (
 );
 
 const PartialIcon = ({ className }: { className?: string }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
     className={className}
   >
     <path d="M12 2v20" />
