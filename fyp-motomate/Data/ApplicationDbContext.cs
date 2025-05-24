@@ -33,6 +33,8 @@ namespace fyp_motomate.Data
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<InvoiceItem> InvoiceItems { get; set; }
         public DbSet<ToolInstance> ToolInstances { get; set; }
+        public DbSet<FinancialReport> FinancialReports { get; set; }
+
 
 
 
@@ -59,6 +61,44 @@ namespace fyp_motomate.Data
                 .WithMany()
                 .HasForeignKey(t => t.MechanicId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<FinancialReport>(entity =>
+{
+entity.HasKey(e => e.ReportId);
+
+entity.Property(e => e.ReportName)
+    .IsRequired()
+    .HasMaxLength(100);
+
+entity.Property(e => e.ReportType)
+    .IsRequired()
+    .HasMaxLength(50);
+
+entity.Property(e => e.ReportCategory)
+    .IsRequired()
+    .HasMaxLength(50);
+
+entity.Property(e => e.TotalRevenue)
+    .HasColumnType("decimal(18,2)");
+
+entity.Property(e => e.TotalTax)
+    .HasColumnType("decimal(18,2)");
+
+entity.Property(e => e.NetRevenue)
+    .HasColumnType("decimal(18,2)");
+
+entity.Property(e => e.InventoryValue)
+    .HasColumnType("decimal(18,2)");
+
+entity.Property(e => e.Notes)
+    .HasMaxLength(500);
+
+entity.HasOne(d => d.GeneratedByUser)
+    .WithMany()
+    .HasForeignKey(d => d.GeneratedBy)
+    .OnDelete(DeleteBehavior.Restrict)
+    .HasConstraintName("FK_FinancialReports_Users_GeneratedBy");
+});
 
             modelBuilder.Entity<ToolInstance>()
 .HasOne(t => t.Tool)
