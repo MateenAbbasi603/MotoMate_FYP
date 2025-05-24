@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading.Tasks;
 using System.Security.Claims;
+using System.ComponentModel.DataAnnotations;
 
 namespace fyp_motomate.Controllers
 {
@@ -20,6 +21,112 @@ namespace fyp_motomate.Controllers
         {
             _context = context;
         }
+
+// In PaymentsController.cs
+[HttpPost("process-cash-payment")]
+[Authorize(Roles = "super_admin,admin,service_agent")]
+public async Task<ActionResult<object>> ProcessCashPayment([FromBody] CashPaymentRequest request)
+{
+    try
+    {
+        // Validate request
+        if (request == null || request.InvoiceId <= 0)
+        {
+            return BadRequest(new { success = false, message = "Invalid payment information" });
+        }
+
+        // Get the invoice
+        var invoice = await _context.Invoices
+            .Include(i => i.Order)
+            .FirstOrDefaultAsync(i => i.InvoiceId == request.InvoiceId);
+
+        if (invoice == null)
+        {
+            return NotFound(new { success = false, message = "Invoice not found" });
+        }
+
+        // Check if invoice is already paid
+        if (invoice.Status.ToLower() == "paid")
+        {
+            return BadRequest(new { success = false, message = "Invoice is already paid" });
+        }
+
+        // Get the admin user who processed the payment
+        int adminUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+        var adminUser = await _context.Users.FirstOrDefaultAsync(u => u.UserId == adminUserId);
+        string receivedBy = adminUser?.Name ?? "Admin";
+
+        // Create new payment record
+        var payment = new Payment
+        {
+            InvoiceId = invoice.InvoiceId,
+            Amount = invoice.TotalAmount,
+            Method = "Cash",
+            PaymentDate = DateTime.Now,
+            ReceivedBy = receivedBy
+        };
+
+        _context.Payments.Add(payment);
+
+        // Update invoice status
+        invoice.Status = "paid";
+        
+        // Update order status if needed
+        if (invoice.Order != null && invoice.Order.Status != "completed")
+        {
+            invoice.Order.Status = "completed";
+        }
+
+        await _context.SaveChangesAsync();
+
+        // Create notification for customer
+        var notification = new Notification
+        {
+            UserId = invoice.UserId,
+            Message = $"Your cash payment of PKR {invoice.TotalAmount} for Invoice #{invoice.InvoiceId} has been received",
+            Status = "unread",
+            CreatedAt = DateTime.Now
+        };
+        
+        // Create notification for admin/staff
+        var adminNotification = new Notification
+        {
+            UserId = 1, // Admin
+            Message = $"Cash payment of PKR {invoice.TotalAmount} for Invoice #{invoice.InvoiceId} received by {receivedBy}",
+            Status = "unread",
+            CreatedAt = DateTime.Now
+        };
+
+        _context.Notifications.AddRange(notification, adminNotification);
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            message = "Cash payment processed successfully",
+            payment = new
+            {
+                payment.PaymentId,
+                payment.InvoiceId,
+                payment.Amount,
+                payment.Method,
+                payment.PaymentDate,
+                payment.ReceivedBy
+            }
+        });
+    }
+    catch (Exception ex)
+    {
+        return StatusCode(500, new
+        {
+            success = false,
+            message = "An error occurred while processing the payment",
+            error = ex.Message
+        });
+    }
+}
+
+
 
         // POST: api/Payments/process-safepay
         [HttpPost("process-safepay")]
@@ -197,4 +304,12 @@ namespace fyp_motomate.Controllers
         public string TransactionId { get; set; }
         // Add any other fields you might need from Safepay response
     }
+
+    public class CashPaymentRequest
+{
+    [Required]
+    public int InvoiceId { get; set; }
+    
+    public string? Notes { get; set; }
+}
 }

@@ -139,6 +139,8 @@ export default function OrderDetailPage({
     try {
       setLoadingInvoice(true);
       const response = await apiClient.get(`/api/Invoices/customer/${orderId}`);
+      console.log(response.data);
+      
 
       if (response.data.success) {
         setInvoice(response.data);
@@ -1161,7 +1163,7 @@ export default function OrderDetailPage({
       {/* Invoice Full Dialog */}
       {invoice && (
         <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
             <DialogHeader className="border-b pb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1235,89 +1237,171 @@ export default function OrderDetailPage({
                 </div>
               </div>
 
-              {/* Invoice Items Table */}
-              <div className="mb-6">
-                <h3 className="text-sm font-medium mb-3">Service Details</h3>
-                <div className="border rounded-lg overflow-hidden shadow-sm">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/30">
-                      <tr>
-                        <th className="text-left p-3 font-medium">Description</th>
-                        <th className="text-center p-3 font-medium">Qty</th>
-                        <th className="text-right p-3 font-medium">Unit Price</th>
-                        <th className="text-right p-3 font-medium">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {(() => {
-                        // Get invoice items
-                        let items = [];
 
-                        if (invoice?.invoice?.invoiceItems?.$values) {
-                          items = invoice.invoice.invoiceItems.$values;
-                        } else if (invoice?.invoiceItems?.$values) {
-                          items = invoice.invoiceItems.$values;
-                        }
+{/* Invoice Items Table */}
+<div className="mb-6">
+  <h3 className="text-sm font-medium mb-3">Service Details</h3>
+  <div className="border rounded-lg overflow-hidden shadow-sm">
+    <table className="w-full text-sm">
+      <thead className="bg-muted/30">
+        <tr>
+          <th className="text-left p-3 font-medium">Description</th>
+          <th className="text-center p-3 font-medium">Qty</th>
+          <th className="text-right p-3 font-medium">Unit Price</th>
+          <th className="text-right p-3 font-medium">Total</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y">
+        {(() => {
+          // Get invoice items - handle different response structures
+          let items = [];
 
-                        if (items.length > 0) {
-                          return items.map((item: any, index: number) => (
-                            <tr key={index} className="hover:bg-muted/10">
-                              <td className="px-4 py-3">{item.description}</td>
-                              <td className="px-4 py-3 text-center">{item.quantity}</td>
-                              <td className="px-4 py-3 text-right">
-                                PKR {typeof item.unitPrice === 'number'
-                                  ? item.unitPrice.toFixed(2)
-                                  : parseFloat(item.unitPrice || '0').toFixed(2)}
-                              </td>
-                              <td className="px-4 py-3 text-right font-medium">
-                                PKR {typeof item.totalPrice === 'number'
-                                  ? item.totalPrice.toFixed(2)
-                                  : parseFloat(item.totalPrice || '0').toFixed(2)}
-                              </td>
-                            </tr>
-                          ));
-                        } else {
-                          return (
-                            <tr>
-                              <td colSpan={4} className="px-4 py-3 text-center text-muted-foreground">
-                                No items found
-                              </td>
-                            </tr>
-                          );
-                        }
-                      })()}
-                    </tbody>
-                    <tfoot className="bg-muted/20">
-                      <tr>
-                      <td colSpan={3} className="px-4 py-3 text-right font-medium">Subtotal</td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        PKR {typeof invoice?.invoice?.subTotal === 'number'
-                          ? invoice.invoice.subTotal.toFixed(2)
-                          : parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0').toFixed(2)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td colSpan={3} className="px-4 py-3 text-right font-medium">
-                        Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        PKR {typeof invoice?.invoice?.taxAmount === 'number'
-                          ? invoice.invoice.taxAmount.toFixed(2)
-                          : (parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0') * 0.18).toFixed(2)}
-                      </td>
-                    </tr>
-                    <tr className="border-t-2">
-                      <td colSpan={3} className="px-4 py-3 text-right font-semibold">Total Amount</td>
-                      <td className="px-4 py-3 text-right font-semibold text-primary">
-                        PKR {typeof invoice?.invoice?.totalAmount === 'number'
-                          ? invoice.invoice.totalAmount.toFixed(2)
-                          : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
+          // Check different possible structures for invoice items
+          if (invoice?.invoiceItems && Array.isArray(invoice.invoiceItems)) {
+            items = invoice.invoiceItems;
+          } else if (invoice?.invoice?.invoiceItems && Array.isArray(invoice.invoice.invoiceItems)) {
+            items = invoice.invoice.invoiceItems;
+          } else if (invoice?.invoiceItems?.$values) {
+            items = invoice.invoiceItems.$values;
+          } else if (invoice?.invoice?.invoiceItems?.$values) {
+            items = invoice.invoice.invoiceItems.$values;
+          }
+
+          console.log('Invoice items found:', items); // Debug log
+
+          if (items && items.length > 0) {
+            return items.map((item: any, index: number) => (
+              <tr key={item.invoiceItemId || index} className="hover:bg-muted/10">
+                <td className="px-4 py-3">{item.description || 'Service Item'}</td>
+                <td className="px-4 py-3 text-center">{item.quantity || 1}</td>
+                <td className="px-4 py-3 text-right">
+                  PKR {typeof item.unitPrice === 'number'
+                    ? item.unitPrice.toFixed(2)
+                    : parseFloat(item.unitPrice || '0').toFixed(2)}
+                </td>
+                <td className="px-4 py-3 text-right font-medium">
+                  PKR {typeof item.totalPrice === 'number'
+                    ? item.totalPrice.toFixed(2)
+                    : parseFloat(item.totalPrice || '0').toFixed(2)}
+                </td>
+              </tr>
+            ));
+          } else {
+            // If no invoice items found, show order services instead
+            let fallbackItems = [];
+            
+            // Try to get services from order data
+            if (invoice?.order?.service) {
+              fallbackItems.push({
+                description: invoice.order.service.serviceName || 'Main Service',
+                quantity: 1,
+                unitPrice: invoice.order.service.price || 0,
+                totalPrice: invoice.order.service.price || 0
+              });
+            }
+
+            // Add inspection if available
+            if (invoice?.order?.inspection?.price) {
+              fallbackItems.push({
+                description: `Inspection - ${invoice.order.inspection.serviceName || 'Vehicle Inspection'}`,
+                quantity: 1,
+                unitPrice: invoice.order.inspection.price,
+                totalPrice: invoice.order.inspection.price
+              });
+            }
+
+            // Add additional services if available
+            if (invoice?.order?.additionalServices && Array.isArray(invoice.order.additionalServices)) {
+              invoice.order.additionalServices.forEach((service: any) => {
+                fallbackItems.push({
+                  description: service.serviceName || 'Additional Service',
+                  quantity: 1,
+                  unitPrice: service.price || 0,
+                  totalPrice: service.price || 0
+                });
+              });
+            }
+
+            if (fallbackItems.length > 0) {
+              return fallbackItems.map((item: any, index: number) => (
+                <tr key={index} className="hover:bg-muted/10">
+                  <td className="px-4 py-3">{item.description}</td>
+                  <td className="px-4 py-3 text-center">{item.quantity}</td>
+                  <td className="px-4 py-3 text-right">
+                    PKR {typeof item.unitPrice === 'number'
+                      ? item.unitPrice.toFixed(2)
+                      : parseFloat(item.unitPrice || '0').toFixed(2)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-medium">
+                    PKR {typeof item.totalPrice === 'number'
+                      ? item.totalPrice.toFixed(2)
+                      : parseFloat(item.totalPrice || '0').toFixed(2)}
+                  </td>
+                </tr>
+              ));
+            } else {
+              return (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <FileText className="h-8 w-8 text-muted-foreground/50" />
+                      <p className="text-muted-foreground">No service details available</p>
+                      <p className="text-xs text-muted-foreground">
+                        Invoice items may not have been generated properly
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              );
+            }
+          }
+        })()}
+      </tbody>
+      <tfoot className="bg-muted/20">
+        <tr>
+          <td colSpan={3} className="px-4 py-3 text-right font-medium">Subtotal</td>
+          <td className="px-4 py-3 text-right font-medium">
+            PKR {(() => {
+              const subtotal = invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount;
+              if (typeof subtotal === 'number') {
+                return subtotal.toFixed(2);
+              }
+              // Calculate subtotal from total if not available
+              const total = parseFloat(invoice?.invoice?.totalAmount || '0');
+              const calculatedSubtotal = total / 1.18; // Assuming 18% tax
+              return calculatedSubtotal.toFixed(2);
+            })()}
+          </td>
+        </tr>
+        <tr>
+          <td colSpan={3} className="px-4 py-3 text-right font-medium">
+            Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
+          </td>
+          <td className="px-4 py-3 text-right font-medium">
+            PKR {(() => {
+              const taxAmount = invoice?.invoice?.taxAmount;
+              if (typeof taxAmount === 'number') {
+                return taxAmount.toFixed(2);
+              }
+              // Calculate tax from total if not available
+              const total = parseFloat(invoice?.invoice?.totalAmount || '0');
+              const calculatedTax = total - (total / 1.18);
+              return calculatedTax.toFixed(2);
+            })()}
+          </td>
+        </tr>
+        <tr className="border-t-2">
+          <td colSpan={3} className="px-4 py-3 text-right font-semibold">Total Amount</td>
+          <td className="px-4 py-3 text-right font-semibold text-primary">
+            PKR {typeof invoice?.invoice?.totalAmount === 'number'
+              ? invoice.invoice.totalAmount.toFixed(2)
+              : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
 
             {/* Notes & Payment Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">

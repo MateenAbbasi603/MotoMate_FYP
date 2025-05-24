@@ -527,6 +527,9 @@ namespace fyp_motomate.Models
         [StringLength(20)]
         public string Method { get; set; }
 
+        [StringLength(100)]
+        public string ReceivedBy { get; set; } = "Admin";
+
         // Foreign key relationship
         [ForeignKey("InvoiceId")]
         public Invoice Invoice { get; set; }

@@ -27,6 +27,17 @@ import {
   AlertCircle
 } from "lucide-react";
 
+// Add these imports to your existing OrderForm.tsx imports
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { CreditCard, Wallet } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -150,6 +161,8 @@ export default function OrderForm() {
   const [allServices, setAllServices] = useState<Service[]>([]);
   const [formStep, setFormStep] = useState(0);
   const [formProgress, setFormProgress] = useState(0);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'cash' | 'online' | null>(null);
 
   // New state for managing selected subcategories
   const [selectedSubcategories, setSelectedSubcategories] = useState<SelectedSubcategory[]>([]);
@@ -380,7 +393,6 @@ export default function OrderForm() {
 
 
 
-  // Updated onSubmit function with fixed subcategory handling
   const onSubmit = async (values: FormValues) => {
     try {
       // Validate that at least one subcategory is selected
@@ -390,14 +402,29 @@ export default function OrderForm() {
         return;
       }
 
+      // Show payment method selection dialog first
+      setShowPaymentDialog(true);
+    } catch (error) {
+      console.error("Form submission error:", error);
+      setError("Failed to process your order. Please try again.");
+      toast.error("Failed to create order");
+    }
+  };
+
+  // Add this new function to handle the actual order creation
+  const handleOrderCreation = async (paymentMethod: 'cash' | 'online') => {
+    try {
       setSubmitting(true);
       setError(null);
+      setShowPaymentDialog(false);
 
       const token = getAuthToken();
       if (!token) {
         router.push("/login");
         return;
       }
+
+      const values = form.getValues();
 
       // Check if the time slot is still available
       const isSlotAvailable = await timeSlotService.isTimeSlotAvailable(
@@ -434,7 +461,7 @@ export default function OrderForm() {
         .slice(1)
         .map(subcategory => subcategory.serviceId);
 
-      // Prepare the final request object
+      // Prepare the final request object with payment method
       const orderData = {
         vehicleId: parseInt(values.vehicleId),
         inspectionTypeId: primaryInspection.serviceId,
@@ -444,6 +471,7 @@ export default function OrderForm() {
         inspectionDate: inspectionDateWithNoon.toISOString(),
         timeSlot: values.timeSlot,
         notes: values.notes || "",
+        paymentMethod: paymentMethod, // Add payment method to the request
       };
 
       console.log("Creating order with data:", orderData);
@@ -465,7 +493,15 @@ export default function OrderForm() {
 
         if (response.data.success) {
           toast.success("Your order has been placed successfully!");
-          router.push("/dashboard");
+
+          // Different redirect based on payment method
+          if (paymentMethod === 'cash') {
+            // For cash payments, redirect to order details page
+            router.push(`/orders/${response.data.orderId}`);
+          } else {
+            // For online payments, redirect to dashboard (existing flow)
+            router.push("/dashboard");
+          }
         } else {
           setError(response.data.message || "Failed to create order");
           toast.error(response.data.message || "Failed to create order");
@@ -503,9 +539,9 @@ export default function OrderForm() {
       toast.error("Failed to create order");
     } finally {
       setSubmitting(false);
+      setSelectedPaymentMethod(null);
     }
   };
-
   // Add a service to the additional services list
   const addAdditionalService = (serviceId: string) => {
     const currentIds = form.getValues("additionalServiceIds");
@@ -766,16 +802,16 @@ export default function OrderForm() {
                               <div
                                 key={subcategory.serviceId}
                                 className={`p-4 rounded-md border cursor-pointer transition-all ${isSelected
-                                    ? 'bg-primary/5 border-primary shadow-sm'
-                                    : 'hover:bg-accent hover:border-accent'
+                                  ? 'bg-primary/5 border-primary shadow-sm'
+                                  : 'hover:bg-accent hover:border-accent'
                                   }`}
                                 onClick={() => toggleSubcategorySelection(subcategory)}
                               >
                                 <div className="flex justify-between items-center">
                                   <div className="flex items-center">
                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center mr-2 ${isSelected
-                                        ? 'bg-primary text-white'
-                                        : 'border border-muted-foreground'
+                                      ? 'bg-primary text-white'
+                                      : 'border border-muted-foreground'
                                       }`}>
                                       {isSelected && <Check className="h-3 w-3" />}
                                     </div>
@@ -1293,6 +1329,71 @@ export default function OrderForm() {
           </form>
         </Form>
       </CardContent>
+
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-primary" />
+              Select Payment Method
+            </DialogTitle>
+            <DialogDescription>
+              How would you like to pay for this service?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 gap-4 py-4">
+            <Button
+              variant={selectedPaymentMethod === 'cash' ? 'default' : 'outline'}
+              className="h-16 flex-col gap-2"
+              onClick={() => setSelectedPaymentMethod('cash')}
+            >
+              <Wallet className="h-6 w-6" />
+              <div className="text-center">
+                <p className="font-medium">Cash Payment</p>
+                <p className="text-xs text-muted-foreground">Pay at the workshop</p>
+              </div>
+            </Button>
+
+            <Button
+              variant={selectedPaymentMethod === 'online' ? 'default' : 'outline'}
+              className="h-16 flex-col gap-2"
+              onClick={() => setSelectedPaymentMethod('online')}
+            >
+              <CreditCard className="h-6 w-6" />
+              <div className="text-center">
+                <p className="font-medium">Online Payment</p>
+                <p className="text-xs text-muted-foreground">Pay now with card</p>
+              </div>
+            </Button>
+          </div>
+
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowPaymentDialog(false);
+                setSelectedPaymentMethod(null);
+              }}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => selectedPaymentMethod && handleOrderCreation(selectedPaymentMethod)}
+              disabled={!selectedPaymentMethod || submitting}
+              className="gap-2"
+            >
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ClipboardCheck className="h-4 w-4" />
+              )}
+              Confirm Order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

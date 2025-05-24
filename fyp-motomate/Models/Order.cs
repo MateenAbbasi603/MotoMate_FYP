@@ -38,6 +38,10 @@ namespace fyp_motomate.Models
         public string? OrderType { get; set; } = "Online";
 
 
+        [StringLength(20)]
+        public string PaymentMethod { get; set; } = "online"; // Default to online payment
+
+
         [Required]
         [Column(TypeName = "decimal(10,2)")]
         public decimal TotalAmount { get; set; }

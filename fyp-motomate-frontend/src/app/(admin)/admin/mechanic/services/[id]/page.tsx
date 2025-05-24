@@ -271,7 +271,7 @@ export default function ServiceDetailPage({
       }
 
       // Get formatted ETA
-      const formattedETA = selectedStatus !== 'completed' ? getFormattedETA() : null;
+      const formattedETA = selectedStatus !== 'completed' ? getFormattedETA() : "";
 
       const payload = {
         status: selectedStatus,

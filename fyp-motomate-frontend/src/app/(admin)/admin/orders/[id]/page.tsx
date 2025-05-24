@@ -151,6 +151,7 @@ interface OrderData {
   vehicle: VehicleData;
   service?: ServiceData;
   inspection?: InspectionData;
+  paymentMethod: string;
 
   additionalServices?: ServiceData[] | { $values?: ServiceData[] };
 }
@@ -271,6 +272,8 @@ export default function OrderDetailPage({
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [invoiceId, setInvoiceId] = useState<number | null>(null);
   const [isDialogMounted, setIsDialogMounted] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
+
 
 
   // Helper function to check if this is an inspection-only order
@@ -278,6 +281,49 @@ export default function OrderDetailPage({
     return Boolean(!order?.service && !order?.serviceId && order?.includesInspection && order?.inspection);
   };
 
+
+  const handleProcessCashPayment = async () => {
+    if (!order || !invoiceId) return;
+
+    try {
+      setProcessingPayment(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error("Please log in again to continue");
+        return;
+      }
+
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Payments/process-cash-payment`,
+        { invoiceId },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.data && response.data.success) {
+        toast.success("Cash payment processed successfully");
+
+        // Update the order and invoice status in the UI
+        setOrder({
+          ...order,
+          invoiceStatus: 'paid'
+        });
+
+        // Refresh page data
+        router.refresh();
+      } else {
+        toast.error(response.data?.message || "Failed to process payment");
+      }
+    } catch (error: any) {
+      console.error('Error processing cash payment:', error);
+      toast.error(error.response?.data?.message || "Failed to process payment");
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
   const handleGenerateInvoice = async () => {
     if (!order) return;
 
@@ -289,12 +335,22 @@ export default function OrderDetailPage({
         toast.success(response.isExisting ? 'Invoice already exists' : 'Invoice generated successfully');
         setInvoiceId(response.invoice.invoiceId);
 
-        // Redirect to the invoice page
-        router.push(`/admin/invoices/${response.invoice.invoiceId}`);
+        // Update the order state with payment method and invoice status
+        setOrder({
+          ...order,
+          paymentMethod: response.paymentMethod || order.paymentMethod || 'online',
+          invoiceStatus: response.invoice.status,
+          invoiceId: response.invoice.invoiceId
+        });
+
+        // Redirect to the invoice page if not cash payment
+        if (response.paymentMethod !== 'cash') {
+          router.push(`/admin/invoices/${response.invoice.invoiceId}`);
+        }
       } else {
         toast.error(response.message || 'Failed to generate invoice');
       }
-    } catch (error: any) {
+    } catch (error:any) {
       console.error('Error generating invoice:', error);
       const errorMessage = error.response?.data?.message ||
         error.response?.data?.error ||
@@ -403,7 +459,11 @@ export default function OrderDetailPage({
         }
 
         // Initialize order with the data we have
-        let enhancedOrder = { ...orderData };
+        let enhancedOrder = {
+          ...orderData,
+          paymentMethod: orderData.paymentMethod || 'online'
+        };
+
 
         // Normalize additionalServices
         const normalizedAdditionalServices = normalizeAdditionalServices(enhancedOrder);
@@ -1540,13 +1600,13 @@ export default function OrderDetailPage({
                           <div className="flex justify-between items-center pt-3 font-semibold">
                             <span className="text-lg">Total Amount</span>
                             <span className="text-lg text-primary">PKR {order.totalAmount?.toFixed(2) || calculateTotalAmount().toFixed(2)}</span>
-                            
+
                           </div>
                           <div className="flex justify-between items-center pt-3 font-semibold">
-                          <span className="text-lg"></span>
+                            <span className="text-lg"></span>
 
-                         <Badge>Exclusive of 18% SST</Badge>
-                            
+                            <Badge>Exclusive of 18% SST</Badge>
+
                           </div>
 
 
@@ -1935,7 +1995,7 @@ export default function OrderDetailPage({
 
 
 
-                {/* Invoice generation section */}
+                {/* Invoice generation section
                 {order && order.status.toLowerCase() === 'completed' && (
                   <div className="pt-4 border-t space-y-3">
                     <h3 className="text-sm font-medium flex items-center gap-2">
@@ -1964,8 +2024,72 @@ export default function OrderDetailPage({
                       {invoiceId ? 'View the generated invoice' : 'Create a detailed invoice from this order'}
                     </p>
                   </div>
-                )}
+                )} */}
 
+
+                {/* Invoice generation and payment handling section */}
+                {order && order.status.toLowerCase() === 'completed' && (
+                  <div className="pt-4 border-t space-y-3">
+                    <h3 className="text-sm font-medium flex items-center gap-2">
+                      <Receipt className="h-4 w-4 text-primary" />
+                      Invoice Management
+                    </h3>
+
+                    {/* Show Generate Invoice or View Invoice button */}
+                    <Button
+                      className="w-full shadow-sm"
+                      variant="default"
+                      onClick={handleGenerateInvoice}
+                      disabled={generatingInvoice}
+                    >
+                      {generatingInvoice ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="mr-2 h-4 w-4" />
+                          {invoiceId ? 'View Invoice' : 'Generate Invoice'}
+                        </>
+                      )}
+                    </Button>
+
+                    {/* Show Receive Payment button for cash invoices - modified condition */}
+                    {invoiceId &&
+                      ((order.paymentMethod && order.paymentMethod === 'cash') ||
+                        (order.invoiceStatus &&
+                          (order.invoiceStatus === 'pending_cash' || order.invoiceStatus === 'pending'))) && (
+                        <Button
+                          className="w-full mt-2 shadow-sm"
+                          variant="outline"
+                          onClick={handleProcessCashPayment}
+                          disabled={processingPayment}
+                        >
+                          {processingPayment ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <Banknote className="mr-2 h-4 w-4 text-green-600" />
+                              Receive Cash Payment
+                            </>
+                          )}
+                        </Button>
+                      )}
+
+                    <p className="text-xs text-muted-foreground">
+                      {invoiceId
+                        ? ((order.paymentMethod === 'cash' || order.invoiceStatus === 'pending_cash')
+                          ? 'View the invoice or process cash payment'
+                          : 'View the generated invoice')
+                        : 'Create a detailed invoice from this order'
+                      }
+                    </p>
+                  </div>
+                )}
                 {/* Status update */}
                 <div className="pt-4 border-t space-y-3">
                   <h3 className="text-sm font-medium flex items-center gap-2">
