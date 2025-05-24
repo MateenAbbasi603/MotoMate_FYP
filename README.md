@@ -50,3 +50,44 @@ ADD MechanicId INT;
  ALTER TABLE [motomateDb].[dbo].[Services]
 ADD [SubCategory] NVARCHAR(100) NULL;
  ```
+
+
+
+
+ /* Replace these blue colors with primary equivalents: */
+
+/* Gradients */
+from-blue-600 to-blue-700 → from-primary to-primary/90
+from-blue-700 to-blue-800 → from-primary/90 to-primary
+from-blue-100 to-blue-200 → from-primary/10 to-primary/20
+
+/* Background Colors */
+bg-blue-600 → bg-primary
+bg-blue-700 → bg-primary/90
+bg-blue-50 → bg-primary/5
+
+/* Text Colors */
+text-blue-600 → text-primary
+text-blue-700 → text-primary/90
+
+/* Border and Ring Colors */
+focus:border-blue-500 → focus:border-primary
+focus:ring-blue-500/20 → focus:ring-primary/20
+
+/* Shadow Colors */
+shadow-blue-600/25 → shadow-primary/25
+shadow-blue-700/30 → shadow-primary/30
+
+/* Background Clip Text */
+bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text → bg-gradient-to-r from-primary to-primary/90 bg-clip-text
+
+/* Hover States */
+hover:from-blue-700 hover:to-blue-800 → hover:from-primary/90 hover:to-primary
+hover:text-blue-700 → hover:text-primary/90
+hover:bg-blue-700 → hover:bg-primary/90
+
+/* Background Decorative Elements */
+bg-blue-400/10 → bg-primary/10
+from-blue-400/5 to-purple-400/5 → from-primary/5 to-primary/10
+from-blue-50/30 → from-primary/5
+via-blue-950/30 → via-primary/20

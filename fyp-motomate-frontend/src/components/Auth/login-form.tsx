@@ -6,6 +6,17 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import axios from "axios";
+import { useState } from "react";
+import Link from "next/link";
+import { 
+  Eye, 
+  EyeOff, 
+  Wrench, 
+  Shield, 
+  ArrowRight,
+  Loader2,
+  AlertCircle 
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,10 +28,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import Link from "next/link";
-import { useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Define login form validation schema - updated to use username instead of email
+// Define login form validation schema
 const loginFormSchema = z.object({
   username: z.string().min(1, {
     message: "Username is required.",
@@ -32,12 +42,37 @@ const loginFormSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginFormSchema>;
 
-export function LoginForm() {
+// Logo Component
+function MotoMateLogo() {
+  return (
+    <div className="flex items-center gap-3 mb-8">
+      <div className="relative">
+        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
+          <Wrench className="w-6 h-6 text-white" />
+        </div>
+        <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+          <Shield className="w-2.5 h-2.5 text-white" />
+        </div>
+      </div>
+      <div>
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">
+          MotoMate
+        </h1>
+        <p className="text-xs text-muted-foreground font-medium">
+          Auto Workshop Management
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Enhanced Login Form Component
+export default function EnhancedLoginForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Define your form
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
     defaultValues: {
@@ -46,20 +81,17 @@ export function LoginForm() {
     },
   });
 
-  // Define a submit handler with debugging
   async function onSubmit(values: LoginFormValues) {
     try {
       setIsSubmitting(true);
       setError(null);
-  
-      // Get backend URL with fallback for testing
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "https://localhost:7105";
       const apiUrl = `${backendUrl}/api/auth/login`;
-  
+
       console.log("Attempting to call API at:", apiUrl);
       console.log("Login payload:", { username: values.username, password: values.password });
-  
-      // Submit the form using axios
+
       const response = await axios.post(
         apiUrl,
         {
@@ -72,21 +104,19 @@ export function LoginForm() {
           }
         }
       );
-  
+
       console.log("API Response:", response.data);
-  
+
       if (response.data.success) {
-        // Store token in localStorage
         localStorage.setItem("token", response.data.token);
         
-        // Store user data if needed
         if (response.data.user) {
           localStorage.setItem("user", JSON.stringify(response.data.user));
         }
-  
-        toast.success("Login successful!");
-  
-        // Redirect based on user role for more specific routing
+
+        toast.success("Welcome back! Login successful.");
+
+        // Enhanced role-based routing
         if (response.data.user?.role) {
           const role = response.data.user.role;
           switch (role) {
@@ -98,19 +128,18 @@ export function LoginForm() {
               router.push("/admin/dashboard");
               break;
             case "service_agent":
-              router.push("/admin/service-agent"); // Service agents directly to services page
+              router.push("/admin/service-agent");
               break;
             case "mechanic":
-              router.push("/admin/mechanic"); // Mechanics directly to mechanic page
+              router.push("/admin/mechanic");
               break;
             case "finance_officer":
-              router.push("/admin/finances"); // Finance officers directly to finance page
+              router.push("/admin/finances");
               break;
             default:
               router.push("/dashboard");
               break;
           }
-          console.log("Redirecting to:", `/admin/${role}`);
         } else {
           router.push("/dashboard");
         }
@@ -120,27 +149,22 @@ export function LoginForm() {
       }
     } catch (error) {
       console.error("Login Error:", error);
-  
-      // Handle error
+
       if (axios.isAxiosError(error)) {
         console.log("Response status:", error.response?.status);
         console.log("Response data:", error.response?.data);
-  
+
         if (error.response) {
-          // Server returned an error response
           setError(error.response.data.message || "Invalid username or password");
           toast.error(error.response.data.message || "Invalid username or password");
         } else if (error.request) {
-          // No response received
-          setError("No response from server. Please try again later.");
-          toast.error("No response from server. Please try again later.");
+          setError("Unable to connect to server. Please check your connection.");
+          toast.error("Unable to connect to server. Please check your connection.");
         } else {
-          // Error setting up the request
-          setError("Error setting up request. Please try again.");
-          toast.error("Error setting up request. Please try again.");
+          setError("An unexpected error occurred. Please try again.");
+          toast.error("An unexpected error occurred. Please try again.");
         }
       } else {
-        // Non-Axios error
         setError("An unexpected error occurred");
         toast.error("An unexpected error occurred");
       }
@@ -150,21 +174,28 @@ export function LoginForm() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-        <div className="mb-6 text-center">
-          <h1 className="text-xl font-semibold">Welcome back</h1>
+    <div className="w-full max-w-md mx-auto">
+      <MotoMateLogo />
+      
+      <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-8 shadow-xl shadow-black/5">
+        <div className="mb-8 text-center">
+          <h2 className="text-2xl font-semibold text-foreground mb-2">
+            Welcome back
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Login with your Username & Password
+            Sign in to your account to continue
           </p>
         </div>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {error && (
-              <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                {error}
-              </div>
+              <Alert variant="destructive" className="border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  {error}
+                </AlertDescription>
+              </Alert>
             )}
 
             <FormField
@@ -172,14 +203,17 @@ export function LoginForm() {
               name="username"
               render={({ field }) => (
                 <FormItem className="space-y-2">
-                  <FormLabel>Username</FormLabel>
+                  <FormLabel className="text-sm font-medium text-foreground">
+                    Username
+                  </FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="yourusername"
+                      placeholder="Enter your username"
+                      className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
@@ -190,42 +224,94 @@ export function LoginForm() {
               render={({ field }) => (
                 <FormItem className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel className="text-sm font-medium text-foreground">
+                      Password
+                    </FormLabel>
                     <Link
                       href="/forgot-password"
-                      className="text-sm text-primary hover:underline underline-offset-4"
+                      className="text-xs text-blue-600 hover:text-primary/90 hover:underline underline-offset-4 transition-colors duration-200"
                     >
-                      Forgot your password?
+                      Forgot password?
                     </Link>
                   </div>
                   <FormControl>
-                    <Input type="password" {...field} />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        className="h-11 px-4 pr-11 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        {...field}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors duration-200"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
 
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Logging in..." : "Login"}
+            <Button 
+              type="submit" 
+              className="w-full h-11 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-lg transition-all duration-200 shadow-lg shadow-blue-600/25 hover:shadow-blue-700/30 disabled:opacity-50" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                <>
+                  Sign in
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </>
+              )}
             </Button>
 
-            <div className="text-center text-sm">
-              Don&apos;t have an account?{" "}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border/50" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-3 text-muted-foreground">
+                  New to MotoMate?
+                </span>
+              </div>
+            </div>
+
+            <div className="text-center">
               <Link
                 href="/register"
-                className="text-primary hover:underline underline-offset-4"
+                className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-primary/90 font-medium transition-colors duration-200"
               >
-                Sign up
+                Create an account
+                <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
           </form>
         </Form>
       </div>
 
-      <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
-        By clicking continue, you agree to our <a href="#">Terms of Service</a>{" "}
-        and <a href="#">Privacy Policy</a>.
+      <div className="mt-8 text-xs text-muted-foreground text-center text-balance">
+        By signing in, you agree to our{" "}
+        <Link href="/terms" className="text-blue-600 hover:text-primary/90 hover:underline underline-offset-4 transition-colors duration-200">
+          Terms of Service
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="text-blue-600 hover:text-primary/90 hover:underline underline-offset-4 transition-colors duration-200">
+          Privacy Policy
+        </Link>
+        .
       </div>
     </div>
   );
