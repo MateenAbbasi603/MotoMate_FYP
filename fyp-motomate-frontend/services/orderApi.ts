@@ -1,7 +1,7 @@
 // services/api.ts
 import apiClient from './apiClient';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+
 
 // Helper to get auth token from local storage
 const getAuthToken = (): string | null => {
@@ -269,15 +269,19 @@ const orderApi = {
   },
 
   // Combined details
-  getCombinedDetails: async (userId: number, vehicleId: number, serviceId?: number) => {
+  getCombinedDetails: async (userId: number, vehicleId: number, serviceId?: number | null) => {
     const params = new URLSearchParams();
     params.append('userId', userId.toString());
     params.append('vehicleId', vehicleId.toString());
-    if (serviceId) {
+
+    // Only add serviceId if it's a valid number (not null, undefined, or 0)
+    if (serviceId && serviceId > 0) {
       params.append('serviceId', serviceId.toString());
     }
-    
+
     const response = await apiClient.get(`/api/Detail/combined-details?${params}`);
+    console.log(response.data);
+    
     return response.data;
   }
 };

@@ -219,21 +219,26 @@ export default function OrdersPage() {
       if (Array.isArray(ordersData)) {
         setOrders(ordersData);
 
-        // Fetch combined details for each unique user, vehicle, and service
+        // Fetch combined details for each unique user, vehicle combination
+        // Note: serviceId is now optional for inspection-only orders
         const uniqueDetails = new Set<string>();
         ordersData.forEach((order: Order) => {
-          if (order.userId && order.vehicleId && order.serviceId) {
-            uniqueDetails.add(`userId=${order.userId}&vehicleId=${order.vehicleId}&serviceId=${order.serviceId}`);
+          if (order.userId && order.vehicleId) {
+            // Create key with or without serviceId
+            const key = order.serviceId
+              ? `userId=${order.userId}&vehicleId=${order.vehicleId}&serviceId=${order.serviceId}`
+              : `userId=${order.userId}&vehicleId=${order.vehicleId}`;
+            uniqueDetails.add(key);
           }
         });
 
         // Fetch combined details for unique combinations
         const combinedDetailsPromises = Array.from(uniqueDetails).map(async (detailQuery) => {
           try {
-            const [userId, vehicleId, serviceId] = detailQuery.split('&').map(param => {
-              const [key, value] = param.split('=');
-              return parseInt(value);
-            });
+            const params = new URLSearchParams(detailQuery);
+            const userId = parseInt(params.get('userId') || '0');
+            const vehicleId = parseInt(params.get('vehicleId') || '0');
+            const serviceId = params.get('serviceId') ? parseInt(params.get('serviceId')!) : undefined;
 
             const combinedData = await orderApi.getCombinedDetails(userId, vehicleId, serviceId);
             return {
@@ -268,7 +273,6 @@ export default function OrdersPage() {
       setLoading(false);
     }
   };
-
   // Handle sort
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -341,7 +345,11 @@ export default function OrdersPage() {
 
   // Helper function to get user, vehicle, or service details
   const getDetails = (order: any, type: 'user' | 'vehicle' | 'service') => {
-    const combinedInfoQuery = `userId=${order.userId}&vehicleId=${order.vehicleId}&serviceId=${order.serviceId}`;
+    // Create the correct key for looking up combined info
+    const combinedInfoQuery = order.serviceId
+      ? `userId=${order.userId}&vehicleId=${order.vehicleId}&serviceId=${order.serviceId}`
+      : `userId=${order.userId}&vehicleId=${order.vehicleId}`;
+
     const combinedInfo = combinedInfoMap[combinedInfoQuery] || {};
 
     switch (type) {
@@ -350,10 +358,13 @@ export default function OrdersPage() {
       case 'vehicle':
         return order.vehicle || combinedInfo.vehicle || { make: 'Unknown', model: 'Vehicle', vehicleId: order.vehicleId };
       case 'service':
+        // For inspection-only orders, return a default service name
+        if (!order.serviceId && order.includesInspection) {
+          return { serviceName: 'Inspection Only', serviceId: null };
+        }
         return order.service || combinedInfo.service || { serviceName: 'Custom Service', serviceId: order.serviceId };
     }
   };
-
   // Handle Transfer to Service
   const handleTransferToService = async (order: Order) => {
     try {
@@ -600,8 +611,17 @@ export default function OrdersPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="max-w-[160px] truncate" title={service.serviceName}>
-                              {service.serviceName}
+                            <div className="flex items-center gap-2">
+                              {!order.serviceId && order.includesInspection ? (
+                                <div className="flex items-center gap-1">
+                                  <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                                  <span className="text-blue-700 font-medium">Inspection Only</span>
+                                </div>
+                              ) : (
+                                <div className="max-w-[160px] truncate" title={service.serviceName}>
+                                  {service.serviceName}
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>

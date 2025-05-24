@@ -108,20 +108,20 @@ namespace fyp_motomate.Controllers
         [Authorize]
         [AllowAnonymous]
         public async Task<ActionResult<CombinedDetailsDto>> GetCombinedDetails(
-            [FromQuery] int? userId, 
-            [FromQuery] int? vehicleId, 
-            [FromQuery] int? serviceId)
+         [FromQuery] int? userId,
+         [FromQuery] int? vehicleId,
+         [FromQuery] int? serviceId)
         {
-            // Check if any ID is provided
-            if (!userId.HasValue && !vehicleId.HasValue && !serviceId.HasValue)
+            // Updated validation - require at least userId OR vehicleId (serviceId is optional)
+            if (!userId.HasValue && !vehicleId.HasValue)
             {
-                return BadRequest("At least one ID (User, Vehicle, or Service) must be provided");
+                return BadRequest("At least one ID (User or Vehicle) must be provided");
             }
 
             // Initialize the response object
             var combinedDetails = new CombinedDetailsDto();
 
-            try 
+            try
             {
                 // Fetch User details if UserId is provided
                 if (userId.HasValue)
@@ -135,7 +135,7 @@ namespace fyp_motomate.Controllers
                     combinedDetails.Vehicle = await FetchVehicleDetails(vehicleId.Value);
                 }
 
-                // Fetch Service details if ServiceId is provided
+                // Fetch Service details if ServiceId is provided (now truly optional)
                 if (serviceId.HasValue)
                 {
                     combinedDetails.Service = await FetchServiceDetails(serviceId.Value);
@@ -154,7 +154,6 @@ namespace fyp_motomate.Controllers
                 return StatusCode(500, "An unexpected error occurred");
             }
         }
-
         private async Task<DetailUserDto> FetchUserDetails(int userId)
         {
             var user = await _context.Users

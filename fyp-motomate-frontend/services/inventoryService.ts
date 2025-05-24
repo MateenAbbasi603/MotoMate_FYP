@@ -1,4 +1,4 @@
-    // services/inventoryService.ts
+// services/inventoryService.ts
 import { InventoryFormData, InventoryItem } from '../types/inventoryTypes';
 import apiClient from './apiClient';
 
@@ -39,25 +39,36 @@ const inventoryService = {
   },
 
   // Update an existing inventory item
-  updateInventory: async (id: number, inventoryData: InventoryFormData): Promise<InventoryItem> => {
+  updateInventory: async (id: number, inventoryData: any): Promise<InventoryItem> => {
     try {
       const response = await apiClient.put(`/api/Inventory/${id}`, {
         toolId: id,
         ...inventoryData
       });
-      return response.data;
+      return response.data.inventory || response.data; // Handle both response formats
     } catch (error) {
       console.error(`Error updating inventory item ${id}:`, error);
       throw error;
     }
   },
+  
+  // Toggle inventory active/inactive status
+  toggleInventoryActive: async (id: number): Promise<InventoryItem> => {
+    try {
+      const response = await apiClient.put(`/api/Inventory/ToggleActive/${id}`, {});
+      return response.data;
+    } catch (error) {
+      console.error(`Error toggling inventory item status ${id}:`, error);
+      throw error;
+    }
+  },
 
-  // Delete an inventory item
+  // This is now just marking it as inactive, not actually deleting
   deleteInventory: async (id: number): Promise<void> => {
     try {
       await apiClient.delete(`/api/Inventory/${id}`);
     } catch (error) {
-      console.error(`Error deleting inventory item ${id}:`, error);
+      console.error(`Error deactivating inventory item ${id}:`, error);
       throw error;
     }
   }

@@ -248,9 +248,41 @@ namespace fyp_motomate.Models
         [StringLength(20)]
         public string Condition { get; set; }
 
-        public int Price { get; set; }
+        [Required]
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal Price { get; set; }
 
         public string VendorName { get; set; }
+
+        [Required]
+        public bool IsActive { get; set; } = true;
+
+        // Navigation property for tool instances
+        public virtual ICollection<ToolInstance> Instances { get; set; } = new List<ToolInstance>();
+    }
+
+    public class ToolInstance
+    {
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int InstanceId { get; set; }
+
+        [Required]
+        public int ToolId { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        public string SerialNumber { get; set; }
+
+        [Required]
+        public bool IsActive { get; set; } = true;
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        public DateTime? LastUpdatedAt { get; set; }
+
+        [ForeignKey("ToolId")]
+        public virtual Inventory Tool { get; set; }
     }
 
     public class Review

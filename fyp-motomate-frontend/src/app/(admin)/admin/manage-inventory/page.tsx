@@ -34,7 +34,12 @@ import {
   Sparkles,
   MoreHorizontal,
   PlusCircle,
-  RefreshCw
+  RefreshCw,
+  EyeIcon,
+  ToggleLeft,
+  ToggleRight,
+  ListTree,
+  Power
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -95,7 +100,7 @@ import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { InventoryFormData, InventoryItem } from '../../../../../types/inventoryTypes';
+import { InventoryFormData, InventoryItem, ToolInstance } from '../../../../../types/inventoryTypes';
 import inventoryService from '../../../../../services/inventoryService';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -108,6 +113,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import toolInstanceService from '../../../../../services/toolInstanceService';
 
 // Inventory form schema
 const inventoryFormSchema = z.object({
@@ -129,21 +143,26 @@ export default function ManageInventoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [conditionFilter, setConditionFilter] = useState<string>('all');
-  const [inventoryToDelete, setInventoryToDelete] = useState<InventoryItem | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [inventoryToDeactivate, setInventoryToDeactivate] = useState<InventoryItem | null>(null);
+  const [isDeactivating, setIsDeactivating] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [selectedInventory, setSelectedInventory] = useState<InventoryItem | null>(null);
   const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [updatingInstance, setUpdatingInstance] = useState<number | null>(null);
 
   // Stats
   const [stats, setStats] = useState({
     totalItems: 0,
     totalValue: 0,
     lowStock: 0,
-    categories: 0
+    categories: 0,
+    inactiveItems: 0
   });
 
   const router = useRouter();
@@ -168,7 +187,7 @@ export default function ManageInventoryPage() {
   // Update filtered inventory when filters change
   useEffect(() => {
     filterAndSortInventory();
-  }, [inventory, searchQuery, typeFilter, conditionFilter, sortBy, sortDirection]);
+  }, [inventory, searchQuery, typeFilter, conditionFilter, statusFilter, sortBy, sortDirection]);
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -183,7 +202,7 @@ export default function ManageInventoryPage() {
     if (editingInventory) {
       form.setValue('toolName', editingInventory.toolName);
       form.setValue('toolType', editingInventory.toolType);
-      form.setValue('quantity', editingInventory.quantity);
+      form.setValue('quantity', editingInventory.totalQuantity);
       if (editingInventory.purchaseDate) {
         form.setValue('purchaseDate', new Date(editingInventory.purchaseDate));
       }
@@ -201,16 +220,19 @@ export default function ManageInventoryPage() {
   }, [inventory]);
 
   const calculateStats = () => {
-    const totalItems = inventory.reduce((sum, item) => sum + item.quantity, 0);
-    const totalValue = inventory.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const lowStock = inventory.filter(item => item.quantity < 3).length;
+    const totalItems = inventory.reduce((sum, item) => sum + item.totalQuantity, 0);
+    const activeItems = inventory.reduce((sum, item) => sum + item.activeQuantity, 0);
+    const inactiveItems = inventory.reduce((sum, item) => sum + item.inactiveQuantity, 0);
+    const totalValue = inventory.reduce((sum, item) => sum + (item.price * item.totalQuantity), 0);
+    const lowStock = inventory.filter(item => item.activeQuantity < 3).length;
     const uniqueCategories = new Set(inventory.map(item => item.toolType)).size;
 
     setStats({
       totalItems,
       totalValue,
       lowStock,
-      categories: uniqueCategories
+      categories: uniqueCategories,
+      inactiveItems
     });
   };
 
@@ -229,6 +251,17 @@ export default function ManageInventoryPage() {
       setLoading(false);
     }
   };
+  
+  const fetchInventoryDetails = async (toolId: number) => {
+    try {
+      const detailedItem = await inventoryService.getInventoryById(toolId);
+      setSelectedInventory(detailedItem);
+      setIsDetailsDialogOpen(true);
+    } catch (error) {
+      console.error('Failed to fetch inventory details:', error);
+      toast.error('Failed to load tool details');
+    }
+  };
 
   const filterAndSortInventory = () => {
     let filtered = [...inventory];
@@ -245,6 +278,15 @@ export default function ManageInventoryPage() {
       filtered = filtered.filter(item =>
         item.condition.toLowerCase() === conditionFilter.toLowerCase()
       );
+    }
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'active') {
+        filtered = filtered.filter(item => item.activeQuantity > 0);
+      } else if (statusFilter === 'inactive') {
+        filtered = filtered.filter(item => item.inactiveQuantity > 0);
+      }
     }
 
     // Apply search filter
@@ -269,7 +311,10 @@ export default function ManageInventoryPage() {
           comparison = a.toolType.localeCompare(b.toolType);
           break;
         case 'quantity':
-          comparison = a.quantity - b.quantity;
+          comparison = a.totalQuantity - b.totalQuantity;
+          break;
+        case 'active':
+          comparison = a.activeQuantity - b.activeQuantity;
           break;
         case 'price':
           comparison = a.price - b.price;
@@ -287,25 +332,82 @@ export default function ManageInventoryPage() {
     setFilteredInventory(filtered);
   };
 
-  const handleDeleteInventory = async () => {
-    if (!inventoryToDelete) return;
+  const handleDeactivateInventory = async () => {
+    if (!inventoryToDeactivate) return;
 
     try {
-      setIsDeleting(true);
-      await inventoryService.deleteInventory(inventoryToDelete.toolId);
+      setIsDeactivating(true);
+      await inventoryService.toggleInventoryActive(inventoryToDeactivate.toolId);
 
-      // Update local state
+      // Update local state - mark as inactive
       setInventory(prevInventory =>
-        prevInventory.filter(item => item.toolId !== inventoryToDelete.toolId)
+        prevInventory.map(item => 
+          item.toolId === inventoryToDeactivate.toolId 
+          ? { 
+              ...item, 
+              isActive: false,
+              activeQuantity: 0,
+              inactiveQuantity: item.totalQuantity
+            } 
+          : item
+        )
       );
 
-      toast.success('Inventory item deleted successfully');
+      toast.success('Inventory item deactivated successfully');
     } catch (error) {
-      console.error('Error deleting inventory item:', error);
-      toast.error('Failed to delete inventory item');
+      console.error('Error deactivating inventory item:', error);
+      toast.error('Failed to deactivate inventory item');
     } finally {
-      setInventoryToDelete(null);
-      setIsDeleting(false);
+      setInventoryToDeactivate(null);
+      setIsDeactivating(false);
+    }
+  };
+  
+  const toggleToolInstanceStatus = async (instanceId: number, currentStatus: boolean) => {
+    try {
+      setUpdatingInstance(instanceId);
+      await toolInstanceService.updateToolInstanceStatus(instanceId, !currentStatus);
+      
+      // Update the selected inventory
+      if (selectedInventory && selectedInventory.instances) {
+        const updatedInstances = selectedInventory.instances.map(instance => 
+          instance.instanceId === instanceId 
+          ? { ...instance, isActive: !currentStatus } 
+          : instance
+        );
+        
+        // Update active/inactive counts
+        const activeCount = updatedInstances.filter(i => i.isActive).length;
+        const inactiveCount = updatedInstances.length - activeCount;
+        
+        setSelectedInventory({
+          ...selectedInventory,
+          instances: updatedInstances,
+          activeQuantity: activeCount,
+          inactiveQuantity: inactiveCount
+        });
+        
+        // Also update in the main inventory list
+        setInventory(prev => 
+          prev.map(item => 
+            item.toolId === selectedInventory.toolId 
+            ? {
+                ...item,
+                activeQuantity: activeCount,
+                inactiveQuantity: inactiveCount
+              }
+            : item
+          )
+        );
+      }
+      
+      const newStatus = !currentStatus ? 'active' : 'inactive';
+      toast.success(`Tool instance marked as ${newStatus}`);
+    } catch (error) {
+      console.error('Error updating tool instance status:', error);
+      toast.error('Failed to update tool instance status');
+    } finally {
+      setUpdatingInstance(null);
     }
   };
 
@@ -313,6 +415,7 @@ export default function ManageInventoryPage() {
     setSearchQuery('');
     setTypeFilter('all');
     setConditionFilter('all');
+    setStatusFilter('all');
   };
 
   const onSubmit = async (values: InventoryFormValues) => {
@@ -328,7 +431,7 @@ export default function ManageInventoryPage() {
         // Update existing inventory item
         const updatedItem = await inventoryService.updateInventory(
           editingInventory.toolId,
-          formattedData
+          { ...formattedData, isActive: editingInventory.isActive }
         );
 
         setInventory(prev =>
@@ -407,21 +510,23 @@ export default function ManageInventoryPage() {
   };
 
   // Get stock level indicator
-  const getStockIndicator = (quantity: number) => {
-    if (quantity <= 0) {
+  const getStockIndicator = (activeQuantity: number, inactiveQuantity: number) => {
+    const totalQuantity = activeQuantity + inactiveQuantity;
+    
+    if (activeQuantity <= 0) {
       return <Badge variant="destructive" className="flex items-center gap-1 font-medium">
         <CircleSlash className="h-3 w-3" />
-        Out of Stock
+        All Inactive
       </Badge>;
-    } else if (quantity < 3) {
+    } else if (activeQuantity < 3) {
       return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1 font-medium">
         <AlertCircle className="h-3 w-3" />
-        Low Stock
+        Low Stock ({activeQuantity}/{totalQuantity})
       </Badge>;
     } else {
       return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1 font-medium">
         <CheckCircle2 className="h-3 w-3" />
-        In Stock
+        In Stock ({activeQuantity}/{totalQuantity})
       </Badge>;
     }
   };
@@ -468,12 +573,12 @@ export default function ManageInventoryPage() {
           </div>
           <h3 className="text-xl font-medium mb-2">No inventory items found</h3>
           <p className="text-muted-foreground mb-6 text-center max-w-md">
-            {(searchQuery || typeFilter !== 'all' || conditionFilter !== 'all')
+            {(searchQuery || typeFilter !== 'all' || conditionFilter !== 'all' || statusFilter !== 'all')
               ? "No items match your current search criteria and filters."
               : "There are no items in your inventory system yet."}
           </p>
 
-          {(searchQuery || typeFilter !== 'all' || conditionFilter !== 'all') ? (
+          {(searchQuery || typeFilter !== 'all' || conditionFilter !== 'all' || statusFilter !== 'all') ? (
             <Button
               variant="outline"
               className="gap-2"
@@ -516,15 +621,15 @@ export default function ManageInventoryPage() {
               <div className="flex items-center">
                 <Warehouse className="h-4 w-4 text-muted-foreground mr-2" />
                 <div>
-                  <p className="text-xs text-muted-foreground">Quantity</p>
-                  <p className="font-medium">{item.quantity}</p>
+                  <p className="text-xs text-muted-foreground">Active/Total</p>
+                  <p className="font-medium">{item.activeQuantity}/{item.totalQuantity}</p>
                 </div>
               </div>
 
               <div className="flex items-center">
                 <BadgeDollarSign className="h-4 w-4 text-muted-foreground mr-2" />
                 <div>
-                  <p className="text-xs text-muted-foreground">Price</p>
+                  <p className="text-xs text-muted-foreground">Price per Unit</p>
                   <p className="font-medium">{formatCurrency(item.price)}</p>
                 </div>
               </div>
@@ -549,11 +654,21 @@ export default function ManageInventoryPage() {
             </div>
 
             <div className="mt-4">
-              {getStockIndicator(item.quantity)}
+              {getStockIndicator(item.activeQuantity, item.inactiveQuantity)}
             </div>
           </CardContent>
 
           <CardFooter className="border-t p-4 bg-muted/20 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchInventoryDetails(item.toolId)}
+              className="gap-1 h-9"
+            >
+              <EyeIcon className="h-4 w-4" />
+              View Details
+            </Button>
+            
             <Button
               variant="outline"
               size="sm"
@@ -569,33 +684,33 @@ export default function ManageInventoryPage() {
 
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button
+                {/* <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => setInventoryToDelete(item)}
+                  onClick={() => setInventoryToDeactivate(item)}
                   className="gap-1 h-9"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </Button>
+                  <Power className="h-4 w-4" />
+                  Deactivate
+                </Button> */}
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete the tool "{item.toolName}".
-                    This action cannot be undone.
+                    This will deactivate all instances of "{item.toolName}".
+                    Deactivated tools won't appear in regular inventory counts.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
-                    onClick={handleDeleteInventory}
-                    disabled={isDeleting}
+                    onClick={handleDeactivateInventory}
+                    disabled={isDeactivating}
                     className="bg-red-600 text-white hover:bg-red-700"
                   >
-                    {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Delete
+                    {isDeactivating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Deactivate
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -644,10 +759,10 @@ export default function ManageInventoryPage() {
                     <Button
                       variant="ghost"
                       className="p-0 font-medium flex items-center ml-auto"
-                      onClick={() => handleSortChange('quantity')}
+                      onClick={() => handleSortChange('active')}
                     >
-                      Quantity
-                      {sortBy === 'quantity' && (
+                      Active/Total
+                      {sortBy === 'active' && (
                         <ChevronDown
                           className={`ml-1 h-4 w-4 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`}
                         />
@@ -686,9 +801,9 @@ export default function ManageInventoryPage() {
                     </td>
                     <td className="px-4 py-3 align-middle">{item.toolType}</td>
                     <td className="px-4 py-3 align-middle">{getConditionBadge(item.condition)}</td>
-                    <td className="px-4 py-3 align-middle text-right font-medium">{item.quantity}</td>
+                    <td className="px-4 py-3 align-middle text-right font-medium">{item.activeQuantity}/{item.totalQuantity}</td>
                     <td className="px-4 py-3 align-middle text-right font-medium">{formatCurrency(item.price)}</td>
-                    <td className="px-4 py-3 align-middle text-right">{getStockIndicator(item.quantity)}</td>
+                    <td className="px-4 py-3 align-middle text-right">{getStockIndicator(item.activeQuantity, item.inactiveQuantity)}</td>
                     <td className="px-4 py-3 align-middle text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -697,6 +812,13 @@ export default function ManageInventoryPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => fetchInventoryDetails(item.toolId)}
+                            className="gap-2"
+                          >
+                            <EyeIcon className="h-4 w-4" />
+                            View Details
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
                               setEditingInventory(item);
@@ -709,11 +831,11 @@ export default function ManageInventoryPage() {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => setInventoryToDelete(item)}
+                            onClick={() => setInventoryToDeactivate(item)}
                             className="text-destructive focus:text-destructive gap-2"
                           >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
+                            <Power className="h-4 w-4" />
+                            Deactivate All
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -722,19 +844,19 @@ export default function ManageInventoryPage() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will permanently delete the tool "{item.toolName}".
-                              This action cannot be undone.
+                              This will deactivate all instances of "{item.toolName}".
+                              Deactivated tools won't appear in regular inventory counts.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={handleDeleteInventory}
-                              disabled={isDeleting}
+                              onClick={handleDeactivateInventory}
+                              disabled={isDeactivating}
                               className="bg-red-600 text-white hover:bg-red-700"
                             >
-                              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                              Delete
+                              {isDeactivating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Deactivate
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -825,6 +947,11 @@ export default function ManageInventoryPage() {
                           />
                         </FormControl>
                         <FormMessage />
+                        {editingInventory && (
+                          <FormDescription>
+                            Adding more will create new instances
+                          </FormDescription>
+                        )}
                       </FormItem>
                     )}
                   />
@@ -834,7 +961,7 @@ export default function ManageInventoryPage() {
                     name="price"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Price</FormLabel>
+                        <FormLabel>Price per Unit</FormLabel>
                         <FormControl>
                           <div className="relative">
                             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -993,8 +1120,140 @@ export default function ManageInventoryPage() {
         </Dialog>
       </div>
 
+      {/* Tool Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="flex items-center">
+              {selectedInventory?.toolName}
+              <Badge variant="outline" className="ml-3">
+                {selectedInventory?.toolType}
+              </Badge>
+            </DialogTitle>
+            <DialogDescription>
+              Manage individual instances of this tool
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-2 grid grid-cols-2 gap-5">
+            <div>
+              <Label className="text-sm text-muted-foreground">Purchase Date</Label>
+              <p className="text-sm font-medium">{selectedInventory?.purchaseDate ? formatDate(selectedInventory.purchaseDate) : 'N/A'}</p>
+            </div>
+            <div>
+              <Label className="text-sm text-muted-foreground">Condition</Label>
+              <div className="mt-1">
+                {selectedInventory && getConditionBadge(selectedInventory.condition)}
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm text-muted-foreground">Price per Unit</Label>
+              <p className="text-sm font-medium">{selectedInventory ? formatCurrency(selectedInventory.price) : 'N/A'}</p>
+            </div>
+            <div>
+              <Label className="text-sm text-muted-foreground">Vendor</Label>
+              <p className="text-sm font-medium">{selectedInventory?.vendorName || 'N/A'}</p>
+            </div>
+          </div>
+          
+          <Separator className="my-2" />
+          
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <h3 className="font-medium text-sm mb-2">
+              Tool Instances ({selectedInventory?.activeQuantity || 0} active of {selectedInventory?.totalQuantity || 0} total)
+            </h3>
+            
+            <ScrollArea className="flex-1 border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Serial #</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Added On</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedInventory?.instances?.map((instance) => (
+                    <TableRow key={instance.instanceId}>
+                      <TableCell className="font-mono text-xs">
+                        {instance.serialNumber}
+                      </TableCell>
+                      <TableCell>
+                        {instance.isActive ? (
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                            <CircleSlash className="h-3 w-3 mr-1" />
+                            Inactive
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {formatDate(instance.createdAt)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleToolInstanceStatus(instance.instanceId, instance.isActive)}
+                          disabled={updatingInstance === instance.instanceId}
+                          className="h-8 gap-1"
+                        >
+                          {updatingInstance === instance.instanceId ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : instance.isActive ? (
+                            <ToggleRight className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <ToggleLeft className="h-4 w-4 text-red-500" />
+                          )}
+                          {instance.isActive ? 'Deactivate' : 'Activate'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!selectedInventory?.instances?.length && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
+                        No instances found for this tool
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </div>
+          
+          <DialogFooter className="pt-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setIsDetailsDialogOpen(false)}
+              className="shadow-sm"
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setEditingInventory(selectedInventory);
+                setIsDetailsDialogOpen(false);
+                setIsDialogOpen(true);
+              }}
+              className="shadow-sm gap-2"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit Tool
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dashboard Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="shadow-sm border border-border/40 overflow-hidden">
           <CardHeader className="pb-2 bg-gradient-to-r from-blue-50 to-blue-50/20 dark:from-blue-950/20 dark:to-transparent">
             <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-400 flex items-center gap-2">
@@ -1035,7 +1294,7 @@ export default function ManageInventoryPage() {
           <CardContent className="pt-4">
             <div className="text-3xl font-bold">{stats.lowStock}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Items with quantity below 3
+              Items with active count below 3
             </p>
           </CardContent>
         </Card>
@@ -1051,6 +1310,21 @@ export default function ManageInventoryPage() {
             <div className="text-3xl font-bold">{stats.categories}</div>
             <p className="text-xs text-muted-foreground mt-1">
               Unique tool categories
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-sm border border-border/40 overflow-hidden">
+          <CardHeader className="pb-2 bg-gradient-to-r from-red-50 to-red-50/20 dark:from-red-950/20 dark:to-transparent">
+            <CardTitle className="text-sm font-medium text-red-700 dark:text-red-400 flex items-center gap-2">
+              <CircleSlash className="h-4 w-4" />
+              Inactive Items
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="text-3xl font-bold">{stats.inactiveItems}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Items marked as inactive
             </p>
           </CardContent>
         </Card>
@@ -1111,8 +1385,23 @@ export default function ManageInventoryPage() {
                   <SelectItem value="Poor">Poor</SelectItem>
                 </SelectContent>
               </Select>
+              
+              <Select
+                value={statusFilter}
+                onValueChange={setStatusFilter}
+              >
+                <SelectTrigger className="w-full sm:w-[180px] shadow-sm">
+                  <Power className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="active">Active Only</SelectItem>
+                  <SelectItem value="inactive">Has Inactive</SelectItem>
+                </SelectContent>
+              </Select>
 
-              {(searchQuery || typeFilter !== 'all' || conditionFilter !== 'all') && (
+              {(searchQuery || typeFilter !== 'all' || conditionFilter !== 'all' || statusFilter !== 'all') && (
                 <Button
                   variant="outline"
                   size="icon"
@@ -1138,7 +1427,8 @@ export default function ManageInventoryPage() {
               <SelectContent>
                 <SelectItem value="name">Name</SelectItem>
                 <SelectItem value="type">Type</SelectItem>
-                <SelectItem value="quantity">Quantity</SelectItem>
+                <SelectItem value="quantity">Total Quantity</SelectItem>
+                <SelectItem value="active">Active Quantity</SelectItem>
                 <SelectItem value="price">Price</SelectItem>
                 <SelectItem value="condition">Condition</SelectItem>
               </SelectContent>

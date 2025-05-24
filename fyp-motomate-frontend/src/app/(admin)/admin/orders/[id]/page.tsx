@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -22,7 +22,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppointmentDialog from '@/components/Admin/AppointmentDialog';
 import {
   ChevronLeft,
@@ -271,6 +270,13 @@ export default function OrderDetailPage({
   const [isTransferringService, setIsTransferringService] = useState<boolean>(false);
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [invoiceId, setInvoiceId] = useState<number | null>(null);
+  const [isDialogMounted, setIsDialogMounted] = useState(false);
+
+
+  // Helper function to check if this is an inspection-only order
+  const isInspectionOnlyOrder = (): boolean => {
+    return Boolean(!order?.service && !order?.serviceId && order?.includesInspection && order?.inspection);
+  };
 
   const handleGenerateInvoice = async () => {
     if (!order) return;
@@ -538,7 +544,7 @@ export default function OrderDetailPage({
   };
 
   // Handle adding a service to the order
-  const handleAddService = async () => {
+  const handleAddService = useCallback(async () => {
     if (!selectedServiceId) {
       toast.error('Please select a service');
       return;
@@ -644,7 +650,7 @@ export default function OrderDetailPage({
     } finally {
       setIsAddingService(false);
     }
-  };
+  }, [selectedServiceId, serviceNotes, id, order]);
 
   // Check if additionalServices is an array and has items
   const hasAdditionalServices = (): boolean => {
@@ -703,8 +709,6 @@ export default function OrderDetailPage({
     toast.success('Mechanic assigned successfully');
   };
 
-
-
   const hasNonInspectionServices = (): boolean => {
     if (!Array.isArray(order?.additionalServices)) return false;
 
@@ -740,6 +744,7 @@ export default function OrderDetailPage({
       default: return <ShieldCheck className="h-4 w-4 text-blue-600" />;
     }
   };
+
   // Component for appointment section
   const AppointmentSection = ({ appointment, loadingAppointment }: any) => {
     if (loadingAppointment) {
@@ -847,79 +852,105 @@ export default function OrderDetailPage({
     );
   };
 
-  const AddServiceDialog = () => (
-    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 shadow-sm">
-          <Plus className="h-4 w-4" />
-          Add Service
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add Additional Service</DialogTitle>
-          <DialogDescription>
-            Select a service to add to this order
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="service">Service</Label>
-            <Select
-              value={selectedServiceId}
-              onValueChange={setSelectedServiceId}
-            >
-              <SelectTrigger id="service" className="w-full">
-                <SelectValue placeholder="Select a service" />
-              </SelectTrigger>
-              <SelectContent>
-                {services.map((service) => (
-                  <SelectItem key={service.serviceId} value={service.serviceId.toString()}>
-                    <div className="flex items-center justify-between w-full">
-                      <span>{service.serviceName}</span>
-                      <Badge variant="outline" className="ml-2 bg-muted/30">
-                        PKR {service.price?.toFixed(2) || '0.00'}
-                      </Badge>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="notes">Notes (Optional)</Label>
-            <Textarea
-              id="notes"
-              value={serviceNotes}
-              onChange={(e) => setServiceNotes(e.target.value)}
-              placeholder="Add any specific requirements or details"
-              className="min-h-24"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleAddService}
-            disabled={isAddingService || !selectedServiceId}
-            className="gap-2"
-          >
-            {isAddingService ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Adding...
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4" />
-                Add Service
-              </>
-            )}
+  const AddServiceDialog = () => {
+    // Filter out services that are already in the order
+    const availableServices = services.filter(service => {
+      // Don't show if it's the main service
+      if (order?.serviceId === service.serviceId) {
+        return false;
+      }
+
+      // Don't show if it's already in additional services
+      const additionalServices = getAdditionalServices();
+      return !additionalServices.some(addedService => addedService.serviceId === service.serviceId);
+    });
+
+    return (
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) {
+          setSelectedServiceId('');
+          setServiceNotes('');
+        }
+      }}>
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2 shadow-sm">
+            <Plus className="h-4 w-4" />
+            Add Service
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Add Additional Service</DialogTitle>
+            <DialogDescription>
+              Select a service to add to this order
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="service">Service</Label>
+              <Select
+                value={selectedServiceId}
+                onValueChange={setSelectedServiceId}
+              >
+                <SelectTrigger id="service" className="w-full">
+                  <SelectValue placeholder="Select a service" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableServices.length > 0 ? (
+                    availableServices.map((service) => (
+                      <SelectItem key={service.serviceId} value={service.serviceId.toString()}>
+                        <div className="flex items-center justify-between w-full">
+                          <span>{service.serviceName}</span>
+                          <Badge variant="outline" className="ml-2 bg-muted/30">
+                            PKR {service.price?.toFixed(2) || '0.00'}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-services" disabled>
+                      No additional services available
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Textarea
+                id="notes"
+                value={serviceNotes}
+                onChange={(e) => setServiceNotes(e.target.value)}
+                placeholder="Add any specific requirements or details"
+                className="min-h-24"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddService}
+              disabled={isAddingService || !selectedServiceId || availableServices.length === 0}
+              className="gap-2"
+            >
+              {isAddingService ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4" />
+                  Add Service
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -938,6 +969,13 @@ export default function OrderDetailPage({
             <h1 className="text-3xl font-bold">Order #{order?.orderId}</h1>
             {order && <StatusBadge status={order.status} />}
             {order?.invoiceStatus && <InvoiceStatusBadge status={order.invoiceStatus} />}
+            {/* Show inspection-only badge */}
+            {order && isInspectionOnlyOrder() && (
+              <Badge className="bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200" variant="outline">
+                <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+                Inspection Only
+              </Badge>
+            )}
           </div>
           {order && (
             <p className="text-muted-foreground mt-1">
@@ -984,30 +1022,28 @@ export default function OrderDetailPage({
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className="bg-primary/10 p-2 rounded-full">
-                      <ClipboardCheck className="h-5 w-5 text-primary" />
+                      {isInspectionOnlyOrder() ? (
+                        <ShieldCheck className="h-5 w-5 text-blue-600" />
+                      ) : (
+                        <ClipboardCheck className="h-5 w-5 text-primary" />
+                      )}
                     </div>
                     <div>
-                      <CardTitle className="text-xl">Order Details</CardTitle>
+                      <CardTitle className="text-xl">
+                        {isInspectionOnlyOrder() ? 'Inspection Details' : 'Order Details'}
+                      </CardTitle>
                       <CardDescription>
-                        Details about services, vehicle and payment
+                        {isInspectionOnlyOrder()
+                          ? 'Vehicle inspection information and status'
+                          : 'Details about services, vehicle and payment'
+                        }
                       </CardDescription>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {(!order.invoiceStatus || order.invoiceStatus.toLowerCase() !== 'paid') && (
-                      <AddServiceDialog />
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      asChild
-                    >
-                      <Link href={`/admin/orders/${order.orderId}/edit`}>
-                        <Pencil className="h-4 w-4" />
-                        Edit
-                      </Link>
-                    </Button>
+                    <AddServiceDialog />
+
+
                   </div>
                 </div>
               </CardHeader>
@@ -1015,12 +1051,21 @@ export default function OrderDetailPage({
               <CardContent className="p-0">
                 <Tabs defaultValue="details" className="w-full">
                   <div className="px-6 pt-4 border-b">
-                    <TabsList className="grid grid-cols-4 w-full">
+                    <TabsList className={`grid w-full ${isInspectionOnlyOrder() ? 'grid-cols-3' : 'grid-cols-4'}`}>
                       <TabsTrigger value="details" className="flex items-center gap-2">
-                        <Package className="h-4 w-4" />
-                        Order Info
+                        {isInspectionOnlyOrder() ? (
+                          <>
+                            <ShieldCheck className="h-4 w-4" />
+                            Inspection
+                          </>
+                        ) : (
+                          <>
+                            <Package className="h-4 w-4" />
+                            Order Info
+                          </>
+                        )}
                       </TabsTrigger>
-                      {order.includesInspection && order.inspection && (
+                      {!isInspectionOnlyOrder() && order.includesInspection && order.inspection && (
                         <TabsTrigger value="inspection" className="flex items-center gap-2">
                           <ShieldCheck className="h-4 w-4" />
                           Inspection
@@ -1076,66 +1121,360 @@ export default function OrderDetailPage({
                         </div>
                       </div>
 
+                      {/* Conditional rendering based on order type */}
+                      {isInspectionOnlyOrder() ? (
+                        /* Inspection-only order: Show inspection details in main section */
+                        <div className="space-y-4">
+                          <h3 className="text-lg font-medium flex items-center gap-2">
+                            <ShieldCheck className="h-5 w-5 text-blue-600" />
+                            Inspection Information
+                          </h3>
 
-                      {/* Service Information section */}
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-medium flex items-center gap-2">
-                          <PenTool className="h-5 w-5 text-primary" />
-                          Service Information
-                        </h3>
-                        <div className="bg-muted/20 p-6 rounded-lg border border-muted shadow-sm">
-                          <div className="flex items-start gap-4">
-                            <div className="bg-primary/10 p-2 rounded-full">
-                              <Wrench className="h-5 w-5 text-primary" />
+                          {/* Inspection date and time */}
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200 shadow-sm">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-5 w-5 text-blue-600" />
+                              <div>
+                                <p className="text-sm text-blue-600">Scheduled Date</p>
+                                <p className="font-medium">{formatDate(order.inspection?.scheduledDate)}</p>
+                              </div>
                             </div>
-                            <div className="flex-1">
-                              <h4 className="font-medium text-lg text-primary">
-                                {order.service?.serviceName || 'Custom Service'}
-                              </h4>
-                              <p className="text-muted-foreground mt-1 mb-3">
-                                {order.service?.description || 'No description available'}
-                              </p>
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-5 w-5 text-blue-600" />
+                              <div>
+                                <p className="text-sm text-blue-600">Time Slot</p>
+                                <p className="font-medium">{order.inspection?.timeSlot || 'Not specified'}</p>
+                              </div>
+                            </div>
+                            <StatusBadge status={order.inspection?.status || 'pending'} />
+                          </div>
 
-                              <div className="flex flex-wrap gap-2 mb-4">
-                                <Badge variant="secondary" className="gap-1">
-                                  <Tag className="h-3.5 w-3.5" />
-                                  {order.service?.category || 'Service'}
-                                </Badge>
-                                {order.includesInspection && (
-                                  <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200 gap-1">
-                                    <ShieldCheck className="h-3.5 w-3.5" />
-                                    Includes Inspection
+                          {/* Inspection type and details */}
+                          <div className="bg-blue-50/50 p-6 rounded-lg border border-blue-200 shadow-sm">
+                            <div className="flex items-start gap-4">
+                              <div className="bg-blue-100 p-2 rounded-full">
+                                {getInspectionCategoryIcon(order.inspection?.subCategory)}
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-medium text-lg text-blue-700">
+                                  {order.inspection?.serviceName || 'Inspection Service'}
+                                </h4>
+                                {order.inspection?.subCategory && (
+                                  <Badge variant="outline" className="mt-2 mb-3 bg-blue-50 text-blue-700 border-blue-200">
+                                    {order.inspection.subCategory}
                                   </Badge>
                                 )}
+
+                                <div className="flex justify-between items-center py-2 border-t border-blue-200 mt-4">
+                                  <span className="font-medium">Inspection Fee</span>
+                                  <span className="font-medium text-blue-700">
+                                    PKR {order.inspection?.price?.toFixed(2) || '0.00'}
+                                  </span>
+                                </div>
                               </div>
-
-                              <div className="flex justify-between items-center py-2 border-t">
-                                <span className="font-medium">Service Price</span>
-                                <span className="font-medium text-primary">
-                                  PKR {order.service?.price?.toFixed(2) || '0.00'}
-                                </span>
-                              </div>
-
-
                             </div>
                           </div>
+
+                          {getAdditionalServices().filter(service =>
+                            service.category.toLowerCase() === 'inspection'
+                          ).map((service, index) => (
+                            <div key={service.serviceId || index} className="bg-blue-50/50 p-6 rounded-lg border border-blue-200 shadow-sm">
+                              <div className="flex items-start gap-4">
+                                <div className="bg-blue-100 p-2 rounded-full">
+                                  {getInspectionCategoryIcon(service.subCategory)}
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-lg text-blue-700">
+                                    {service.serviceName}
+                                  </h4>
+                                  {service.subCategory && (
+                                    <Badge variant="outline" className="mt-2 mb-3 bg-blue-50 text-blue-700 border-blue-200">
+                                      {service.subCategory}
+                                    </Badge>
+                                  )}
+                                  {service.description && (
+                                    <p className="text-sm text-muted-foreground mt-1 mb-3">
+                                      {service.description}
+                                    </p>
+                                  )}
+
+                                  <div className="flex justify-between items-center py-2 border-t border-blue-200 mt-4">
+                                    <span className="font-medium">Inspection Fee</span>
+                                    <span className="font-medium text-blue-700">
+                                      PKR {service.price?.toFixed(2) || '0.00'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Inspection results if available */}
+                          {order.inspection?.status !== 'pending' && (
+                            <div className="bg-muted/20 p-4 rounded-lg border border-muted shadow-sm">
+                              <p className="text-sm font-medium mb-4 flex items-center gap-2">
+                                <ListChecks className="h-4 w-4 text-primary" />
+                                Inspection Results
+                              </p>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
+                                {(() => {
+                                  const subCategory = order.inspection?.subCategory?.toLowerCase();
+
+                                  switch (subCategory) {
+                                    case 'bodyinspection':
+                                      return (
+                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
+                                          <p className="text-sm text-muted-foreground font-medium mb-1">Body Condition</p>
+                                          <p className="font-medium">{order.inspection?.bodyCondition || 'Not inspected'}</p>
+                                        </div>
+                                      );
+                                    case 'brakeinspection':
+                                      return (
+                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
+                                          <p className="text-sm text-muted-foreground font-medium mb-1">Brake Condition</p>
+                                          <p className="font-medium">{order.inspection?.brakeCondition || 'Not inspected'}</p>
+                                        </div>
+                                      );
+                                    case 'engineinspection':
+                                      return (
+                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
+                                          <p className="text-sm text-muted-foreground font-medium mb-1">Engine Condition</p>
+                                          <p className="font-medium">{order.inspection?.engineCondition || 'Not inspected'}</p>
+                                        </div>
+                                      );
+                                    case 'transmissioninspection':
+                                      return (
+                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
+                                          <p className="text-sm text-muted-foreground font-medium mb-1">Transmission Condition</p>
+                                          <p className="font-medium">{order.inspection?.transmissionCondition || 'Not inspected'}</p>
+                                        </div>
+                                      );
+                                    case 'electricalinspection':
+                                      return (
+                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
+                                          <p className="text-sm text-muted-foreground font-medium mb-1">Electrical Condition</p>
+                                          <p className="font-medium">{order.inspection?.electricalCondition || 'Not inspected'}</p>
+                                        </div>
+                                      );
+                                    case 'tireinspection':
+                                      return (
+                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
+                                          <p className="text-sm text-muted-foreground font-medium mb-1">Tire Condition</p>
+                                          <p className="font-medium">{order.inspection?.tireCondition || 'Not inspected'}</p>
+                                        </div>
+                                      );
+                                    case 'interiorinspection':
+                                      return (
+                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
+                                          <p className="text-sm text-muted-foreground font-medium mb-1">Interior Condition</p>
+                                          <p className="font-medium">{order.inspection?.interiorCondition || 'Not inspected'}</p>
+                                        </div>
+                                      );
+                                    case 'suspensioninspection':
+                                      return (
+                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
+                                          <p className="text-sm text-muted-foreground font-medium mb-1">Suspension Condition</p>
+                                          <p className="font-medium">{order.inspection?.suspensionCondition || 'Not inspected'}</p>
+                                        </div>
+                                      );
+                                    default:
+                                      return (
+                                        <>
+                                          <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
+                                            <p className="text-sm text-muted-foreground font-medium mb-1">Overall Condition</p>
+                                            <p className="font-medium">Inspection pending</p>
+                                          </div>
+                                        </>
+                                      );
+                                  }
+                                })()}
+                              </div>
+
+                              {order.inspection?.notes && (
+                                <div className="mt-6 pt-4 border-t">
+                                  <h4 className="font-medium mb-2 flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-muted-foreground" />
+                                    Inspection Notes
+                                  </h4>
+                                  <div className="bg-white p-4 rounded-lg border border-muted">
+                                    <p className="text-sm italic">{order.inspection.notes}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
+                      ) : (
+                        /* Regular order: Show service information */
+                        <>
+                          {/* Service Information section */}
+                          <div className="space-y-4">
+                            <h3 className="text-lg font-medium flex items-center gap-2">
+                              <PenTool className="h-5 w-5 text-primary" />
+                              Service Information
+                            </h3>
+                            <div className="bg-muted/20 p-6 rounded-lg border border-muted shadow-sm">
+                              <div className="flex items-start gap-4">
+                                <div className="bg-primary/10 p-2 rounded-full">
+                                  <Wrench className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-lg text-primary">
+                                    {order.service?.serviceName || 'Custom Service'}
+                                  </h4>
+                                  <p className="text-muted-foreground mt-1 mb-3">
+                                    {order.service?.description || 'No description available'}
+                                  </p>
 
-                        {/* Show only non-inspection additional services here */}
-                        {hasNonInspectionServices() && (
-                          <div className="mt-4 space-y-4">
-                            <h4 className="font-medium flex items-center gap-2">
-                              <Plus className="h-4 w-4 text-primary" />
-                              Additional Services
-                            </h4>
+                                  <div className="flex flex-wrap gap-2 mb-4">
+                                    <Badge variant="secondary" className="gap-1">
+                                      <Tag className="h-3.5 w-3.5" />
+                                      {order.service?.category || 'Service'}
+                                    </Badge>
+                                    {order.includesInspection && (
+                                      <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200 gap-1">
+                                        <ShieldCheck className="h-3.5 w-3.5" />
+                                        Includes Inspection
+                                      </Badge>
+                                    )}
+                                  </div>
 
-                            <div className="grid gap-3">
-                              {getAdditionalServices().filter(service =>
-                                service.category.toLowerCase() !== 'inspection'
-                              ).map((service, index) => (
+                                  <div className="flex justify-between items-center py-2 border-t">
+                                    <span className="font-medium">Service Price</span>
+                                    <span className="font-medium text-primary">
+                                      PKR {order.service?.price?.toFixed(2) || '0.00'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+
+                            {/* Show only non-inspection additional services here */}
+                            {hasNonInspectionServices() && (
+                              <div className="mt-4 space-y-4">
+                                <h4 className="font-medium flex items-center gap-2">
+                                  <Plus className="h-4 w-4 text-primary" />
+                                  Additional Services
+                                </h4>
+
+                                <div className="grid gap-3">
+                                  {getAdditionalServices().filter(service =>
+                                    service.category.toLowerCase() !== 'inspection'
+                                  ).map((service, index) => (
+                                    <div
+                                      key={service.serviceId || index}
+                                      className="bg-muted/20 p-4 rounded-md border border-muted shadow-sm flex justify-between items-start"
+                                    >
+                                      <div className="flex items-start gap-3 flex-1">
+                                        <div className="bg-primary/10 p-1.5 rounded-full shrink-0 mt-1">
+                                          <Wrench className="h-4 w-4 text-primary" />
+                                        </div>
+                                        <div>
+                                          <h5 className="font-medium text-primary">
+                                            {service.serviceName}
+                                          </h5>
+                                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                            {service.description || 'No description available'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <Badge variant="outline" className="ml-2 shrink-0 shadow-sm">
+                                        PKR {service.price?.toFixed(2) || '0.00'}
+                                      </Badge>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Completely separate Inspection Services section */}
+                          {hasInspectionServices() && (
+                            <div className="space-y-4 mt-8">
+                              <h3 className="text-lg font-medium flex items-center gap-2">
+                                <ShieldCheck className="h-5 w-5 text-blue-600" />
+                                Inspection Services
+                              </h3>
+                              {order.includesInspection && order.inspection && (
+                                <div
+                                  key={order.serviceId}
+                                  className="bg-blue-50/50 p-4 rounded-md border border-blue-200 shadow-sm flex justify-between items-start"
+                                >
+                                  <div className="flex items-start gap-3 flex-1">
+                                    <div className="bg-blue-100 p-1.5 rounded-full shrink-0 mt-1">
+                                      {getInspectionCategoryIcon(order?.service?.subCategory)}
+                                    </div>
+                                    <div>
+                                      <h5 className="font-medium text-blue-700">
+                                        {order.inspection.serviceName}
+                                      </h5>
+                                      {order.inspection.subCategory && (
+                                        <Badge variant="outline" className="mt-1 mb-1 bg-blue-50 text-blue-700 border-blue-200">
+                                          {order.inspection.subCategory}
+                                        </Badge>
+                                      )}
+                                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                        {order.inspection.description || 'No description available'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <Badge variant="outline" className="ml-2 shrink-0 shadow-sm bg-blue-50 text-blue-700 border-blue-200">
+                                    PKR {order.inspection.price?.toFixed(2) || '0.00'}
+                                  </Badge>
+                                </div>
+                              )}
+                              <div className="grid gap-3">
+                                {getAdditionalServices().filter(service =>
+                                  service.category.toLowerCase() === 'inspection'
+                                ).map((service, index) => (
+                                  <div
+                                    key={service.serviceId || index}
+                                    className="bg-blue-50/50 p-4 rounded-md border border-blue-200 shadow-sm flex justify-between items-start"
+                                  >
+                                    <div className="flex items-start gap-3 flex-1">
+                                      <div className="bg-blue-100 p-1.5 rounded-full shrink-0 mt-1">
+                                        {getInspectionCategoryIcon(service.subCategory)}
+                                      </div>
+                                      <div>
+                                        <h5 className="font-medium text-blue-700">
+                                          {service.serviceName}
+                                        </h5>
+                                        {service.subCategory && (
+                                          <Badge variant="outline" className="mt-1 mb-1 bg-blue-50 text-blue-700 border-blue-200">
+                                            {service.subCategory}
+                                          </Badge>
+                                        )}
+                                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                          {service.description || 'No description available'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <Badge variant="outline" className="ml-2 shrink-0 shadow-sm bg-blue-50 text-blue-700 border-blue-200">
+                                      PKR {service.price?.toFixed(2) || '0.00'}
+                                    </Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {isInspectionOnlyOrder() && hasAdditionalServices() && (
+                        <div className="space-y-4 mt-6">
+                          <h4 className="font-medium flex items-center gap-2">
+                            <Plus className="h-4 w-4 text-primary" />
+                            Additional Services
+                          </h4>
+                          <div className="grid gap-3">
+                            {getAdditionalServices()
+                              .filter(service => service.category.toLowerCase() !== 'inspection') // Filter out inspection services
+                              .map((service, index) => (
                                 <div
                                   key={service.serviceId || index}
-                                  className="bg-muted/20 p-4 rounded-md border border-muted shadow-sm flex justify-between items-start"
+                                  className="bg-muted/20 border-muted p-4 rounded-md border shadow-sm flex justify-between items-start"
                                 >
                                   <div className="flex items-start gap-3 flex-1">
                                     <div className="bg-primary/10 p-1.5 rounded-full shrink-0 mt-1">
@@ -1145,6 +1484,11 @@ export default function OrderDetailPage({
                                       <h5 className="font-medium text-primary">
                                         {service.serviceName}
                                       </h5>
+                                      {service.subCategory && (
+                                        <Badge variant="outline" className="mt-1 mb-1 bg-muted/30">
+                                          {service.subCategory}
+                                        </Badge>
+                                      )}
                                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                                         {service.description || 'No description available'}
                                       </p>
@@ -1155,78 +1499,13 @@ export default function OrderDetailPage({
                                   </Badge>
                                 </div>
                               ))}
-                            </div>
                           </div>
-                        )}
-                      </div>
-
-                      {/* Completely separate Inspection Services section */}
-                      {hasInspectionServices() && (
-                        <div className="space-y-4 mt-8"> {/* Added margin-top to separate from previous section */}
-                          <h3 className="text-lg font-medium flex items-center gap-2">
-                            <ShieldCheck className="h-5 w-5 text-blue-600" />
-                            Inspection Services
-                          </h3>
-                          {order.includesInspection && order.inspection && (
-                            <div
-                              key={order.serviceId}
-                              className="bg-blue-50/50 p-4 rounded-md border border-blue-200 shadow-sm flex justify-between items-start"
-                            >
-                              <div className="flex items-start gap-3 flex-1">
-                                <div className="bg-blue-100 p-1.5 rounded-full shrink-0 mt-1">
-                                  {getInspectionCategoryIcon(order?.service?.subCategory)}
-                                </div>
-                                <div>
-                                  <h5 className="font-medium text-blue-700">
-                                    {order.inspection.serviceName}
-                                  </h5>
-                                  {order.inspection.subCategory && (
-                                    <Badge variant="outline" className="mt-1 mb-1 bg-blue-50 text-blue-700 border-blue-200">
-                                      {order.inspection.subCategory}
-                                    </Badge>
-                                  )}
-                                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                    {order.inspection.description || 'No description available'}
-                                  </p>
-                                </div>
-                              </div>
-                              <Badge variant="outline" className="ml-2 shrink-0 shadow-sm bg-blue-50 text-blue-700 border-blue-200">
-                                PKR {order.inspection.price?.toFixed(2) || '0.00'}
-                              </Badge>
+                          {/* Show message if no non-inspection additional services */}
+                          {getAdditionalServices().filter(service => service.category.toLowerCase() !== 'inspection').length === 0 && (
+                            <div className="text-center py-4 text-muted-foreground">
+                              <p className="text-sm">No additional services added yet.</p>
                             </div>
                           )}
-                          <div className="grid gap-3">
-                            {getAdditionalServices().filter(service =>
-                              service.category.toLowerCase() === 'inspection'
-                            ).map((service, index) => (
-                              <div
-                                key={service.serviceId || index}
-                                className="bg-blue-50/50 p-4 rounded-md border border-blue-200 shadow-sm flex justify-between items-start"
-                              >
-                                <div className="flex items-start gap-3 flex-1">
-                                  <div className="bg-blue-100 p-1.5 rounded-full shrink-0 mt-1">
-                                    {getInspectionCategoryIcon(service.subCategory)}
-                                  </div>
-                                  <div>
-                                    <h5 className="font-medium text-blue-700">
-                                      {service.serviceName}
-                                    </h5>
-                                    {service.subCategory && (
-                                      <Badge variant="outline" className="mt-1 mb-1 bg-blue-50 text-blue-700 border-blue-200">
-                                        {service.subCategory}
-                                      </Badge>
-                                    )}
-                                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                      {service.description || 'No description available'}
-                                    </p>
-                                  </div>
-                                </div>
-                                <Badge variant="outline" className="ml-2 shrink-0 shadow-sm bg-blue-50 text-blue-700 border-blue-200">
-                                  PKR {service.price?.toFixed(2) || '0.00'}
-                                </Badge>
-                              </div>
-                            ))}
-                          </div>
                         </div>
                       )}
 
@@ -1237,14 +1516,16 @@ export default function OrderDetailPage({
                           Payment Information
                         </h3>
                         <div className="bg-muted/20 p-6 rounded-lg border border-muted shadow-sm">
-                          <div className="flex justify-between items-center pb-3 border-b">
-                            <span>Main Service Fee</span>
-                            <span>PKR {order.service?.price?.toFixed(2) || '0.00'}</span>
-                          </div>
+                          {!isInspectionOnlyOrder() && (
+                            <div className="flex justify-between items-center pb-3 border-b">
+                              <span>Main Service Fee</span>
+                              <span>PKR {order.service?.price?.toFixed(2) || '0.00'}</span>
+                            </div>
+                          )}
 
                           {order.includesInspection && order.inspection && (
-                            <div className="flex justify-between items-center py-3 border-b">
-                              <span>Inspection Fee</span>
+                            <div className={`flex justify-between items-center ${!isInspectionOnlyOrder() ? 'py-3 border-b' : 'pb-3 border-b'}`}>
+                              <span>{isInspectionOnlyOrder() ? 'Inspection Fee' : 'Inspection Fee'}</span>
                               <span>PKR {order.inspection.price?.toFixed(2) || '0.00'}</span>
                             </div>
                           )}
@@ -1259,7 +1540,15 @@ export default function OrderDetailPage({
                           <div className="flex justify-between items-center pt-3 font-semibold">
                             <span className="text-lg">Total Amount</span>
                             <span className="text-lg text-primary">PKR {order.totalAmount?.toFixed(2) || calculateTotalAmount().toFixed(2)}</span>
+                            
                           </div>
+                          <div className="flex justify-between items-center pt-3 font-semibold">
+                          <span className="text-lg"></span>
+
+                         <Badge>Exclusive of 18% SST</Badge>
+                            
+                          </div>
+
 
                           {/* Invoice status if any */}
                           {order.invoiceStatus && (
@@ -1289,7 +1578,7 @@ export default function OrderDetailPage({
                       </div>
                     </TabsContent>
 
-                    {order.includesInspection && order.inspection && (
+                    {!isInspectionOnlyOrder() && order.includesInspection && order.inspection && (
                       <TabsContent value="inspection" className="mt-0 space-y-6">
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 bg-muted/30 rounded-lg border border-muted shadow-sm">
                           <div className="flex items-center gap-2">
@@ -1612,8 +1901,8 @@ export default function OrderDetailPage({
                   </div>
                 </div>
 
-                {/* Key actions based on order state */}
-                {appointment && appointment.mechanic && order.service && order.serviceId &&
+                {/* Key actions based on order state - Hide transfer for inspection-only orders */}
+                {!isInspectionOnlyOrder() && appointment && appointment.mechanic && order.service && order.serviceId &&
                   (!order.invoiceStatus || order.invoiceStatus.toLowerCase() !== 'paid') && (
                     <div className="pt-4 border-t space-y-3">
                       <h3 className="text-sm font-medium flex items-center gap-2">
@@ -1643,6 +1932,8 @@ export default function OrderDetailPage({
                       </p>
                     </div>
                   )}
+
+
 
                 {/* Invoice generation section */}
                 {order && order.status.toLowerCase() === 'completed' && (
@@ -1729,7 +2020,7 @@ export default function OrderDetailPage({
                 <div className="pt-4 border-t space-y-3">
                   <h3 className="text-sm font-medium flex items-center gap-2">
                     <CalendarClock className="h-4 w-4 text-primary" />
-                    Order Timeline
+                    {isInspectionOnlyOrder() ? 'Inspection Timeline' : 'Order Timeline'}
                   </h3>
                   <ScrollArea className="h-[180px] pr-3">
                     <div className="relative ml-2">
@@ -1737,7 +2028,9 @@ export default function OrderDetailPage({
                         <div className="pl-4 pb-6 relative">
                           <div className="absolute w-3 h-3 bg-primary rounded-full -left-[7px] top-0 shadow-sm"></div>
                           <div className="bg-muted/20 p-3 rounded-lg shadow-sm border border-muted">
-                            <p className="text-sm font-medium">Order Created</p>
+                            <p className="text-sm font-medium">
+                              {isInspectionOnlyOrder() ? 'Inspection Scheduled' : 'Order Created'}
+                            </p>
                             <p className="text-xs text-muted-foreground">
                               {formatDateTime(order.orderDate)}
                             </p>
@@ -1748,7 +2041,9 @@ export default function OrderDetailPage({
                           <div className="pl-4 pb-6 relative">
                             <div className="absolute w-3 h-3 bg-blue-500 rounded-full -left-[7px] top-0 shadow-sm"></div>
                             <div className="bg-blue-50 p-3 rounded-lg shadow-sm border border-blue-200">
-                              <p className="text-sm font-medium">Inspection Scheduled</p>
+                              <p className="text-sm font-medium">
+                                {isInspectionOnlyOrder() ? 'Inspection Date' : 'Inspection Scheduled'}
+                              </p>
                               <p className="text-xs text-blue-700">
                                 {formatDate(order.inspection.scheduledDate)}, {order.inspection.timeSlot}
                               </p>
@@ -1772,7 +2067,9 @@ export default function OrderDetailPage({
                           <div className="pl-4 pb-6 relative">
                             <div className="absolute w-3 h-3 bg-green-500 rounded-full -left-[7px] top-0 shadow-sm"></div>
                             <div className="bg-green-50 p-3 rounded-lg shadow-sm border border-green-200">
-                              <p className="text-sm font-medium">Order Completed</p>
+                              <p className="text-sm font-medium">
+                                {isInspectionOnlyOrder() ? 'Inspection Completed' : 'Order Completed'}
+                              </p>
                               <p className="text-xs text-green-700">
                                 {formatDateTime(new Date().toISOString())}
                               </p>
@@ -1784,7 +2081,9 @@ export default function OrderDetailPage({
                           <div className="pl-4 pb-6 relative">
                             <div className="absolute w-3 h-3 bg-red-500 rounded-full -left-[7px] top-0 shadow-sm"></div>
                             <div className="bg-red-50 p-3 rounded-lg shadow-sm border border-red-200">
-                              <p className="text-sm font-medium">Order Cancelled</p>
+                              <p className="text-sm font-medium">
+                                {isInspectionOnlyOrder() ? 'Inspection Cancelled' : 'Order Cancelled'}
+                              </p>
                               <p className="text-xs text-red-700">
                                 {formatDateTime(new Date().toISOString())}
                               </p>

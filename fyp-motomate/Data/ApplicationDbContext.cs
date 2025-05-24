@@ -32,6 +32,8 @@ namespace fyp_motomate.Data
 
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<InvoiceItem> InvoiceItems { get; set; }
+        public DbSet<ToolInstance> ToolInstances { get; set; }
+
 
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -57,6 +59,12 @@ namespace fyp_motomate.Data
                 .WithMany()
                 .HasForeignKey(t => t.MechanicId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ToolInstance>()
+.HasOne(t => t.Tool)
+.WithMany(i => i.Instances)
+.HasForeignKey(t => t.ToolId)
+.OnDelete(DeleteBehavior.Cascade);
 
             // Configure unique constraints
             modelBuilder.Entity<User>()
