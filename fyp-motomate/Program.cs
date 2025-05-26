@@ -14,7 +14,19 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
-    options.JsonSerializerOptions.MaxDepth = 64; // Increase default depth limit
+    options.JsonSerializerOptions.MaxDepth = 64;
+});
+
+// Configure CORS first
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
 });
 
 // Add DbContext
@@ -51,28 +63,9 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
-// Add these lines in your Program.cs where services are registered
-builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
-builder.Logging.AddDebug();
-
-
-// Add CORS
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowNextJsApp",
-        policy =>
-        {
-            policy.WithOrigins("http://localhost:3000") // Frontend URL
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
-        });
-});
-
-// Add Swagger
+// Add Swagger services
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -112,25 +105,21 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
     app.UseDeveloperExceptionPage();
-    app.UseHttpsRedirection();
-
-}
-else
-{
-    app.UseExceptionHandler("/error");
-    app.UseHsts();
 }
 
-app.UseStaticFiles();
-
-app.UseCors("AllowNextJsApp");
+// Use CORS before other middleware
+app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
-// Apply migrations at startup (optional)
+// Configure the URLs to listen on all interfaces
+app.Urls.Clear();
+app.Urls.Add("http://0.0.0.0:5177");
+
+// Apply migrations at startup
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -145,6 +134,5 @@ using (var scope = app.Services.CreateScope())
         logger.LogError(ex, "An error occurred during migration");
     }
 }
-
 
 app.Run();

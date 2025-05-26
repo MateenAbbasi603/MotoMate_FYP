@@ -388,5 +388,11 @@ namespace fyp_motomate.Controllers
                 }
             });
         }
+
+        [HttpGet("test")]
+        public IActionResult Test()
+        {
+            return Ok(new { message = "Backend is reachable!", timestamp = DateTime.UtcNow });
+        }
     }
 }
