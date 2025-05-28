@@ -4,9 +4,9 @@ import * as SecureStore from 'expo-secure-store';
 
 // Update API URL based on platform
 const API_URL = Platform.select({
-  android: 'https://d071-202-47-38-69.ngrok-free.app',
-  ios: 'https://d071-202-47-38-69.ngrok-free.app',
-  default: 'https://d071-202-47-38-69.ngrok-free.app'
+  android: 'https://26cd-202-47-38-69.ngrok-free.app',
+  ios: 'https://26cd-202-47-38-69.ngrok-free.app',
+  default: 'https://26cd-202-47-38-69.ngrok-free.app'
 });
 
 // Create axios instance with custom config
@@ -19,13 +19,19 @@ const axiosInstance = axios.create({
   }
 });
 
+interface ApiResponse {
+  success: boolean;
+  data?: any;
+  message?: string;
+  fullError?: any;
+}
 
 export interface UpdateProfileData {
+  imgUrl?: string;
   name?: string;
   email?: string;
   phone?: string;
   address?: string;
-  imgUrl?: string;
 }
 
 export interface ChangePasswordData {
@@ -87,12 +93,13 @@ const processNetResponseItem = (item: any) => {
 // Add request interceptor for logging
 axiosInstance.interceptors.request.use(
   (config) => {
-    // console.log('Making request to:', config.url);
-    // console.log('Request headers:', config.headers);
+    console.log('[apiService] Making request to:', config.url);
+    console.log('[apiService] Request method:', config.method);
+    console.log('[apiService] Request headers:', JSON.stringify(config.headers, null, 2));
     return config;
   },
   (error) => {
-    console.error('Request error:', error);
+    console.error('[apiService] Request error:', error);
     return Promise.reject(error);
   }
 );
@@ -100,21 +107,23 @@ axiosInstance.interceptors.request.use(
 // Add response interceptor for better error handling and data processing
 axiosInstance.interceptors.response.use(
   (response) => {
-    // console.log('Response received:', response.status);
+    console.log('[apiService] Response received for:', response.config.url);
+    console.log('[apiService] Response status:', response.status);
     // Process the response data to handle .NET serialization
     response.data = processNetResponse(response.data);
     return response;
   },
   (error) => {
+    console.error('[apiService] Response error for:', error.config?.url);
     if (error.code === 'ECONNABORTED') {
-      console.error('Request timeout');
+      console.error('[apiService] Request timeout');
       return Promise.reject(new Error('Request timeout. Please check your connection.'));
     }
     if (!error.response) {
-      console.error('Network Error:', error.message);
+      console.error('[apiService] Network Error:', error.message);
       return Promise.reject(new Error('Network error. Please check your connection and ensure the backend server is running.'));
     }
-    console.error('API Error:', error.response?.data || error.message);
+    console.error('[apiService] API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }
 );
@@ -163,11 +172,28 @@ class ApiService {
     }
   }
 
-  async updateProfile  (userData: UpdateProfileData){
-    const response = await axiosInstance.put('/api/auth/update', userData);
-    return response.data;
+  async updateProfile(data: UpdateProfileData): Promise<ApiResponse> {
+    try {
+      console.log('[apiService] Updating profile with data:', data);
+      // For image updates, we need to ensure we're sending a different value
+      if (data.imgUrl) {
+        // Add a timestamp to ensure the URL is different
+        data.imgUrl = `${data.imgUrl}?t=${Date.now()}`;
+      }
+      const response = await axiosInstance.put('/api/auth/update', data);
+      console.log('[apiService] Profile update response:', response.data);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('[apiService] Profile update error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to update profile',
+      };
+    }
   }
-
 
   async register(userData: any) {
     try {
@@ -223,9 +249,6 @@ class ApiService {
   async getOrders() {
     try {
       const response = await axiosInstance.get('/api/orders');
-      // console.log('Orders response (processed):', response.data);
-
-      // The response is already processed by the interceptor
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error('Get orders error:', error.message);
@@ -238,25 +261,127 @@ class ApiService {
 
   async createOrder(orderData: any) {
     try {
-      const response = await axiosInstance.post('/api/orders', orderData);
-      return { success: true, data: response.data };
+      console.log('[apiService] Creating order with data:', JSON.stringify(orderData, null, 2));
+      
+      // Ensure we have the required fields
+      if (!orderData.vehicleId || !orderData.inspectionTypeId || !orderData.subCategory || !orderData.timeSlot) {
+        return {
+          success: false,
+          message: 'Missing required fields: vehicleId, inspectionTypeId, subCategory, or timeSlot'
+        };
+      }
+
+      // Format the date to match backend expectations
+      if (orderData.inspectionDate) {
+        const date = new Date(orderData.inspectionDate);
+        // Set to noon to avoid timezone issues
+        date.setHours(12, 0, 0, 0);
+        orderData.inspectionDate = date.toISOString();
+      }
+
+      // First, check if the time slot is still available
+      const formattedDate = orderData.inspectionDate.split('T')[0];
+      const timeSlotsResponse = await this.getTimeSlotsInfo(formattedDate);
+      
+      if (!timeSlotsResponse.success) {
+        return {
+          success: false,
+          message: 'Failed to verify time slot availability'
+        };
+      }
+
+      const selectedTimeSlot = timeSlotsResponse.timeSlotInfos.find(
+        (slot: { timeSlot: string; availableSlots: number }) => slot.timeSlot === orderData.timeSlot
+      );
+
+      if (!selectedTimeSlot || selectedTimeSlot.availableSlots <= 0) {
+        return {
+          success: false,
+          message: 'Selected time slot is no longer available'
+        };
+      }
+
+      // Prepare the order data exactly as in the web app
+      const orderPayload = {
+        vehicleId: parseInt(orderData.vehicleId),
+        inspectionTypeId: orderData.inspectionTypeId,
+        subCategory: orderData.subCategory,
+        serviceId: orderData.serviceId ? parseInt(orderData.serviceId) : null,
+        additionalServiceIds: orderData.additionalServiceIds ? orderData.additionalServiceIds.map((id: string | number) => parseInt(id.toString())) : [],
+        inspectionDate: orderData.inspectionDate,
+        timeSlot: orderData.timeSlot,
+        notes: orderData.notes || "",
+        paymentMethod: orderData.paymentMethod,
+        orderType: orderData.paymentMethod === 'online' ? 'Online' : 'Cash',
+        totalAmount: orderData.totalAmount || 0,
+        includesInspection: true
+      };
+
+      console.log('[apiService] Sending order payload:', JSON.stringify(orderPayload, null, 2));
+
+      // Create the order with all services
+      const response = await axiosInstance.post('/api/orders/CreateWithInspection', orderPayload);
+
+      if (!response.data.success) {
+        return {
+          success: false,
+          message: response.data.message || 'Failed to create order'
+        };
+      }
+
+      return { 
+        success: true, 
+        data: response.data,
+        orderId: response.data.orderId 
+      };
     } catch (error: any) {
-      console.error('Create order error:', error.message);
+      console.error('[apiService] Response error for: /api/orders', error);
+      
+      if (error.response && error.response.data) {
+        console.error('[apiService] API Error:', error.response.data);
+        return { 
+          success: false, 
+          message: error.response.data.message || 'An error occurred while creating the order',
+          error: error.response.data
+        };
+      }
+      
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to create order'
+        message: 'Network error or server unreachable',
+        error: error
       };
     }
   }
 
   async getOrderDetails(orderId: number) {
     try {
-      const response = await axiosInstance.get(`/api/orders/${orderId}`);
-      console.log(response.data ,"ORDER DETAILS");
+      console.log('[apiService] Starting getOrderDetails for orderId:', orderId);
+      console.log('[apiService] Current auth token:', this.token ? 'Present' : 'Missing');
       
-      return { success: true, data: response.data };
+      const response = await axiosInstance.get(`/api/orders/${orderId}`);
+      console.log('[apiService] Order details response received');
+      console.log('[apiService] Response data:', JSON.stringify(response.data, null, 2));
+      
+      if (!response.data) {
+        console.error('[apiService] No data received in order details response');
+        return {
+          success: false,
+          message: 'No data received from server'
+        };
+      }
+
+      return { 
+        success: true, 
+        data: response.data 
+      };
     } catch (error: any) {
-      console.error('Get order details error:', error.message);
+      console.error('[apiService] Get order details error:', error.message);
+      console.error('[apiService] Error stack:', error?.stack);
+      if (error.response) {
+        console.error('[apiService] Error response data:', error.response.data);
+        console.error('[apiService] Error response status:', error.response.status);
+      }
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch order details'
@@ -341,7 +466,7 @@ class ApiService {
     }
   }
 
-  async getInvoiceById(invoiceId: string) {
+  async getInvoiceById(orderId: string) {
     try {
       const token = await SecureStore.getItemAsync('token');
       if (!token) {
@@ -349,19 +474,18 @@ class ApiService {
       }
 
       const response = await axiosInstance.get(
-        `/api/Invoices/${invoiceId}`,
+        `/api/Invoices/customer/${orderId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         }
       );
-      // console.log(response.data ,"getInvoiceById");
-
+      console.log('[apiService] Invoice response:', response.data);
 
       return { success: true, data: response.data };
     } catch (error: any) {
-      console.error('Get invoice error:', error.message);
+      console.error('[apiService] Get invoice error:', error.message);
       return { 
         success: false, 
         message: error.response?.data?.message || 'Failed to fetch invoice' 
@@ -386,6 +510,22 @@ class ApiService {
         success: false,
         message: error.message || 'Failed to connect to server',
         error: error
+      };
+    }
+  }
+
+  async getTimeSlotsInfo(date: string) {
+    try {
+      const response = await axiosInstance.get(`/api/TimeSlots/Info?date=${date}`);
+      return { 
+        success: true, 
+        timeSlotInfos: response.data.timeSlotInfos || [] 
+      };
+    } catch (error: any) {
+      console.error('Get time slots error:', error.message);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch time slots'
       };
     }
   }

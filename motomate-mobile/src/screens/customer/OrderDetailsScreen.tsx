@@ -1,1392 +1,2239 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  RefreshControl,
-  Dimensions,
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    TouchableOpacity,
+    ActivityIndicator,
+    Alert,
+    RefreshControl,
+    Dimensions,
+    Modal,
+    Platform,
+    Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { apiService } from 'services/apiService';
 import { useAuth } from 'context/AuthContext';
+import { apiService } from 'services/apiService';
+import ViewShot from 'react-native-view-shot';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
+
 
 // Define navigation types
 type OrdersStackParamList = {
-  OrderHistoryMain: undefined;
-  OrderDetails: { orderId: number };
+    OrderHistoryMain: undefined;
+    OrderDetails: { orderId: number };
 };
 
 type OrderDetailsScreenNavigationProp = StackNavigationProp<
-  OrdersStackParamList,
-  'OrderDetails'
+    OrdersStackParamList,
+    'OrderDetails'
 >;
 
 type OrderDetailsScreenRouteProp = RouteProp<
-  OrdersStackParamList,
-  'OrderDetails'
+    OrdersStackParamList,
+    'OrderDetails'
 >;
 
 interface OrderDetails {
-  orderId: number;
-  userId: number;
-  vehicleId: number;
-  serviceId?: number;
-  includesInspection: boolean;
-  orderDate: string;
-  status: string;
-  totalAmount: number;
-  notes?: string;
-  invoiceStatus?: string;
-  invoiceId?: number;
-  user?: {
+    orderId: number;
     userId: number;
-    name: string;
-    email: string;
-    phone: string;
-    address: string;
-  };
-  vehicle?: {
     vehicleId: number;
-    make: string;
-    model: string;
-    year: number;
-    licensePlate: string;
-  };
-  service?: {
-    serviceId: number;
-    serviceName: string;
-    category: string;
-    price: number;
-    description: string;
-  };
-  inspection?: {
-    inspectionId: number;
-    scheduledDate: string;
-    timeSlot: string;
+    serviceId?: number;
+    includesInspection: boolean;
+    orderDate: string;
     status: string;
-    bodyCondition?: string;
+    totalAmount: number;
+    notes?: string;
+    invoiceStatus?: string;
+    invoiceId?: number;
+    user?: {
+        userId: number;
+        name: string;
+        email: string;
+        phone: string;
+        address: string;
+    };
+    vehicle?: {
+        vehicleId: number;
+        make: string;
+        model: string;
+        year: number;
+        licensePlate: string;
+    };
+    service?: {
+        serviceId: number;
+        serviceName: string;
+        category: string;
+        price: number;
+        description: string;
+    };
+    inspection?: {
+        inspectionId: number;
+        scheduledDate: string;
+        timeSlot: string;
+        status: string;
+        bodyCondition?: string;
+        engineCondition?: string;
+        electricalCondition?: string;
+        tireCondition?: string;
+        brakeCondition?: string;
+        transmissionCondition?: string;
+        notes?: string;
+        price?: number;
+        serviceName?: string;
+        subCategory?: string;
+        Service?: {
+            ServiceId: number;
+            ServiceName: string;
+            Category: string;
+            Price: number;
+            Description: string;
+            SubCategory?: string;
+        };
+    };
+    additionalServices?: Array<{
+        serviceId: number;
+        serviceName: string;
+        category: string;
+        price: number;
+        description: string;
+        subCategory?: string;
+        status?: string;
+    }>;
+}
+
+// Helper type for array elements, safely handles undefined
+type ArrayElement<ArrayType extends readonly unknown[] | undefined> = ArrayType extends readonly (infer ElementType)[] ? ElementType : never;
+
+// Define a discriminated union type for inspection items
+type MainInspectionItem = Omit<NonNullable<OrderDetails['inspection']>, 'Service' | 'serviceName' | 'price' | 'subCategory' | 'description' | 'status'> & // Exclude relevant properties to redefine
+{
+    isMainInspection: true;
+    status: string;
+    price?: number;
+    notes?: string;
+    serviceName?: string;
+    subCategory?: string;
     engineCondition?: string;
+    transmissionCondition?: string;
+    brakeCondition?: string;
     electricalCondition?: string;
     tireCondition?: string;
-    brakeCondition?: string;
-    transmissionCondition?: string;
-    notes?: string;
-    price?: number;
-  };
-  additionalServices?: Array<{
-    serviceId: number;
-    serviceName: string;
-    category: string;
-    price: number;
-    description: string;
-  }>;
+    bodyCondition?: string;
+};
+
+type AdditionalServiceItemBase = NonNullable<ArrayElement<NonNullable<OrderDetails['additionalServices']>>>;
+
+type AdditionalInspectionItem = Omit<AdditionalServiceItemBase, 'notes' | 'engineCondition' | 'transmissionCondition' | 'brakeCondition' | 'electricalCondition' | 'tireCondition' | 'bodyCondition' | 'inspectionId' | 'scheduledDate' | 'timeSlot' | 'Service'> & // Exclude properties not present on additional services
+{ isMainInspection: false; subCategory?: string; description?: string; status?: string; price?: number; serviceId: number; serviceName: string; category: string; }; // Include relevant properties for additional services with category inspection
+
+type InspectionItem = MainInspectionItem | AdditionalInspectionItem;
+
+// Type guard function
+function isMainInspectionItem(item: InspectionItem): item is MainInspectionItem {
+    return item.isMainInspection === true;
+}
+
+function isAdditionalInspectionItem(item: InspectionItem): item is AdditionalInspectionItem {
+    return item.isMainInspection === false && item.category?.toLowerCase() === 'inspection';
 }
 
 const OrderDetailsScreen: React.FC = () => {
-  const navigation = useNavigation<OrderDetailsScreenNavigationProp>();
-  const route = useRoute<OrderDetailsScreenRouteProp>();
-  const { orderId } = route.params;
-  const { user } = useAuth();
+    const navigation = useNavigation<OrderDetailsScreenNavigationProp>();
+    const route = useRoute<OrderDetailsScreenRouteProp>();
+    const { orderId } = route.params;
+    const { user } = useAuth();
 
-  const [order, setOrder] = useState<OrderDetails | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'details' | 'inspection' | 'invoice'>('details');
-  const [invoice, setInvoice] = useState<any>(null);
-  const [loadingInvoice, setLoadingInvoice] = useState(false);
+    const [order, setOrder] = useState<OrderDetails | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'details' | 'inspection' | 'invoice'>('details');
+    const [invoice, setInvoice] = useState<any>(null);
+    const [loadingInvoice, setLoadingInvoice] = useState(false);
+    const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+    const [savingToGallery, setSavingToGallery] = useState(false);
 
-  const screenWidth = Dimensions.get('window').width;
+    const invoiceRef = useRef<ViewShot>(null);
+    const screenWidth = Dimensions.get('window').width;
 
-  useEffect(() => {
-    if (orderId) {
-      fetchOrderDetails();
-    }
-  }, [orderId]);
-
-  const fetchOrderDetails = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      console.log('Fetching order details for orderId:', orderId);
-      const response = await apiService.getOrderDetails(orderId);
-      console.log('Order details response:', response);
-
-      if (response.success) {
-        setOrder(response.data);
-        
-        // If order is completed, check for invoice
-        if (response.data.status.toLowerCase() === 'completed') {
-          checkForInvoice(response.data.orderId);
+    useEffect(() => {
+        if (orderId) {
+            fetchOrderDetails();
         }
-      } else {
-        setError(response.message || 'Failed to fetch order details');
-      }
-    } catch (error) {
-      console.error('Error fetching order details:', error);
-      setError('An unexpected error occurred');
-    } finally {
-      setLoading(false);
+    }, [orderId]);
+
+    const fetchOrderDetails = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            console.log('[OrderDetailsScreen] Starting to fetch order details for orderId:', orderId);
+            const response = await apiService.getOrderDetails(orderId);
+            console.log('[OrderDetailsScreen] Raw API Response:', JSON.stringify(response, null, 2));
+
+            if (!response) {
+                console.error('[OrderDetailsScreen] No response received from API');
+                setError('No response received from server');
+                return;
+            }
+
+            if (!response.success) {
+                console.error('[OrderDetailsScreen] API returned error:', response.message);
+                setError(response.message || 'Failed to fetch order details');
+                return;
+            }
+
+            if (!response.data) {
+                console.error('[OrderDetailsScreen] No data in API response');
+                setError('No order data received');
+                return;
+            }
+
+            console.log('[OrderDetailsScreen] Setting order data:', JSON.stringify(response.data, null, 2));
+            setOrder(response.data);
+
+            // Always check for invoice if order data is successfully fetched
+            console.log('[OrderDetailsScreen] Checking for invoice after fetching order details');
+            await checkForInvoice(response.data.orderId);
+        } catch (error: any) {
+            console.error('[OrderDetailsScreen] Error fetching order details:', error);
+            console.error('[OrderDetailsScreen] Error stack:', error?.stack);
+            setError(error?.message || 'An unexpected error occurred');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const checkForInvoice = async (orderId: number) => {
+        try {
+            setLoadingInvoice(true);
+            console.log('[OrderDetailsScreen] Checking for invoice for order:', orderId);
+
+            const response = await apiService.getInvoiceById(orderId.toString());
+            console.log('[OrderDetailsScreen] Raw invoice response:', JSON.stringify(response, null, 2));
+
+            if (response && response.success && response.data) {
+                // Debug the structure of response.data
+                console.log('[OrderDetailsScreen] Response data structure:', {
+                    hasInvoice: !!response.data.invoice,
+                    hasInvoiceItems: !!response.data.invoiceItems,
+                    hasNestedInvoiceItems: !!response.data.invoice?.invoiceItems,
+                    dataKeys: Object.keys(response.data)
+                });
+
+                // Create a safe invoice object
+                const invoiceData = {
+                    invoice: response.data.invoice || {},
+                    customer: response.data.customer || {},
+                    vehicle: response.data.vehicle || {},
+                    invoiceItems: []
+                };
+
+                // Safely extract invoice items
+                if (Array.isArray(response.data.invoiceItems)) {
+                    invoiceData.invoiceItems = response.data.invoiceItems;
+                } else if (Array.isArray(response.data.invoice?.invoiceItems)) {
+                    invoiceData.invoiceItems = response.data.invoice.invoiceItems;
+                }
+
+                console.log('[OrderDetailsScreen] Processed invoice data:', JSON.stringify(invoiceData, null, 2));
+                setInvoice(invoiceData);
+                console.log('[OrderDetailsScreen] Invoice data set successfully');
+            } else {
+                console.log('[OrderDetailsScreen] No invoice found or invalid response');
+                setInvoice(null);
+            }
+        } catch (error: any) {
+            console.error('[OrderDetailsScreen] Error checking for invoice:', error);
+            console.error('[OrderDetailsScreen] Error stack:', error?.stack);
+            setInvoice(null);
+        } finally {
+            setLoadingInvoice(false);
+        }
+    };
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchOrderDetails();
+        setRefreshing(false);
+    };
+
+    const formatDate = (dateString?: string): string => {
+        if (!dateString) return 'N/A';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            });
+        } catch (e) {
+            return 'Invalid date';
+        }
+    };
+
+    const formatShortDate = (dateString?: string): string => {
+        if (!dateString) return 'N/A';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+            });
+        } catch (e) {
+            return 'Invalid date';
+        }
+    };
+
+    const formatCurrency = (amount: number | string): string => {
+        const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+        return `PKR ${numAmount?.toFixed(2) || '0.00'}`;
+    };
+
+    const getStatusColor = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'completed':
+                return '#10B981';
+            case 'in progress':
+            case 'inprogress':
+                return '#3B82F6';
+            case 'pending':
+                return '#F59E0B';
+            case 'cancelled':
+                return '#EF4444';
+            case 'paid':
+                return '#10B981';
+            case 'issued':
+                return '#3B82F6';
+            case 'overdue':
+                return '#EF4444';
+            default:
+                return '#6B7280';
+        }
+    };
+
+    const getStatusIcon = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'completed':
+                return 'checkmark-circle';
+            case 'pending':
+                return 'time';
+            case 'cancelled':
+                return 'close-circle';
+            case 'in progress':
+            case 'inprogress':
+                return 'play-circle';
+            case 'paid':
+                return 'card';
+            case 'issued':
+                return 'document-text';
+            case 'overdue':
+                return 'warning';
+            default:
+                return 'ellipse-outline';
+        }
+    };
+
+    const handlePayInvoice = () => {
+        if (invoice?.invoice?.invoiceId) {
+            Alert.alert('Payment', 'Payment functionality will be implemented soon');
+        }
+    };
+
+    const handleViewInvoice = () => {
+        setShowInvoiceModal(true);
+    };
+
+    const saveToGallery = async () => {
+        try {
+            const { status } = await MediaLibrary.requestPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission Required', 'We need permission to save the invoice to your gallery');
+                return;
+            }
+
+            setSavingToGallery(true);
+
+            const viewShot = invoiceRef.current;
+            if (viewShot && typeof viewShot.capture === 'function') {
+                const uri = await viewShot.capture();
+                if (uri) {
+                    console.log('Invoice captured, URI:', uri);
+                    const asset = await MediaLibrary.createAssetAsync(uri);
+                    console.log('Invoice saved to gallery, asset:', asset);
+                    Alert.alert('Success', 'Invoice saved to gallery successfully');
+                } else {
+                    Alert.alert('Error', 'Failed to capture invoice');
+                }
+            } else {
+                Alert.alert('Error', 'Failed to capture invoice');
+            }
+        } catch (error) {
+            console.error('Error saving to gallery:', error);
+            Alert.alert('Error', 'Failed to save invoice to gallery');
+        } finally {
+            setSavingToGallery(false);
+        }
+    };
+
+    const shareInvoice = async () => {
+        try {
+            const viewShot = invoiceRef.current;
+            if (viewShot && typeof viewShot.capture === 'function') {
+                const uri = await viewShot.capture();
+                if (uri) {
+                    if (!(await Sharing.isAvailableAsync())) {
+                        Alert.alert('Error', 'Sharing is not available on this device');
+                        return;
+                    }
+
+                    await Sharing.shareAsync(uri, {
+                        dialogTitle: `Invoice #${invoice?.invoice?.invoiceId || ''}`,
+                        mimeType: 'image/png',
+                        UTI: 'public.png'
+                    });
+                } else {
+                    Alert.alert('Error', 'Failed to capture invoice for sharing');
+                }
+            } else {
+                Alert.alert('Error', 'Failed to capture invoice for sharing');
+            }
+        } catch (error) {
+            console.error('Error sharing invoice:', error);
+            Alert.alert('Error', 'Failed to share invoice');
+        }
+    };
+
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#3B82F6" />
+                <Text style={styles.loadingText}>Loading order details...</Text>
+            </View>
+        );
     }
-  };
 
-  const checkForInvoice = async (orderId: number) => {
-    try {
-      setLoadingInvoice(true);
-      const response = await apiService.getInvoiceById(orderId.toString());
-      
-      if (response.success) {
-        setInvoice(response.data);
-      }
-    } catch (error) {
-      console.error('Error checking for invoice:', error);
-    } finally {
-      setLoadingInvoice(false);
+    if (error || !order) {
+        return (
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={() => navigation.goBack()}
+                    >
+                        <Ionicons name="chevron-back" size={24} color="#1F2937" />
+                    </TouchableOpacity>
+                    <Text style={styles.title}>Order Details</Text>
+                </View>
+
+                <View style={styles.errorContainer}>
+                    <Ionicons name="alert-circle" size={64} color="#EF4444" />
+                    <Text style={styles.errorTitle}>Error Loading Order</Text>
+                    <Text style={styles.errorText}>{error || 'Order not found'}</Text>
+                    <TouchableOpacity
+                        style={styles.retryButton}
+                        onPress={fetchOrderDetails}
+                    >
+                        <Text style={styles.retryButtonText}>Try Again</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
     }
-  };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchOrderDetails();
-    setRefreshing(false);
-  };
+    // Invoice Modal UI
+    const renderInvoiceModal = () => {
+        if (!invoice || !invoice.invoice) return null;
 
-  const formatDate = (dateString?: string): string => {
-    if (!dateString) return 'N/A';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-    } catch (e) {
-      return 'Invalid date';
-    }
-  };
-
-  const formatCurrency = (amount: number | string): string => {
-    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return `PKR ${numAmount?.toFixed(2) || '0.00'}`;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'completed':
-        return '#10B981';
-      case 'in progress':
-      case 'inprogress':
-        return '#3B82F6';
-      case 'pending':
-        return '#F59E0B';
-      case 'cancelled':
-        return '#EF4444';
-      case 'paid':
-        return '#10B981';
-      case 'issued':
-        return '#3B82F6';
-      case 'overdue':
-        return '#EF4444';
-      default:
-        return '#6B7280';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'completed':
-        return 'checkmark-circle';
-      case 'pending':
-        return 'time';
-      case 'cancelled':
-        return 'close-circle';
-      case 'in progress':
-      case 'inprogress':
-        return 'play-circle';
-      case 'paid':
-        return 'card';
-      case 'issued':
-        return 'document-text';
-      case 'overdue':
-        return 'warning';
-      default:
-        return 'ellipse-outline';
-    }
-  };
-
-  const handlePayInvoice = () => {
-    if (invoice?.invoice?.invoiceId) {
-      Alert.alert('Payment', 'Payment functionality will be implemented soon');
-    }
-  };
-
-  const handlePrintInvoice = () => {
-    Alert.alert('Print Invoice', 'Print functionality will be implemented soon');
-  };
-
-  const renderTabButton = (
-    tab: 'details' | 'inspection' | 'invoice',
-    title: string,
-    icon: string,
-    isVisible: boolean = true
-  ) => {
-    if (!isVisible) return null;
-
-    const tabsCount = [
-      true, // details always visible
-      order?.includesInspection && order?.inspection,
-      !!invoice
-    ].filter(Boolean).length;
-
-    return (
-      <TouchableOpacity
-        style={[
-          styles.tabButton,
-          activeTab === tab && styles.activeTabButton,
-          { width: (screenWidth - 48) / tabsCount }
-        ]}
-        onPress={() => setActiveTab(tab)}
-      >
-        <Ionicons
-          name={icon as any}
-          size={18}
-          color={activeTab === tab ? '#3B82F6' : '#6B7280'}
-        />
-        <Text style={[
-          styles.tabButtonText,
-          activeTab === tab && styles.activeTabButtonText
-        ]}>
-          {title}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderDetailsTab = () => (
-    <View style={styles.tabContent}>
-      {/* Vehicle Information */}
-      <View style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="car" size={20} color="#3B82F6" />
-          <Text style={styles.sectionTitle}>Vehicle Information</Text>
-        </View>
-        {order?.vehicle && (
-          <View style={styles.sectionContent}>
-            <View style={styles.vehicleHeader}>
-              <View style={styles.vehicleIconContainer}>
-                <Ionicons name="car-sport" size={24} color="#3B82F6" />
-              </View>
-              <View style={styles.vehicleInfo}>
-                <Text style={styles.vehicleTitle}>
-                  {order.vehicle.make} {order.vehicle.model}
-                </Text>
-                <View style={styles.vehicleBadges}>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{order.vehicle.year}</Text>
-                  </View>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{order.vehicle.licensePlate}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-            <View style={styles.detailRows}>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Registration No.</Text>
-                <Text style={styles.detailValue}>{order.vehicle.licensePlate}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Model Year</Text>
-                <Text style={styles.detailValue}>{order.vehicle.year}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Vehicle ID</Text>
-                <Text style={styles.detailValue}>{order.vehicleId}</Text>
-              </View>
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* Service Information */}
-      {order?.service && (
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="construct" size={20} color="#3B82F6" />
-            <Text style={styles.sectionTitle}>Service Information</Text>
-          </View>
-          <View style={styles.sectionContent}>
-            <View style={styles.serviceItem}>
-              <View style={styles.serviceHeader}>
-                <View style={styles.serviceIconContainer}>
-                  <Ionicons 
-                    name={order.service.category?.toLowerCase() === 'inspection' ? 'shield-checkmark' : 'construct'} 
-                    size={20} 
-                    color="#3B82F6" 
-                  />
-                </View>
-                <View style={styles.serviceInfo}>
-                  <Text style={styles.serviceTitle}>{order.service.serviceName}</Text>
-                  <Text style={styles.serviceDescription}>
-                    {order.service.description || 'No description available'}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.serviceDetails}>
-                <View style={styles.serviceDetailRow}>
-                  <Text style={styles.detailLabel}>Category</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: '#E0E7FF' }]}>
-                    <Text style={[styles.statusText, { color: '#3730A3' }]}>
-                      {order.service.category}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.serviceDetailRow}>
-                  <Text style={styles.detailLabel}>Price</Text>
-                  <Text style={styles.detailValue}>
-                    {formatCurrency(order.service.price || 0)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Additional Services */}
-      {order?.additionalServices && order.additionalServices.length > 0 && (
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="list" size={20} color="#3B82F6" />
-            <Text style={styles.sectionTitle}>Additional Services</Text>
-          </View>
-          <View style={styles.sectionContent}>
-            {order.additionalServices.map((service, index) => (
-              <View key={service.serviceId || index} style={styles.additionalServiceItem}>
-                <View style={styles.additionalServiceHeader}>
-                  <Text style={styles.additionalServiceTitle}>{service.serviceName}</Text>
-                  <Text style={styles.additionalServicePrice}>
-                    {formatCurrency(service.price || 0)}
-                  </Text>
-                </View>
-                <Text style={styles.additionalServiceDescription}>
-                  {service.description || 'No description available'}
-                </Text>
-                <View style={[styles.statusBadge, { backgroundColor: '#F3F4F6', alignSelf: 'flex-start' }]}>
-                  <Text style={[styles.statusText, { color: '#374151' }]}>
-                    {service.category}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Payment Summary */}
-      <View style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="card" size={20} color="#3B82F6" />
-          <Text style={styles.sectionTitle}>Payment Summary</Text>
-        </View>
-        <View style={styles.sectionContent}>
-          <View style={styles.paymentSummary}>
-            {order?.service && (
-              <View style={styles.paymentRow}>
-                <Text style={styles.paymentLabel}>Main Service</Text>
-                <Text style={styles.paymentValue}>
-                  {formatCurrency(order.service.price || 0)}
-                </Text>
-              </View>
-            )}
-            
-            {order?.includesInspection && order?.inspection?.price && (
-              <View style={styles.paymentRow}>
-                <Text style={styles.paymentLabel}>Inspection Fee</Text>
-                <Text style={styles.paymentValue}>
-                  {formatCurrency(order.inspection.price)}
-                </Text>
-              </View>
-            )}
-
-            {order?.additionalServices && order.additionalServices.length > 0 && (
-              <View style={styles.paymentRow}>
-                <Text style={styles.paymentLabel}>Additional Services</Text>
-                <Text style={styles.paymentValue}>
-                  {formatCurrency(
-                    order.additionalServices.reduce(
-                      (sum, service) => sum + (service.price || 0),
-                      0
-                    )
-                  )}
-                </Text>
-              </View>
-            )}
-
-            <View style={[styles.paymentRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Total Amount</Text>
-              <Text style={styles.totalValue}>
-                {formatCurrency(order?.totalAmount || 0)}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Notes */}
-      {order?.notes && (
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="document-text" size={20} color="#3B82F6" />
-            <Text style={styles.sectionTitle}>Order Notes</Text>
-          </View>
-          <View style={styles.sectionContent}>
-            <Text style={styles.notesText}>{order.notes}</Text>
-          </View>
-        </View>
-      )}
-    </View>
-  );
-
-  const renderInspectionTab = () => (
-    <View style={styles.tabContent}>
-      {order?.inspection ? (
-        <>
-          {/* Inspection Schedule Info */}
-          <View style={styles.inspectionScheduleCard}>
-            <View style={styles.scheduleRow}>
-              <View style={styles.scheduleItem}>
-                <View style={styles.scheduleIconContainer}>
-                  <Ionicons name="calendar" size={20} color="#3B82F6" />
-                </View>
-                <View>
-                  <Text style={styles.scheduleLabel}>Inspection Date</Text>
-                  <Text style={styles.scheduleValue}>
-                    {formatDate(order.inspection.scheduledDate)}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.scheduleItem}>
-                <View style={styles.scheduleIconContainer}>
-                  <Ionicons name="time" size={20} color="#3B82F6" />
-                </View>
-                <View>
-                  <Text style={styles.scheduleLabel}>Time Slot</Text>
-                  <Text style={styles.scheduleValue}>
-                    {order.inspection.timeSlot || 'Not specified'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(order.inspection.status) + '20', alignSelf: 'center' }
-            ]}>
-              <Ionicons
-                name={getStatusIcon(order.inspection.status) as any}
-                size={14}
-                color={getStatusColor(order.inspection.status)}
-              />
-              <Text style={[
-                styles.statusText,
-                { color: getStatusColor(order.inspection.status) }
-              ]}>
-                {order.inspection.status}
-              </Text>
-            </View>
-          </View>
-
-          {/* Inspection Results */}
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="clipboard" size={20} color="#3B82F6" />
-              <Text style={styles.sectionTitle}>Inspection Results</Text>
-            </View>
-            
-            {order.inspection.status === 'completed' ? (
-              <View style={styles.sectionContent}>
-                <View style={styles.inspectionGrid}>
-                  {[
-                    { label: 'Body Condition', value: order.inspection.bodyCondition },
-                    { label: 'Engine Condition', value: order.inspection.engineCondition },
-                    { label: 'Electrical Condition', value: order.inspection.electricalCondition },
-                    { label: 'Tire Condition', value: order.inspection.tireCondition },
-                    { label: 'Brake Condition', value: order.inspection.brakeCondition },
-                    { label: 'Transmission Condition', value: order.inspection.transmissionCondition },
-                  ].filter(item => item.value && item.value !== 'Not Inspected Yet').map((item, index) => (
-                    <View key={index} style={styles.inspectionResultItem}>
-                      <Text style={styles.inspectionResultLabel}>{item.label}</Text>
-                      <View style={styles.inspectionResultValue}>
-                        <Ionicons name="ellipse" size={8} color="#3B82F6" />
-                        <Text style={styles.inspectionResultText}>
-                          {item.value}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ) : (
-              <View style={styles.inspectionStatusContainer}>
-                <View style={styles.inspectionStatusIcon}>
-                  <Ionicons
-                    name={getStatusIcon(order.inspection.status) as any}
-                    size={32}
-                    color={getStatusColor(order.inspection.status)}
-                  />
-                </View>
-                <Text style={styles.inspectionStatusTitle}>
-                  {order.inspection.status === 'pending' ? 'Inspection Scheduled' :
-                   order.inspection.status === 'in progress' ? 'Inspection In Progress' :
-                   order.inspection.status === 'cancelled' ? 'Inspection Cancelled' :
-                   `Inspection ${order.inspection.status}`}
-                </Text>
-                <Text style={styles.inspectionStatusDescription}>
-                  {order.inspection.status === 'pending' 
-                    ? "Your vehicle inspection is scheduled but has not been completed yet. We'll notify you once the inspection is complete."
-                    : order.inspection.status === 'in progress'
-                    ? "Your vehicle is currently being inspected by our technicians. Results will be available soon."
-                    : order.inspection.status === 'cancelled'
-                    ? "This inspection was cancelled. Please contact customer service if you need to reschedule."
-                    : `The current status of your inspection is ${order.inspection.status}.`}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Inspection Notes */}
-          {order.inspection.notes && (
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="document-text" size={20} color="#3B82F6" />
-                <Text style={styles.sectionTitle}>Inspection Notes</Text>
-              </View>
-              <View style={styles.sectionContent}>
-                <Text style={styles.notesText}>{order.inspection.notes}</Text>
-              </View>
-            </View>
-          )}
-        </>
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="shield-outline" size={64} color="#D1D5DB" />
-          <Text style={styles.emptyText}>No Inspection Data</Text>
-          <Text style={styles.emptySubtext}>This order does not include an inspection</Text>
-        </View>
-      )}
-    </View>
-  );
-
-  const renderInvoiceTab = () => (
-    <View style={styles.tabContent}>
-      {invoice ? (
-        <>
-          <View style={styles.invoiceHeader}>
-            <View style={styles.invoiceHeaderLeft}>
-              <View style={styles.invoiceIconContainer}>
-                <Ionicons name="receipt" size={24} color="#3B82F6" />
-              </View>
-              <View>
-                <Text style={styles.invoiceTitle}>Invoice #{invoice.invoice.invoiceId}</Text>
-                <Text style={styles.invoiceDate}>
-                  {formatDate(invoice.invoice.invoiceDate)}
-                </Text>
-              </View>
-            </View>
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(invoice.invoice.status) + '20' }
-            ]}>
-              <Ionicons
-                name={getStatusIcon(invoice.invoice.status) as any}
-                size={14}
-                color={getStatusColor(invoice.invoice.status)}
-              />
-              <Text style={[
-                styles.statusText,
-                { color: getStatusColor(invoice.invoice.status) }
-              ]}>
-                {invoice.invoice.status}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="calculator" size={20} color="#3B82F6" />
-              <Text style={styles.sectionTitle}>Summary</Text>
-            </View>
-            <View style={styles.sectionContent}>
-              <View style={styles.invoiceSummary}>
-                <View style={styles.invoiceSummaryRow}>
-                  <Text style={styles.invoiceSummaryLabel}>Subtotal</Text>
-                  <Text style={styles.invoiceSummaryValue}>
-                    {formatCurrency(
-                      invoice.invoice.subTotal || 
-                      invoice.invoice.totalAmount || 0
-                    )}
-                  </Text>
-                </View>
-                <View style={styles.invoiceSummaryRow}>
-                  <Text style={styles.invoiceSummaryLabel}>
-                    Tax ({invoice.invoice.taxRate || 18}%)
-                  </Text>
-                  <Text style={styles.invoiceSummaryValue}>
-                    {formatCurrency(
-                      invoice.invoice.taxAmount || 
-                      (parseFloat(invoice.invoice.totalAmount || '0') * 0.18)
-                    )}
-                  </Text>
-                </View>
-                <View style={[styles.invoiceSummaryRow, styles.totalSummaryRow]}>
-                  <Text style={styles.totalSummaryLabel}>Total</Text>
-                  <Text style={styles.totalSummaryValue}>
-                    {formatCurrency(invoice.invoice.totalAmount || 0)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {invoice.invoice.status !== 'paid' && (
-            <TouchableOpacity
-              style={styles.payButton}
-              onPress={handlePayInvoice}
+        return (
+            <Modal
+                visible={showInvoiceModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowInvoiceModal(false)}
             >
-              <Ionicons name="card" size={20} color="#FFFFFF" />
-              <Text style={styles.payButtonText}>Pay Now</Text>
-            </TouchableOpacity>
-          )}
-        </>
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="receipt-outline" size={64} color="#D1D5DB" />
-          <Text style={styles.emptyText}>No Invoice Available</Text>
-          <Text style={styles.emptySubtext}>Invoice will be generated once the order is completed</Text>
-        </View>
-      )}
-    </View>
-  );
+                <View style={styles.modalContainer}>
+                    <View style={styles.invoiceModalContent}>
+                        <View style={styles.invoiceModalHeader}>
+                            <TouchableOpacity
+                                onPress={() => setShowInvoiceModal(false)}
+                                style={styles.closeButton}
+                            >
+                                <Ionicons name="close" size={24} color="#6B7280" />
+                            </TouchableOpacity>
+                        </View>
 
-  if (loading) {
+                        <ScrollView style={styles.invoiceScrollView}>
+                            <ViewShot
+                                ref={invoiceRef}
+                                options={{ format: 'png', quality: 0.9 }}
+                                style={styles.invoiceContainer}
+                            >
+                                {/* Invoice Header */}
+                                <View style={styles.invoiceHeader}>
+                                    <View style={styles.invoiceHeaderTop}>
+                                        <View style={styles.invoiceLogoContainer}>
+                                            <Ionicons name="document-text" size={30} color="#3B82F6" />
+                                        </View>
+                                        <View style={styles.invoiceTitleContainer}>
+                                            <Text style={styles.invoiceTitle}>Invoice #{invoice.invoice.invoiceId}</Text>
+                                            <Text style={styles.invoiceDate}>
+                                                Issued on {formatDate(invoice.invoice.invoiceDate)}
+                                            </Text>
+                                        </View>
+                                        <View style={[
+                                            styles.invoiceStatusBadge,
+                                            { backgroundColor: getStatusColor(invoice.invoice.status) + '20' }
+                                        ]}>
+                                            <Text style={[
+                                                styles.invoiceStatusText,
+                                                { color: getStatusColor(invoice.invoice.status) }
+                                            ]}>
+                                                {invoice.invoice.status}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {/* Customer and Vehicle Information */}
+                                <View style={styles.invoiceSection}>
+                                    <View style={styles.invoiceRow}>
+                                        <View style={styles.invoiceHalf}>
+                                            <View style={styles.invoiceSectionHeader}>
+                                                <Ionicons name="person" size={18} color="#3B82F6" />
+                                                <Text style={styles.invoiceSectionTitle}>Customer Information</Text>
+                                            </View>
+                                            <View style={styles.invoiceInfoCard}>
+                                                <View style={styles.invoiceInfoRow}>
+                                                    <Text style={styles.invoiceInfoLabel}>Name</Text>
+                                                    <Text style={styles.invoiceInfoValue} numberOfLines={1} ellipsizeMode="tail">
+                                                        {invoice.customer?.name || 'N/A'}
+                                                    </Text>
+                                                </View>
+                                                <View style={styles.invoiceInfoRow}>
+                                                    <Text style={styles.invoiceInfoLabel}>Email</Text>
+                                                    <Text style={styles.invoiceInfoValue} numberOfLines={1} ellipsizeMode="tail">
+                                                        {invoice.customer?.email || 'N/A'}
+                                                    </Text>
+                                                </View>
+                                                <View style={styles.invoiceInfoRow}>
+                                                    <Text style={styles.invoiceInfoLabel}>Phone</Text>
+                                                    <Text style={styles.invoiceInfoValue}>
+                                                        {invoice.customer?.phone || 'N/A'}
+                                                    </Text>
+                                                </View>
+                                                <View style={styles.invoiceInfoRow}>
+                                                    <Text style={styles.invoiceInfoLabel}>Address</Text>
+                                                    <Text style={styles.invoiceInfoValue} numberOfLines={2} ellipsizeMode="tail">
+                                                        {invoice.customer?.address || 'N/A'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        </View>
+
+                                        <View style={styles.invoiceHalf}>
+                                            <View style={styles.invoiceSectionHeader}>
+                                                <Ionicons name="car" size={18} color="#3B82F6" />
+                                                <Text style={styles.invoiceSectionTitle}>Vehicle Information</Text>
+                                            </View>
+                                            <View style={styles.invoiceInfoCard}>
+                                                <View style={styles.invoiceInfoRow}>
+                                                    <Text style={styles.invoiceInfoLabel}>Make & Model</Text>
+                                                    <Text style={styles.invoiceInfoValue} numberOfLines={1} ellipsizeMode="tail">
+                                                        {invoice.vehicle?.make} {invoice.vehicle?.model}
+                                                    </Text>
+                                                </View>
+                                                <View style={styles.invoiceInfoRow}>
+                                                    <Text style={styles.invoiceInfoLabel}>Year</Text>
+                                                    <Text style={styles.invoiceInfoValue}>
+                                                        {invoice.vehicle?.year || 'N/A'}
+                                                    </Text>
+                                                </View>
+                                                <View style={styles.invoiceInfoRow}>
+                                                    <Text style={styles.invoiceInfoLabel}>License Plate</Text>
+                                                    <Text style={styles.invoiceInfoValue}>
+                                                        {invoice.vehicle?.licensePlate || 'N/A'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {/* Service Details */}
+                                <View style={styles.invoiceSection}>
+                                    <View style={styles.invoiceSectionHeader}>
+                                        <Ionicons name="list" size={18} color="#3B82F6" />
+                                        <Text style={styles.invoiceSectionTitle}>Service Details</Text>
+                                    </View>
+
+                                    <View style={styles.invoiceTable}>
+                                        <View style={styles.invoiceTableHeader}>
+                                            <Text style={[styles.invoiceTableHeaderText, { flex: 2 }]}>Description</Text>
+                                            <Text style={[styles.invoiceTableHeaderText, { flex: 0.5, textAlign: 'center' }]}>Qty</Text>
+                                            <Text style={[styles.invoiceTableHeaderText, { flex: 1, textAlign: 'right' }]}>Unit Price</Text>
+                                            <Text style={[styles.invoiceTableHeaderText, { flex: 1, textAlign: 'right' }]}>Total</Text>
+                                        </View>
+
+                                        {invoice.invoiceItems?.map((item: any, index: number) => (
+                                            <View key={index} style={styles.invoiceTableRow}>
+                                                <Text style={[styles.invoiceTableCell, { flex: 2 }]}>{item.description}</Text>
+                                                <Text style={[styles.invoiceTableCell, { flex: 0.5, textAlign: 'center' }]}>{item.quantity || 1}</Text>
+                                                <Text style={[styles.invoiceTableCell, { flex: 1, textAlign: 'right' }]}>
+                                                    {formatCurrency(item.unitPrice)}
+                                                </Text>
+                                                <Text style={[styles.invoiceTableCell, { flex: 1, textAlign: 'right' }]}>
+                                                    {formatCurrency(item.totalPrice)}
+                                                </Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+
+                                {/* Invoice Summary */}
+                                <View style={styles.invoiceSummary}>
+                                    <View style={styles.invoiceSummaryRow}>
+                                        <Text style={styles.invoiceSummaryLabel}>Subtotal</Text>
+                                        <Text style={styles.invoiceSummaryValue}>{formatCurrency(invoice.invoice.subTotal)}</Text>
+                                    </View>
+                                    <View style={styles.invoiceSummaryRow}>
+                                        <Text style={styles.invoiceSummaryLabel}>Tax (18%)</Text>
+                                        <Text style={styles.invoiceSummaryValue}>{formatCurrency(invoice.invoice.taxAmount)}</Text>
+                                    </View>
+                                    <View style={[styles.invoiceSummaryRow, styles.invoiceTotalRow]}>
+                                        <Text style={styles.invoiceTotalLabel}>Total Amount</Text>
+                                        <Text style={styles.invoiceTotalValue}>{formatCurrency(invoice.invoice.totalAmount)}</Text>
+                                    </View>
+                                </View>
+
+                                {/* Payment Information */}
+                                <View style={styles.invoiceSection}>
+                                    <View style={styles.invoiceSectionHeader}>
+                                        <Ionicons name="card" size={18} color="#3B82F6" />
+                                        <Text style={styles.invoiceSectionTitle}>Payment Information</Text>
+                                    </View>
+                                    <View style={styles.paymentInfo}>
+                                        <View style={styles.invoiceInfoRow}>
+                                            <Text style={styles.invoiceInfoLabel}>Status</Text>
+                                            <View style={[
+                                                styles.paymentStatusBadge,
+                                                { backgroundColor: getStatusColor(invoice.invoice.status) + '20' }
+                                            ]}>
+                                                <Text style={[
+                                                    styles.paymentStatusText,
+                                                    { color: getStatusColor(invoice.invoice.status) }
+                                                ]}>
+                                                    {invoice.invoice.status}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <View style={styles.invoiceInfoRow}>
+                                            <Text style={styles.invoiceInfoLabel}>Due Date</Text>
+                                            <Text style={styles.invoiceInfoValue}>{formatDate(invoice.invoice.dueDate)}</Text>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {/* Footer */}
+                                <View style={styles.invoiceFooter}>
+                                    <Text style={styles.invoiceFooterText}>
+                                        Thank you for your business!
+                                    </Text>
+                                    <Text style={styles.invoiceFooterCompany}>
+                                        MotoMate Auto Services
+                                    </Text>
+                                    <Text style={styles.invoiceFooterContact}>
+                                        C43 – Shahra e Faisal, Karachi • MotoM22@gmail.com • +92-336-1800485
+                                    </Text>
+                                </View>
+                            </ViewShot>
+                        </ScrollView>
+
+                        <View style={styles.invoiceModalActions}>
+                            <TouchableOpacity
+                                style={[styles.invoiceAction, styles.invoiceShareAction]}
+                                onPress={shareInvoice}
+                                disabled={savingToGallery}
+                            >
+                                <Ionicons name="share-outline" size={20} color="white" />
+                                <Text style={styles.invoiceActionText}>Share</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.invoiceAction, styles.invoiceSaveAction]}
+                                onPress={saveToGallery}
+                                disabled={savingToGallery}
+                            >
+                                {savingToGallery ? (
+                                    <ActivityIndicator size="small" color="white" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="download-outline" size={20} color="white" />
+                                        <Text style={styles.invoiceActionText}>Save to Gallery</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        );
+    };
+
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={styles.loadingText}>Loading order details...</Text>
-      </View>
-    );
-  }
-
-  if (error || !order) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="chevron-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Order Details</Text>
-        </View>
-        
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={64} color="#EF4444" />
-          <Text style={styles.errorTitle}>Error Loading Order</Text>
-          <Text style={styles.errorText}>{error || 'Order not found'}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={fetchOrderDetails}
-          >
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="chevron-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.title}>Order #{order.orderId}</Text>
-          <Text style={styles.subtitle}>Placed on {formatDate(order.orderDate)}</Text>
-        </View>
-      </View>
-
-      {/* Order Status Card */}
-      <View style={styles.statusCard}>
-        <View style={styles.statusHeader}>
-          <View style={styles.statusInfo}>
-            <Text style={styles.statusTitle}>Order Status</Text>
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(order.status) + '20' }
-            ]}>
-              <Ionicons
-                name={getStatusIcon(order.status) as any}
-                size={16}
-                color={getStatusColor(order.status)}
-              />
-              <Text style={[
-                styles.statusText,
-                { color: getStatusColor(order.status) }
-              ]}>
-                {order.status}
-              </Text>
+        <View style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => navigation.goBack()}
+                >
+                    <Ionicons name="chevron-back" size={24} color="#1F2937" />
+                </TouchableOpacity>
+                <View style={styles.headerTitleContainer}>
+                    <Text style={styles.title}>Order #{order.orderId}</Text>
+                    <Text style={styles.subtitle}>Placed on {formatDate(order.orderDate)}</Text>
+                </View>
             </View>
-          </View>
-          <View style={styles.amountInfo}>
-            <Text style={styles.amountLabel}>Total Amount</Text>
-            <Text style={styles.amountValue}>{formatCurrency(order.totalAmount)}</Text>
-          </View>
-        </View>
-        
-        {invoice && (
-          <View style={styles.invoiceQuickInfo}>
-            <View style={styles.invoiceQuickHeader}>
-              <Ionicons name="receipt" size={16} color="#3B82F6" />
-              <Text style={styles.invoiceQuickTitle}>Invoice #{invoice.invoice.invoiceId}</Text>
-              <View style={[
-                styles.statusBadge,
-                { backgroundColor: getStatusColor(invoice.invoice.status) + '20' }
-              ]}>
-                <Text style={[
-                  styles.statusText,
-                  { color: getStatusColor(invoice.invoice.status), fontSize: 11 }
-                ]}>
-                  {invoice.invoice.status}
-                </Text>
-              </View>
+
+            {/* Order Status Card */}
+            <View style={styles.statusCard}>
+                <View style={styles.statusHeader}>
+                    <View style={styles.statusInfo}>
+                        <Text style={styles.statusTitle}>Order Status</Text>
+                        <View style={[
+                            styles.statusBadge,
+                            { backgroundColor: getStatusColor(order.status) + '20' }
+                        ]}>
+                            <Ionicons
+                                name={getStatusIcon(order.status) as any}
+                                size={16}
+                                color={getStatusColor(order.status)}
+                            />
+                            <Text style={[
+                                styles.statusText,
+                                { color: getStatusColor(order.status) }
+                            ]}>
+                                {order.status}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.amountInfo}>
+                        <Text style={styles.amountLabel}>Total Amount</Text>
+                        <Text style={styles.amountValue}>{formatCurrency(order.totalAmount)}</Text>
+                    </View>
+                </View>
+
+                {invoice && (
+                    <TouchableOpacity style={styles.invoiceQuickInfo} onPress={() => setActiveTab('invoice')}>
+                        <View style={styles.invoiceQuickHeader}>
+                            <Ionicons name="receipt" size={16} color="#3B82F6" />
+                            <Text style={styles.invoiceQuickTitle}>Invoice #{invoice.invoice.invoiceId}</Text>
+                            <View style={[
+                                styles.statusBadge,
+                                { backgroundColor: getStatusColor(invoice.invoice.status) + '20' }
+                            ]}>
+                                <Text style={[
+                                    styles.statusText,
+                                    { color: getStatusColor(invoice.invoice.status), fontSize: 11 }
+                                ]}>
+                                    {invoice.invoice.status}
+                                </Text>
+                            </View>
+                        </View>
+                        {invoice.invoice.status !== 'paid' && (
+                            <TouchableOpacity
+                                style={styles.quickPayButton}
+                                onPress={handlePayInvoice}
+                            >
+                                <Ionicons name="card" size={16} color="#FFFFFF" />
+                                <Text style={styles.quickPayButtonText}>Pay Now</Text>
+                            </TouchableOpacity>
+                        )}
+                    </TouchableOpacity>
+                )}
             </View>
-            {invoice.invoice.status !== 'paid' && (
-              <TouchableOpacity
-                style={styles.quickPayButton}
-                onPress={handlePayInvoice}
-              >
-                <Ionicons name="card" size={16} color="#FFFFFF" />
-                <Text style={styles.quickPayButtonText}>Pay Now</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
 
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
-        {renderTabButton('details', 'Details', 'document-text')}
-        {renderTabButton('inspection', 'Inspection', 'shield-checkmark', 
-          order.includesInspection && !!order.inspection)}
-        {renderTabButton('invoice', 'Invoice', 'receipt', !!invoice)}
-      </View>
+            {/* Tabs */}
+            <View style={styles.tabContainer}>
+                <TouchableOpacity
+                    style={[
+                        styles.tabButton,
+                        activeTab === 'details' && styles.activeTabButton,
+                        { width: (screenWidth - 48) / 3 }
+                    ]}
+                    onPress={() => setActiveTab('details')}
+                >
+                    <Ionicons
+                        name="document-text"
+                        size={18}
+                        color={activeTab === 'details' ? '#3B82F6' : '#6B7280'}
+                    />
+                    <Text style={[
+                        styles.tabButtonText,
+                        activeTab === 'details' && styles.activeTabButtonText
+                    ]}>
+                        Details
+                    </Text>
+                </TouchableOpacity>
 
-      {/* Tab Content */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {activeTab === 'details' && renderDetailsTab()}
-        {activeTab === 'inspection' && renderInspectionTab()}
-        {activeTab === 'invoice' && renderInvoiceTab()}
-      </ScrollView>
-    </View>
-  );
+                {order.includesInspection && order.inspection && (
+                    <TouchableOpacity
+                        style={[
+                            styles.tabButton,
+                            activeTab === 'inspection' && styles.activeTabButton,
+                            { width: (screenWidth - 48) / 3 }
+                        ]}
+                        onPress={() => setActiveTab('inspection')}
+                    >
+                        <Ionicons
+                            name="shield-checkmark"
+                            size={18}
+                            color={activeTab === 'inspection' ? '#3B82F6' : '#6B7280'}
+                        />
+                        <Text style={[
+                            styles.tabButtonText,
+                            activeTab === 'inspection' && styles.activeTabButtonText
+                        ]}>
+                            Inspection
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
+                {invoice && (
+                    <TouchableOpacity
+                        style={[
+                            styles.tabButton,
+                            activeTab === 'invoice' && styles.activeTabButton,
+                            { width: (screenWidth - 48) / 3 }
+                        ]}
+                        onPress={() => setActiveTab('invoice')}
+                    >
+                        <Ionicons
+                            name="receipt"
+                            size={18}
+                            color={activeTab === 'invoice' ? '#3B82F6' : '#6B7280'}
+                        />
+                        <Text style={[
+                            styles.tabButtonText,
+                            activeTab === 'invoice' && styles.activeTabButtonText
+                        ]}>
+                            Invoice
+                        </Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {/* Tab Content */}
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                }
+            >
+                {activeTab === 'details' && (
+                    <View style={styles.tabContent}>
+                        {/* Vehicle Information */}
+                        {order.vehicle && (
+                            <View style={styles.sectionCard}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="car" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Vehicle Information</Text>
+                                </View>
+                                <View style={styles.sectionContent}>
+                                    <View style={styles.vehicleHeader}>
+                                        <View style={styles.vehicleIconContainer}>
+                                            <Ionicons name="car-sport" size={24} color="#3B82F6" />
+                                        </View>
+                                        <View style={styles.vehicleInfo}>
+                                            <Text style={styles.vehicleTitle}>
+                                                {order.vehicle.make} {order.vehicle.model}
+                                            </Text>
+                                            <View style={styles.vehicleBadges}>
+                                                <View style={styles.badge}>
+                                                    <Text style={styles.badgeText}>{order.vehicle.year}</Text>
+                                                </View>
+                                                <View style={styles.badge}>
+                                                    <Text style={styles.badgeText}>{order.vehicle.licensePlate}</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    </View>
+                                    <View style={styles.detailRows}>
+                                        <View style={styles.detailRow}>
+                                            <Text style={styles.detailLabel}>Registration No.</Text>
+                                            <Text style={styles.detailValue}>{order.vehicle.licensePlate}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <Text style={styles.detailLabel}>Model Year</Text>
+                                            <Text style={styles.detailValue}>{order.vehicle.year}</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <Text style={styles.detailLabel}>Vehicle ID</Text>
+                                            <Text style={styles.detailValue}>{order.vehicleId}</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Service Information (Main Service - if not inspection) */}
+                        {order.service && order.service.category?.toLowerCase() !== 'inspection' && (
+                            <View style={styles.sectionCard}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="construct" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Service Information</Text>
+                                </View>
+                                <View style={styles.sectionContent}>
+                                    <View style={styles.serviceItem}>
+                                        <View style={styles.serviceHeader}>
+                                            <Text style={styles.serviceName}>{order.service.serviceName || 'N/A'}</Text>
+                                            <Text style={styles.servicePrice}>{formatCurrency(order.service.price || 0)}</Text>
+                                        </View>
+                                        <Text style={styles.serviceCategory}>{order.service.category || 'N/A'}</Text>
+                                        {order.service.description && (
+                                            <Text style={styles.serviceDescription}>{order.service.description}</Text>
+                                        )}
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Additional Services (non-inspection) */}
+                        {order.additionalServices && Array.isArray(order.additionalServices) && order.additionalServices.filter(s => s.category?.toLowerCase() !== 'inspection').length > 0 && (
+                            <View style={styles.sectionCard}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="add-circle" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Additional Services</Text>
+                                </View>
+                                <View style={styles.sectionContent}>
+                                    {order.additionalServices.filter(s => s.category?.toLowerCase() !== 'inspection').map((service, index) => (
+                                        <View key={index} style={[styles.serviceItem, index > 0 && styles.serviceItemBorder]}>
+                                            <View style={styles.serviceHeader}>
+                                                <Text style={styles.serviceName}>{service.serviceName || 'N/A'}</Text>
+                                                <Text style={styles.servicePrice}>{formatCurrency(service.price || 0)}</Text>
+                                            </View>
+                                            <Text style={styles.serviceCategory}>{service.category || 'N/A'}</Text>
+                                            {service.description && (
+                                                <Text style={styles.serviceDescription}>{service.description}</Text>
+                                            )}
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Inspection Services */}
+                        {(() => {
+                            const inspectionItems: InspectionItem[] = []; // Explicitly type the array
+
+                            // Add main inspection if it exists and is included
+                            if (order?.includesInspection && order?.inspection) {
+                                // Construct main inspection item explicitly
+                                const mainInspectionItem: MainInspectionItem = {
+                                    // Spread properties from original inspection, ensuring status is present
+                                    ...order.inspection,
+                                    isMainInspection: true,
+                                    status: order.inspection.status || 'N/A', // Ensure status exists
+                                    // Explicitly include properties needed for rendering, even if optional in original type
+                                    notes: order.inspection.notes,
+                                    price: order.inspection.price,
+                                    serviceName: order.inspection.serviceName,
+                                    subCategory: order.inspection.subCategory,
+                                    engineCondition: order.inspection.engineCondition,
+                                    transmissionCondition: order.inspection.transmissionCondition,
+                                    brakeCondition: order.inspection.brakeCondition,
+                                    electricalCondition: order.inspection.electricalCondition,
+                                    tireCondition: order.inspection.tireCondition,
+                                    bodyCondition: order.inspection.bodyCondition,
+                                };
+                                inspectionItems.push(mainInspectionItem);
+                            }
+
+                            // Add additional services that are inspections
+                            if (order?.additionalServices && Array.isArray(order.additionalServices)) {
+                                order.additionalServices
+                                    .filter(s => s.category?.toLowerCase() === 'inspection')
+                                    .forEach(s => {
+                                        // Construct additional inspection item explicitly
+                                        const additionalInspectionItem: AdditionalInspectionItem = {
+                                            // Spread properties from original additional service
+                                            ...s,
+                                            isMainInspection: false,
+                                            status: s.status || 'N/A', // Ensure status exists or default to N/A
+                                            // Explicitly include properties needed for rendering
+                                            description: s.description,
+                                            subCategory: s.subCategory,
+                                            price: s.price,
+                                            serviceId: s.serviceId,
+                                            serviceName: s.serviceName,
+                                            category: s.category, // Use the original category string
+                                        };
+                                        inspectionItems.push(additionalInspectionItem);
+                                    });
+                            }
+
+                            if (inspectionItems.length === 0) {
+                                return null; // Don't render section if no inspection items
+                            }
+
+                            return (
+                                <View style={styles.sectionCard}>
+                                    <View style={styles.sectionHeader}>
+                                        <Ionicons name="shield-checkmark" size={20} color="#3B82F6" />
+                                        <Text style={styles.sectionTitle}>Inspection Services</Text>
+                                    </View>
+                                    <View style={styles.sectionContent}>
+                                        {inspectionItems.map((item: InspectionItem, index) => (
+                                            <View key={index} style={[styles.serviceItem, index > 0 && styles.serviceItemBorder]}>
+                                                <View style={styles.serviceHeader}>
+                                                    <Text style={styles.serviceName}>
+                                                        {isMainInspectionItem(item) ? item.serviceName || 'Inspection Service' : item.serviceName || 'Inspection Service'}
+                                                    </Text>
+                                                    <Text style={styles.servicePrice}>{formatCurrency(isMainInspectionItem(item) ? item.price || 0 : item.price || 0)}</Text>
+                                                </View>
+                                                {isMainInspectionItem(item) ? (
+                                                    item.subCategory && (
+                                                        <Text style={styles.serviceCategory}>
+                                                            {item.subCategory}
+                                                        </Text>
+                                                    )
+                                                ) : (
+                                                    item.subCategory && (
+                                                        <Text style={styles.serviceCategory}>
+                                                            {item.subCategory}
+                                                        </Text>
+                                                    )
+                                                )}
+                                                {isMainInspectionItem(item) ? (
+                                                    <>
+                                                        {item.notes && (
+                                                            <Text style={styles.serviceDescription}>{item.notes}</Text>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    item.description && (
+                                                        <Text style={styles.serviceDescription}>{item.description}</Text>
+                                                    )
+                                                )}
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            );
+                        })()}
+
+                        {/* Order Notes */}
+                        {order.notes && (
+                            <View style={styles.sectionCard}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="document-text" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Order Notes</Text>
+                                </View>
+                                <View style={styles.sectionContent}>
+                                    <Text style={styles.notesText}>{order.notes}</Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Price Summary */}
+                        <View style={styles.sectionCard}>
+                            <View style={styles.sectionHeader}>
+                                <Ionicons name="calculator" size={20} color="#3B82F6" />
+                                <Text style={styles.sectionTitle}>Price Summary</Text>
+                            </View>
+                            <View style={styles.sectionContent}>
+                                <View style={styles.priceSummaryContainer}>
+                                    {/* Main Service Price */}
+                                    {order.service && order.service.category?.toLowerCase() !== 'inspection' && (
+                                        <View style={styles.priceSummaryRow}>
+                                            <Text style={styles.priceSummaryLabel}>Main Service</Text>
+                                            <Text style={styles.priceSummaryValue}>{formatCurrency(order.service.price || 0)}</Text>
+                                        </View>
+                                    )}
+
+                                    {/* Additional Services Price */}
+                                    {order.additionalServices && Array.isArray(order.additionalServices) &&
+                                        order.additionalServices.filter(s => s.category?.toLowerCase() !== 'inspection').length > 0 && (
+                                            <View style={styles.priceSummaryRow}>
+                                                <Text style={styles.priceSummaryLabel}>Additional Services</Text>
+                                                <Text style={styles.priceSummaryValue}>
+                                                    {formatCurrency(order.additionalServices
+                                                        .filter(s => s.category?.toLowerCase() !== 'inspection')
+                                                        .reduce((sum, service) => sum + (service.price || 0), 0))}
+                                                </Text>
+                                            </View>
+                                        )}
+
+                                    {/* Inspection Services Price */}
+                                    {order.includesInspection && order.inspection && (
+                                        <View style={styles.priceSummaryRow}>
+                                            <Text style={styles.priceSummaryLabel}>Inspection Services</Text>
+                                            <Text style={styles.priceSummaryValue}>
+                                                {formatCurrency(
+                                                    (order.inspection.price || 0) +
+                                                    (order.additionalServices?.filter(s => s.category?.toLowerCase() === 'inspection')
+                                                        .reduce((sum, service) => sum + (service.price || 0), 0) || 0)
+                                                )}
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    {/* Total */}
+                                    <View style={[styles.priceSummaryRow, styles.priceSummaryTotalRow]}>
+                                        <Text style={styles.priceSummaryTotalLabel}>Total (Excl. SST)</Text>
+                                        <Text style={styles.priceSummaryTotalValue}>{formatCurrency(order.totalAmount)}</Text>
+                                    </View>
+                                    <Text style={styles.taxNote}>exclusive of 18% SST</Text>
+
+                                    {/* After Tax Total */}
+                                    <View style={[styles.priceSummaryRow, styles.afterTaxTotalRow]}>
+                                        <Text style={styles.afterTaxTotalLabel}>After Tax Total (Incl. 18% SST)</Text>
+                                        {/* Calculate total including 18% SST */}
+                                        <Text style={styles.afterTaxTotalValue}>{formatCurrency(order.totalAmount * 1.18)}</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+                )}
+
+                {activeTab === 'inspection' && order.includesInspection && order.inspection && (
+                    <View style={styles.tabContent}>
+                        {/* Inspection Details */}
+                        <View style={styles.sectionCard}>
+                            <View style={styles.sectionHeader}>
+                                <Ionicons name="shield-checkmark" size={20} color="#3B82F6" />
+                                <Text style={styles.sectionTitle}>Inspection Details</Text>
+                            </View>
+                            <View style={styles.sectionContent}>
+                                <View style={styles.detailRows}>
+                                    <View style={styles.detailRow}>
+                                        <Text style={styles.detailLabel}>Scheduled Date</Text>
+                                        <Text style={styles.detailValue}>{formatDate(order.inspection.scheduledDate)}</Text>
+                                    </View>
+                                    <View style={styles.detailRow}>
+                                        <Text style={styles.detailLabel}>Time Slot</Text>
+                                        <Text style={styles.detailValue}>{order.inspection.timeSlot}</Text>
+                                    </View>
+                                    <View style={styles.detailRow}>
+                                        <Text style={styles.detailLabel}>Status</Text>
+                                        <View style={[
+                                            styles.statusBadge,
+                                            { backgroundColor: getStatusColor(order.inspection.status) + '20' }
+                                        ]}>
+                                            <Text style={[
+                                                styles.statusText,
+                                                { color: getStatusColor(order.inspection.status) }
+                                            ]}>
+                                                {order.inspection.status}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Inspection Report */}
+                        {order.inspection.status === 'completed' && (
+                            <View style={styles.sectionCard}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="clipboard" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Inspection Report</Text>
+                                </View>
+                                <View style={styles.sectionContent}>
+                                    <View style={styles.inspectionGrid}>
+                                        {[
+                                            { label: 'Engine', value: order.inspection?.engineCondition },
+                                            { label: 'Transmission', value: order.inspection?.transmissionCondition },
+                                            { label: 'Brakes', value: order.inspection?.brakeCondition },
+                                            { label: 'Electrical', value: order.inspection?.electricalCondition },
+                                            { label: 'Body', value: order.inspection?.bodyCondition },
+                                            { label: 'Tires', value: order.inspection?.tireCondition },
+                                        ].map((item, index) => (
+                                            <View key={index} style={styles.inspectionItem}>
+                                                <Text style={styles.inspectionLabel}>{item.label}</Text>
+                                                <View style={[
+                                                    styles.conditionBadge,
+                                                    { backgroundColor: getConditionColor(item.value as any) + '20' }
+                                                ]}>
+                                                    <Text style={[
+                                                        styles.conditionText,
+                                                        { color: getConditionColor(item.value as any) }
+                                                    ]}>
+                                                        {item.value || 'Not Inspected'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </View>
+                                    {order.inspection.notes && (
+                                        <View style={styles.inspectionNotes}>
+                                            <Text style={styles.inspectionNotesTitle}>Inspector Notes:</Text>
+                                            <Text style={styles.inspectionNotesText}>{order.inspection.notes}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                        )}
+                    </View>
+                )}
+
+                {activeTab === 'invoice' && invoice && (
+                    <View style={styles.tabContent}>
+                        {/* Invoice Summary Card */}
+                        <View style={styles.sectionCard}>
+                            <View style={styles.sectionHeader}>
+                                <Ionicons name="receipt" size={20} color="#3B82F6" />
+                                <Text style={styles.sectionTitle}>Invoice Summary</Text>
+                            </View>
+                            <View style={styles.sectionContent}>
+                                <View style={styles.invoiceSummaryCard}>
+                                    <View style={styles.invoiceHeaderRow}>
+                                        <View>
+                                            <Text style={styles.invoiceNumber}>Invoice #{invoice.invoice.invoiceId}</Text>
+                                            <Text style={styles.invoiceIssueDate}>
+                                                Issued: {formatShortDate(invoice.invoice.invoiceDate)}
+                                            </Text>
+                                        </View>
+                                        <View style={[
+                                            styles.invoiceStatusBadge,
+                                            { backgroundColor: getStatusColor(invoice.invoice.status) + '20' }
+                                        ]}>
+                                            <Text style={[
+                                                styles.invoiceStatusText,
+                                                { color: getStatusColor(invoice.invoice.status) }
+                                            ]}>
+                                                {invoice.invoice.status}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.invoiceAmountSection}>
+                                        <View style={styles.amountRow}>
+                                            <Text style={styles.amountLabel}>Subtotal</Text>
+                                            <Text style={styles.amountValue}>{formatCurrency(invoice.invoice.subTotal)}</Text>
+                                        </View>
+                                        <View style={styles.amountRow}>
+                                            <Text style={styles.amountLabel}>Tax (18%)</Text>
+                                            <Text style={styles.amountValue}>{formatCurrency(invoice.invoice.taxAmount)}</Text>
+                                        </View>
+                                        <View style={[styles.amountRow, styles.totalAmountRow]}>
+                                            <Text style={styles.totalLabel}>Total</Text>
+                                            <Text style={styles.totalValue}>{formatCurrency(invoice.invoice.totalAmount)}</Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.invoiceActions}>
+                                        <TouchableOpacity
+                                            style={styles.viewInvoiceButton}
+                                            onPress={handleViewInvoice}
+                                        >
+                                            <Ionicons name="eye" size={20} color="#3B82F6" />
+                                            <Text style={styles.viewInvoiceText}>View Full Invoice</Text>
+                                        </TouchableOpacity>
+
+                                        {invoice.invoice.status !== 'paid' && (
+                                            <TouchableOpacity
+                                                style={styles.payInvoiceButton}
+                                                onPress={handlePayInvoice}
+                                            >
+                                                <Ionicons name="card" size={20} color="#FFFFFF" />
+                                                <Text style={styles.payInvoiceText}>Pay Now</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Invoice Items */}
+                        <View style={styles.sectionCard}>
+                            <View style={styles.sectionHeader}>
+                                <Ionicons name="list" size={20} color="#3B82F6" />
+                                <Text style={styles.sectionTitle}>Invoice Items</Text>
+                            </View>
+                            <View style={styles.sectionContent}>
+                                {(() => {
+                                    // Debug current invoice state
+                                    console.log('[OrderDetailsScreen] Current invoice state:', {
+                                        hasInvoice: !!invoice,
+                                        hasInvoiceItems: !!invoice?.invoiceItems,
+                                        isArray: Array.isArray(invoice?.invoiceItems),
+                                        length: invoice?.invoiceItems?.length
+                                    });
+
+                                    if (!invoice) {
+                                        return (
+                                            <View style={styles.emptyStateContainer}>
+                                                <Ionicons name="receipt-outline" size={48} color="#9CA3AF" />
+                                                <Text style={styles.emptyStateText}>Loading invoice...</Text>
+                                            </View>
+                                        );
+                                    }
+
+                                    if (!Array.isArray(invoice.invoiceItems) || invoice.invoiceItems.length === 0) {
+                                        return (
+                                            <View style={styles.emptyStateContainer}>
+                                                <Ionicons name="receipt-outline" size={48} color="#9CA3AF" />
+                                                <Text style={styles.emptyStateText}>No invoice items found</Text>
+                                            </View>
+                                        );
+                                    }
+
+                                    return invoice.invoiceItems.map((item: any, index: number) => (
+                                        <View key={index} style={[styles.invoiceItem, index > 0 && styles.invoiceItemBorder]}>
+                                            <View style={styles.invoiceItemHeader}>
+                                                <Text style={styles.invoiceItemName}>{item.description || 'No description'}</Text>
+                                                <Text style={styles.invoiceItemTotal}>{formatCurrency(item.totalPrice || 0)}</Text>
+                                            </View>
+                                            <View style={styles.invoiceItemDetails}>
+                                                <Text style={styles.invoiceItemQuantity}>Qty: {item.quantity || 1}</Text>
+                                                <Text style={styles.invoiceItemPrice}>Unit: {formatCurrency(item.unitPrice || 0)}</Text>
+                                            </View>
+                                        </View>
+                                    ));
+                                })()}
+                            </View>
+                        </View>
+                    </View>
+                )}
+            </ScrollView>
+
+            {/* Render Invoice Modal */}
+            {renderInvoiceModal()}
+        </View>
+    );
 };
 
-const { width } = Dimensions.get('window');
+// Helper function for condition colors
+const getConditionColor = (condition: string): string => {
+    switch (condition?.toLowerCase()) {
+        case 'excellent':
+        case 'good':
+            return '#10B981';
+        case 'fair':
+        case 'average':
+            return '#F59E0B';
+        case 'poor':
+        case 'bad':
+            return '#EF4444';
+        default:
+            return '#6B7280';
+    }
+};
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  backButton: {
-    marginRight: 16,
-    padding: 4,
-  },
-  headerTitleContainer: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  statusCard: {
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  statusHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  statusInfo: {
-    flex: 1,
-  },
-  statusTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  amountInfo: {
-    alignItems: 'flex-end',
-  },
-  amountLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  amountValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#059669',
-    marginTop: 2,
-  },
-  invoiceQuickInfo: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  invoiceQuickHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  invoiceQuickTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
-    flex: 1,
-  },
-  quickPayButton: {
-    backgroundColor: '#059669',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    gap: 8,
-  },
-  quickPayButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 12,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  tabButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    gap: 6,
-  },
-  activeTabButton: {
-    backgroundColor: '#F3F4F6',
-  },
-  tabButtonText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  activeTabButtonText: {
-    color: '#3B82F6',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  tabContent: {
-    gap: 16,
-  },
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  sectionContent: {
-    gap: 12,
-  },
-  vehicleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 12,
-  },
-  vehicleIconContainer: {
-    backgroundColor: '#DBEAFE',
-    padding: 12,
-    borderRadius: 12,
-  },
-  vehicleInfo: {
-    flex: 1,
-  },
-  vehicleTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  vehicleBadges: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  badge: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  badgeText: {
-    fontSize: 12,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  detailRows: {
-    gap: 12,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
-  },
-  serviceItem: {
-    gap: 12,
-  },
-  serviceHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  serviceIconContainer: {
-    backgroundColor: '#DBEAFE',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 2,
-  },
-  serviceInfo: {
-    flex: 1,
-  },
-  serviceTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#3B82F6',
-    marginBottom: 4,
-  },
-  serviceDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
-  },
-  serviceDetails: {
-    gap: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  serviceDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  additionalServiceItem: {
-    backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  additionalServiceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  additionalServiceTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#3B82F6',
-    flex: 1,
-  },
-  additionalServicePrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  additionalServiceDescription: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 8,
-    lineHeight: 16,
-  },
-  paymentSummary: {
-    gap: 12,
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  paymentLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  paymentValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
-  },
-  totalRow: {
-    borderBottomWidth: 0,
-    paddingTop: 12,
-    marginTop: 8,
-    borderTopWidth: 2,
-    borderTopColor: '#E5E7EB',
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#3B82F6',
-  },
-  payButton: {
-    backgroundColor: '#059669',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 12,
-    gap: 8,
-  },
-  payButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  notesText: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
-  },
-  inspectionScheduleCard: {
-    backgroundColor: '#EBF8FF',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  scheduleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  scheduleItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  scheduleIconContainer: {
-    backgroundColor: '#DBEAFE',
-    padding: 8,
-    borderRadius: 8,
-  },
-  scheduleLabel: {
-    fontSize: 12,
-    color: '#3B82F6',
-  },
-  scheduleValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E40AF',
-  },
-  inspectionGrid: {
-    gap: 12,
-  },
-  inspectionResultItem: {
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  inspectionResultLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  inspectionResultValue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  inspectionResultText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
-  },
-  inspectionStatusContainer: {
-    alignItems: 'center',
-    padding: 32,
-  },
-  inspectionStatusIcon: {
-    marginBottom: 16,
-  },
-  inspectionStatusTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  inspectionStatusDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  invoiceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  invoiceHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  invoiceIconContainer: {
-    backgroundColor: '#DBEAFE',
-    padding: 8,
-    borderRadius: 8,
-  },
-  invoiceTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  invoiceDate: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  invoiceSummary: {
-    gap: 12,
-  },
-  invoiceSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  invoiceSummaryLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  invoiceSummaryValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
-  },
-  totalSummaryRow: {
-    borderBottomWidth: 0,
-    paddingTop: 12,
-    marginTop: 8,
-    borderTopWidth: 2,
-    borderTopColor: '#E5E7EB',
-  },
-  totalSummaryLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  totalSummaryValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#3B82F6',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4B5563',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#EF4444',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  retryButton: {
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
-  },
+    container: {
+        flex: 1,
+        backgroundColor: '#F9FAFB',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#F9FAFB',
+    },
+    loadingText: {
+        marginTop: 16,
+        fontSize: 16,
+        color: '#6B7280',
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+        paddingTop: Platform.OS === 'ios' ? 60 : 40,
+        paddingBottom: 16,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+    },
+    backButton: {
+        padding: 8,
+        marginRight: 12,
+        borderRadius: 8,
+        backgroundColor: '#F3F4F6',
+    },
+    headerTitleContainer: {
+        flex: 1,
+    },
+    title: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#1F2937',
+    },
+    subtitle: {
+        fontSize: 14,
+        color: '#6B7280',
+        marginTop: 2,
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    errorTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        marginTop: 16,
+        marginBottom: 8,
+    },
+    errorText: {
+        fontSize: 16,
+        color: '#6B7280',
+        textAlign: 'center',
+        marginBottom: 24,
+    },
+    retryButton: {
+        backgroundColor: '#3B82F6',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    retryButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    statusCard: {
+        backgroundColor: '#FFFFFF',
+        marginHorizontal: 24,
+        marginTop: 16,
+        borderRadius: 12,
+        padding: 20,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    statusHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+    statusInfo: {
+        flex: 1,
+    },
+    statusTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1F2937',
+        marginBottom: 8,
+    },
+    statusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        alignSelf: 'flex-start',
+    },
+    statusText: {
+        fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 4,
+        textTransform: 'capitalize',
+    },
+    amountInfo: {
+        alignItems: 'flex-end',
+    },
+    amountLabel: {
+        fontSize: 14,
+        color: '#6B7280',
+        marginBottom: 4,
+    },
+    amountValue: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#1F2937',
+    },
+    invoiceQuickInfo: {
+        marginTop: 16,
+        padding: 16,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    invoiceQuickHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    invoiceQuickTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1F2937',
+        marginLeft: 8,
+        flex: 1,
+    },
+    quickPayButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#3B82F6',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 6,
+        alignSelf: 'flex-start',
+    },
+    quickPayButtonText: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 6,
+    },
+    tabContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#FFFFFF',
+        marginHorizontal: 24,
+        marginTop: 16,
+        borderRadius: 12,
+        padding: 4,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    tabButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    activeTabButton: {
+        backgroundColor: '#EBF4FF',
+    },
+    tabButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#6B7280',
+        marginLeft: 6,
+    },
+    activeTabButtonText: {
+        color: '#3B82F6',
+    },
+    scrollView: {
+        flex: 1,
+        paddingTop: 16,
+    },
+    scrollContent: {
+        paddingBottom: 100,
+    },
+    tabContent: {
+        paddingHorizontal: 24,
+    },
+    sectionCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        marginLeft: 12,
+    },
+    sectionContent: {
+        padding: 20,
+    },
+    vehicleHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    vehicleIconContainer: {
+        width: 48,
+        height: 48,
+        backgroundColor: '#EBF4FF',
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    vehicleInfo: {
+        flex: 1,
+    },
+    vehicleTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        marginBottom: 8,
+    },
+    vehicleBadges: {
+        flexDirection: 'row',
+    },
+    badge: {
+        backgroundColor: '#F3F4F6',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 16,
+        marginRight: 8,
+    },
+    badgeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#6B7280',
+    },
+    detailRows: {
+        borderTopWidth: 1,
+        borderTopColor: '#F3F4F6',
+        paddingTop: 16,
+    },
+    detailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    detailLabel: {
+        fontSize: 14,
+        color: '#6B7280',
+        fontWeight: '500',
+    },
+    detailValue: {
+        fontSize: 14,
+        color: '#1F2937',
+        fontWeight: '600',
+    },
+    serviceItem: {
+        marginBottom: 16,
+    },
+    serviceItemBorder: {
+        borderTopWidth: 1,
+        borderTopColor: '#F3F4F6',
+        paddingTop: 16,
+    },
+    serviceHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 8,
+    },
+    serviceName: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        flex: 1,
+        marginRight: 12,
+    },
+    servicePrice: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#10B981',
+    },
+    serviceCategory: {
+        fontSize: 14,
+        color: '#3B82F6',
+        fontWeight: '600',
+        marginBottom: 4,
+        textTransform: 'capitalize',
+    },
+    serviceDescription: {
+        fontSize: 14,
+        color: '#6B7280',
+        lineHeight: 20,
+    },
+    notesText: {
+        fontSize: 14,
+        color: '#1F2937',
+        lineHeight: 20,
+    },
+    inspectionGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginHorizontal: -8,
+    },
+    inspectionItem: {
+        width: '50%',
+        paddingHorizontal: 8,
+        marginBottom: 16,
+    },
+    inspectionLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 8,
+    },
+    conditionBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        alignSelf: 'flex-start',
+    },
+    conditionText: {
+        fontSize: 12,
+        fontWeight: '600',
+        textTransform: 'capitalize',
+    },
+    inspectionNotes: {
+        marginTop: 20,
+        padding: 16,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    inspectionNotesTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 8,
+    },
+    inspectionNotesText: {
+        fontSize: 14,
+        color: '#6B7280',
+        lineHeight: 20,
+    },
+    invoiceSummaryCard: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    invoiceHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 20,
+    },
+    invoiceNumber: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#1F2937',
+    },
+    invoiceIssueDate: {
+        fontSize: 14,
+        color: '#6B7280',
+        marginTop: 4,
+    },
+    invoiceStatusBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+    },
+    invoiceStatusText: {
+        fontSize: 12,
+        fontWeight: '600',
+        textTransform: 'capitalize',
+    },
+    invoiceAmountSection: {
+        marginBottom: 20,
+    },
+    amountRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 8,
+    },
+    totalAmountRow: {
+        borderTopWidth: 2,
+        borderTopColor: '#E5E7EB',
+        paddingTop: 12,
+        marginTop: 8,
+    },
+    totalLabel: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#1F2937',
+    },
+    totalValue: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#1F2937',
+    },
+    invoiceActions: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    viewInvoiceButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FFFFFF',
+        paddingVertical: 12,
+        borderRadius: 8,
+        borderWidth: 2,
+        borderColor: '#3B82F6',
+    },
+    viewInvoiceText: {
+        color: '#3B82F6',
+        fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 8,
+    },
+    payInvoiceButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#3B82F6',
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    payInvoiceText: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 8,
+    },
+    invoiceItem: {
+        paddingVertical: 12,
+    },
+    invoiceItemBorder: {
+        borderTopWidth: 1,
+        borderTopColor: '#F3F4F6',
+        paddingTop: 16,
+    },
+    invoiceItemHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 8,
+    },
+    invoiceItemName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1F2937',
+        flex: 1,
+        marginRight: 12,
+    },
+    invoiceItemTotal: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#10B981',
+    },
+    invoiceItemDetails: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    invoiceItemQuantity: {
+        fontSize: 14,
+        color: '#6B7280',
+    },
+    invoiceItemPrice: {
+        fontSize: 14,
+        color: '#6B7280',
+    },
+    // Invoice Modal Styles
+    modalContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    invoiceModalContent: {
+        flex: 1,
+        backgroundColor: '#FFFFFF',
+        marginTop: 50,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+    },
+    invoiceModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+    },
+    closeButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#F3F4F6',
+    },
+    invoiceScrollView: {
+        flex: 1,
+    },
+    invoiceContainer: {
+        backgroundColor: '#FFFFFF',
+        margin: 20,
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    invoiceHeader: {
+        backgroundColor: '#F8FAFC',
+        padding: 24,
+        borderTopLeftRadius: 12,
+        borderTopRightRadius: 12,
+        borderBottomWidth: 2,
+        borderBottomColor: '#E2E8F0',
+    },
+    invoiceHeaderTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    invoiceLogoContainer: {
+        width: 60,
+        height: 60,
+        backgroundColor: '#EBF4FF',
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    invoiceTitleContainer: {
+        flex: 1,
+        marginLeft: 16,
+    },
+    invoiceTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#1F2937',
+    },
+    invoiceDate: {
+        fontSize: 14,
+        color: '#6B7280',
+        marginTop: 4,
+    },
+    invoiceSection: {
+        padding: 24,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    invoiceInfoRowContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 16,
+    },
+    invoiceHalfInfoBox: {
+        flex: 1,
+    },
+    invoiceInfoBoxContent: {
+        backgroundColor: '#FAFBFC',
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    invoiceInfoCard: {
+        backgroundColor: '#FAFBFC',
+        padding: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        minHeight: 140, // Ensure consistent height
+    },
+    invoiceInfoRow: {
+        flexDirection: 'column',
+        marginBottom: 12,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    invoiceInfoLabel: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontWeight: '600',
+        marginBottom: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    invoiceInfoValue: {
+        fontSize: 14,
+        color: '#1F2937',
+        fontWeight: '500',
+        lineHeight: 18,
+    },
+    invoiceHalf: {
+        flex: 1,
+        paddingHorizontal: 8,
+    },
+    invoiceRow: {
+        flexDirection: 'row',
+        marginHorizontal: -8,
+    },
+    invoiceTable: {
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 8,
+        overflow: 'hidden',
+    },
+    invoiceTableHeader: {
+        flexDirection: 'row',
+        backgroundColor: '#F9FAFB',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+    },
+    invoiceTableHeaderText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#374151',
+    },
+    invoiceTableRow: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    invoiceTableCell: {
+        fontSize: 14,
+        color: '#1F2937',
+    },
+    invoiceSummary: {
+        padding: 24,
+        backgroundColor: '#F8FAFC',
+    },
+    invoiceSummaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 6,
+    },
+    invoiceSummaryLabel: {
+        fontSize: 13,
+        color: '#6B7280',
+        fontWeight: '500',
+        flexShrink: 1,
+        marginRight: 8,
+    },
+    invoiceSummaryValue: {
+        fontSize: 13,
+        color: '#1F2937',
+        fontWeight: '600',
+        flexShrink: 0,
+    },
+    invoiceTotalRow: {
+        borderTopWidth: 2,
+        borderTopColor: '#E5E7EB',
+        paddingTop: 12,
+        marginTop: 8,
+    },
+    invoiceTotalLabel: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#1F2937',
+    },
+    invoiceTotalValue: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#1F2937',
+    },
+    paymentInfo: {
+        backgroundColor: '#FAFBFC',
+        padding: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    paymentStatusBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+    },
+    paymentStatusText: {
+        fontSize: 12,
+        fontWeight: '600',
+        textTransform: 'capitalize',
+    },
+    invoiceFooter: {
+        padding: 24,
+        alignItems: 'center',
+        borderTopWidth: 2,
+        borderTopColor: '#E5E7EB',
+    },
+    invoiceFooterText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1F2937',
+        marginBottom: 8,
+    },
+    invoiceFooterCompany: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#3B82F6',
+        marginBottom: 4,
+    },
+    invoiceFooterContact: {
+        fontSize: 12,
+        color: '#6B7280',
+        textAlign: 'center',
+    },
+    invoiceModalActions: {
+        flexDirection: 'row',
+        padding: 20,
+        backgroundColor: '#F8FAFC',
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+        gap: 12,
+    },
+    invoiceAction: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    invoiceShareAction: {
+        backgroundColor: '#6B7280',
+    },
+    invoiceSaveAction: {
+        backgroundColor: '#10B981',
+    },
+    invoiceActionText: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 8,
+    },
+    emptyStateContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+    },
+    emptyStateText: {
+        marginTop: 12,
+        fontSize: 16,
+        color: '#6B7280',
+        textAlign: 'center',
+    },
+    invoiceSectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    invoiceSectionTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        marginLeft: 8,
+    },
+    serviceBadges: {
+        flexDirection: 'row',
+        marginTop: 8,
+    },
+    inspectionStatusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        marginTop: 8,
+    },
+    inspectionStatusText: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginLeft: 4,
+        textTransform: 'capitalize',
+    },
+    priceSummaryContainer: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 8,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    priceSummaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 6,
+    },
+    priceSummaryLabel: {
+        fontSize: 13,
+        color: '#6B7280',
+        fontWeight: '500',
+        flexShrink: 1,
+        marginRight: 8,
+    },
+    priceSummaryValue: {
+        fontSize: 13,
+        color: '#1F2937',
+        fontWeight: '600',
+        flexShrink: 0,
+    },
+    priceSummaryTotalRow: {
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+        marginTop: 12,
+        paddingTop: 12,
+    },
+    priceSummaryTotalLabel: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        flexShrink: 1,
+        marginRight: 8,
+    },
+    priceSummaryTotalValue: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        flexShrink: 0,
+    },
+    taxNote: {
+        fontSize: 12,
+        color: '#6B7280',
+        textAlign: 'right',
+        marginTop: 4,
+        fontStyle: 'italic',
+    },
+    afterTaxTotalRow: {
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+        marginTop: 12,
+        paddingTop: 12,
+    },
+    afterTaxTotalLabel: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        flexShrink: 1,
+        marginRight: 8,
+    },
+    afterTaxTotalValue: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        flexShrink: 0,
+    },
 });
 
 export default OrderDetailsScreen;

@@ -821,7 +821,7 @@ export default function OrderForm() {
                                     variant={isSelected ? "default" : "outline"}
                                     className={isSelected ? "bg-primary" : ""}
                                   >
-                                    ${subcategory.price.toFixed(2)}
+                                    PKR {subcategory.price.toFixed(2)}
                                   </Badge>
                                 </div>
 
@@ -856,7 +856,7 @@ export default function OrderForm() {
                             <p className="font-medium text-sm">{subcategory.serviceName}</p>
                           </div>
                           <div className="flex items-center">
-                            <Badge className="mr-2">${subcategory.price.toFixed(2)}</Badge>
+                            <Badge className="mr-2">PKR {subcategory.price.toFixed(2)}</Badge>
                             <Button
                               type="button"
                               variant="ghost"
@@ -1131,7 +1131,7 @@ export default function OrderForm() {
                               >
                                 <div className="flex items-center justify-between w-full">
                                   <span>{service.serviceName}</span>
-                                  <Badge variant="outline">${service.price.toFixed(2)}</Badge>
+                                  <Badge variant="outline">PKR {service.price.toFixed(2)}</Badge>
                                 </div>
                               </SelectItem>
                             ))}
@@ -1176,7 +1176,7 @@ export default function OrderForm() {
                                   onClick={() => addAdditionalService(service.serviceId.toString())}
                                 >
                                   <span className="text-left">{service.serviceName}</span>
-                                  <Badge variant="outline">${service.price.toFixed(2)}</Badge>
+                                  <Badge variant="outline">PKR {service.price.toFixed(2)}</Badge>
                                 </Button>
                               ))}
                             </div>
@@ -1194,7 +1194,7 @@ export default function OrderForm() {
                           >
                             <div>
                               <p className="font-medium text-sm">{service.serviceName}</p>
-                              <p className="text-xs text-muted-foreground">${service.price.toFixed(2)}</p>
+                              <p className="text-xs text-muted-foreground">PKR {service.price.toFixed(2)}</p>
                             </div>
                             <Button
                               type="button"
@@ -1242,7 +1242,7 @@ export default function OrderForm() {
                     Order Summary
                   </h3>
                   <Badge variant="secondary" className="font-medium text-base px-3 py-1">
-                    ${calculateTotal()}
+                    PKR {calculateTotal()}
                   </Badge>
                 </div>
                 <div className="p-4">
@@ -1257,7 +1257,7 @@ export default function OrderForm() {
                         {selectedSubcategories.map((subcategory) => (
                           <div key={subcategory.serviceId} className="flex justify-between text-sm pl-2">
                             <span className="text-muted-foreground">• {subcategory.serviceName}</span>
-                            <span>${subcategory.price.toFixed(2)}</span>
+                            <span>PKR {subcategory.price.toFixed(2)}</span>
                           </div>
                         ))}
                       </>
@@ -1272,7 +1272,7 @@ export default function OrderForm() {
                         </div>
                         <div className="flex justify-between text-sm pl-2">
                           <span className="text-muted-foreground">• {selectedService.serviceName}</span>
-                          <span>${selectedService.price.toFixed(2)}</span>
+                          <span>PKR {selectedService.price.toFixed(2)}</span>
                         </div>
                       </>
                     )}
@@ -1287,7 +1287,7 @@ export default function OrderForm() {
                         {selectedAdditionalServices.map(service => (
                           <div key={service.serviceId} className="flex justify-between text-sm pl-2">
                             <span className="text-muted-foreground">• {service.serviceName}</span>
-                            <span>${service.price.toFixed(2)}</span>
+                            <span>PKR {service.price.toFixed(2)}</span>
                           </div>
                         ))}
                       </>
@@ -1296,7 +1296,7 @@ export default function OrderForm() {
                     <Separator />
                     <div className="flex justify-between font-medium pt-2">
                       <span>Total:</span>
-                      <span className="text-primary text-lg">${calculateTotal()}</span>
+                      <span className="text-primary text-lg">PKR {calculateTotal()}</span>
                     </div>
                   </div>
                 </div>

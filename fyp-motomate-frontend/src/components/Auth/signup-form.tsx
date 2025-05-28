@@ -22,7 +22,8 @@ import {
   Mail,
   Phone,
   MapPin,
-  Lock
+  Lock,
+  Flag
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ModeToggle } from "@/components/ModeToggle";
 
 // Enhanced schema with phone validation for exactly 11 digits
 const formSchema = z.object({
@@ -73,11 +75,15 @@ const formSchema = z.object({
     }),
   phone: z
     .string()
-    .regex(/^\d{11}$/, {
-      message: "Phone number must be exactly 11 digits.",
-    })
     .optional()
-    .or(z.literal("")),
+    .or(z.literal("")) // Allow empty string
+    .transform(val => { // Transform to digits only for validation, handle undefined
+      if (val === undefined || val === null || val === "") return "";
+      return val.replace(/\D/g, '');
+    })
+    .refine(val => val === "" || /^3\d{9}$/.test(val), { // Validate the digits-only string
+      message: "Phone number must be 10 digits, starting with 3.",
+    }),
   address: z.string().max(255, {
     message: "Address must not exceed 255 characters.",
   }).optional(),
@@ -94,15 +100,15 @@ function MotoMateLogo() {
   return (
     <div className="flex items-center gap-3 mb-8">
       <div className="relative">
-        <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary/90 rounded-xl flex items-center justify-center shadow-lg">
-          <Wrench className="w-6 h-6 text-white" />
+        <div className="w-12 h-12 bg-gradient-to-br from-white to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
+          <Wrench className="w-6 h-6 text-red-600 dark:text-red-500" />
         </div>
         <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
           <Shield className="w-2.5 h-2.5 text-white" />
         </div>
       </div>
       <div>
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/90 bg-clip-text text-transparent">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-red-600 to-red-700 bg-clip-text text-transparent">
           MotoMate
         </h1>
         <p className="text-xs text-muted-foreground font-medium">
@@ -161,7 +167,7 @@ export default function EnhancedSignupForm() {
         confirmPassword: values.confirmPassword,
         role: "customer",
         name: values.name,
-        phone: values.phone || "",
+        phone: values.phone ? '+92' + values.phone.replace(/\D/g, '') : "", // Add +92 and remove dash for backend
         address: values.address || "",
         imgUrl: values.imgUrl || "",
       };
@@ -200,7 +206,10 @@ export default function EnhancedSignupForm() {
     <div className="w-full max-w-lg mx-auto">
       <MotoMateLogo />
       
-      <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-8 shadow-xl shadow-black/5">
+      <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-8 shadow-xl shadow-black/5 relative">
+        <div className="absolute top-4 right-4">
+          <ModeToggle />
+        </div>
         <div className="mb-8 text-center">
           <h2 className="text-2xl font-semibold text-foreground mb-2">
             Create your account
@@ -269,7 +278,7 @@ export default function EnhancedSignupForm() {
                     <FormControl>
                       <Input
                         placeholder="John Doe"
-                        className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
                         {...field}
                       />
                     </FormControl>
@@ -289,7 +298,7 @@ export default function EnhancedSignupForm() {
                     <FormControl>
                       <Input
                         placeholder="johndoe123"
-                        className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
                         {...field}
                       />
                     </FormControl>
@@ -312,7 +321,7 @@ export default function EnhancedSignupForm() {
                     <Input
                       type="email"
                       placeholder="john.doe@example.com"
-                      className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
                       {...field}
                     />
                   </FormControl>
@@ -332,21 +341,49 @@ export default function EnhancedSignupForm() {
                       Phone Number
                     </FormLabel>
                     <FormControl>
-                      <Input
-                        type="tel"
-                        placeholder="03123456789"
-                        maxLength={11}
-                        className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                        {...field}
-                        onChange={(e) => {
-                          // Only allow digits
-                          const value = e.target.value.replace(/\D/g, '');
-                          field.onChange(value);
-                        }}
-                      />
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                          
+                          <div className="w-4 h-4 rounded-sm overflow-hidden">
+                            <img 
+                              src="https://flagcdn.com/w20/pk.png" 
+                              alt="Pakistan Flag" 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <span className="text-sm font-medium text-muted-foreground">+92</span>
+                        </div>
+                        <Input
+                          type="tel"
+                          placeholder="3XXXXXXXXX"
+                          maxLength={11}
+                          className="h-11 pl-16 pr-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                          {...field}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, ''); // Allow only digits initially
+                            let formattedValue = value;
+
+                            // Ensure the number starts with '3' if not empty
+                            if (formattedValue.length > 0 && !formattedValue.startsWith('3')) {
+                              formattedValue = ''; // Clear input if it doesn't start with 3
+                            }
+
+                            // Insert dash after the 4th digit (index 3) if input starts with 3 and has more than 3 digits
+                            if (formattedValue.startsWith('3') && formattedValue.length > 3 && !formattedValue.includes('-')) {
+                                formattedValue = formattedValue.slice(0, 4) + '-' + formattedValue.slice(4);
+                            }
+                            
+                            // Limit total characters to match the format 3XX-XXXXXXX (12 characters including the initial 3 and dash)
+                            formattedValue = formattedValue.slice(0, 12);
+
+                            // Update the form state with the formatted value
+                            field.onChange(formattedValue);
+                          }}
+                        />
+                      </div>
                     </FormControl>
                     <p className="text-xs text-muted-foreground">
-                      Enter 11-digit Pakistani mobile number
+                      Enter 10-digit Pakistani mobile number starting with 3
                     </p>
                     <FormMessage className="text-xs" />
                   </FormItem>
@@ -365,7 +402,7 @@ export default function EnhancedSignupForm() {
                     <FormControl>
                       <Input
                         placeholder="123 Main Street, Karachi"
-                        className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
                         {...field}
                       />
                     </FormControl>
@@ -390,7 +427,7 @@ export default function EnhancedSignupForm() {
                         <Input
                           type={showPassword ? "text" : "password"}
                           placeholder="Create password"
-                          className="h-11 px-4 pr-11 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                          className="h-11 px-4 pr-11 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
                           {...field}
                         />
                         <button
@@ -424,7 +461,7 @@ export default function EnhancedSignupForm() {
                         <Input
                           type={showConfirmPassword ? "text" : "password"}
                           placeholder="Confirm password"
-                          className="h-11 px-4 pr-11 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                          className="h-11 px-4 pr-11 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
                           {...field}
                         />
                         <button
@@ -449,7 +486,7 @@ export default function EnhancedSignupForm() {
             <div className="pt-2">
               <Button 
                 type="submit" 
-                className="w-full h-11 bg-gradient-to-r from-primary to-primary/90 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-lg transition-all duration-200 shadow-lg shadow-blue-600/25 hover:shadow-blue-700/30 disabled:opacity-50" 
+                className="w-full h-11 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-medium rounded-lg transition-all duration-200 shadow-lg shadow-red-600/25 hover:shadow-red-700/30 disabled:opacity-50" 
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
@@ -480,7 +517,7 @@ export default function EnhancedSignupForm() {
             <div className="text-center">
               <Link
                 href="/login"
-                className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/90 font-medium transition-colors duration-200"
+                className="inline-flex items-center gap-2 text-sm text-red-600 hover:text-red-700 font-medium transition-colors duration-200"
               >
                 Sign in instead
                 <ArrowRight className="w-3 h-3" />
@@ -492,11 +529,11 @@ export default function EnhancedSignupForm() {
 
       <div className="mt-8 text-xs text-muted-foreground text-center text-balance">
         By creating an account, you agree to our{" "}
-        <Link href="/terms" className="text-primary hover:text-primary/90 hover:underline underline-offset-4 transition-colors duration-200">
+        <Link href="/terms" className="text-red-600 hover:text-red-700 hover:underline underline-offset-4 transition-colors duration-200">
           Terms of Service
         </Link>{" "}
         and{" "}
-        <Link href="/privacy" className="text-primary hover:text-primary/90 hover:underline underline-offset-4 transition-colors duration-200">
+        <Link href="/privacy" className="text-red-600 hover:text-red-700 hover:underline underline-offset-4 transition-colors duration-200">
           Privacy Policy
         </Link>
         .

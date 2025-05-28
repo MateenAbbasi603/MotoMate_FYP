@@ -33,7 +33,7 @@ export interface ChangePasswordData {
 }
 
 // Helper to get auth token from local storage
-const getAuthToken = (): string | null => {
+export const getAuthToken = (): string | null => {
   if (typeof window !== 'undefined') {
     return localStorage.getItem('token');
   }

@@ -35,6 +35,7 @@ packages/
 
 # Entity Framework
 *.edmx.diagram
+Migrations/
 
 # Web.config transformations
 *.Web.Debug.config

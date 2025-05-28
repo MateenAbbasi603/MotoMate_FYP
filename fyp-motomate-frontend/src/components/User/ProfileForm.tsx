@@ -92,13 +92,32 @@ export default function ProfileForm({ user, setUser }: ProfileFormProps) {
         imgUrl: uploadedImage
       };
 
-      await authService.updateProfile(updateData);
+      const response = await authService.updateProfile(updateData);
       
-      setUser(prev => prev ? {...prev, imgUrl: uploadedImage} : null);
-      toast.success("Profile picture updated successfully");
-      setUpdatedFields(prev => ({...prev, imgUrl: false}));
+      // Check the 'success' property from the API response data
+      if (response && response.success) {
+         // The API might return the updated user object, use it if available
+         const updatedUserFromApi = response.user; // Assuming the updated user is in response.user
+
+         if (updatedUserFromApi) {
+             setUser(updatedUserFromApi);
+         } else { // Fallback if API doesn't return full user
+             setUser(prev => prev ? {...prev, imgUrl: uploadedImage} : null);
+         }
+
+         toast.success("Profile picture updated successfully");
+         setUpdatedFields(prev => ({...prev, imgUrl: false}));
+      } else {
+         console.error("Profile image update API call reported failure or returned unexpected format.", response);
+         // Use the message from the backend if available, otherwise a generic error
+         const errorMessage = response?.message || "Failed to update profile picture.";
+         toast.error(errorMessage);
+         // You might want to revert uploadedImage state if update failed
+         // setUploadedImage(user.imgUrl || null);
+      }
+
     } catch (error) {
-      console.error("Profile image update error:", error);
+      console.error("Profile image update error caught:", error);
       handleApiError(error);
     } finally {
       setIsSubmitting(false);
@@ -136,17 +155,30 @@ export default function ProfileForm({ user, setUser }: ProfileFormProps) {
       // Call the API to update profile
       const response = await authService.updateProfile(updateData);
 
-      if (response.status !== 200) {
-        throw new Error("Failed to update profile");
+       // Check the 'success' property from the API response data for the main form submit
+      if (response && response.success) {
+           // The API might return the updated user object, use it if available
+           const updatedUserFromApi = response.user; // Assuming the updated user is in response.user
+
+           if (updatedUserFromApi) {
+               setUser(updatedUserFromApi);
+           } else { // Fallback if API doesn't return full user
+               // Update the user state with new values from the form if no user object returned
+               setUser(prev => prev ? {...prev, ...updateData} : null);
+           }
+
+           toast.success("Profile updated successfully");
+           // Reset updated fields tracking based on the form's current values
+           // This might require re-initializing the form or complex state management
+           // For simplicity now, we'll just assume successful update clears tracked changes
+            setUpdatedFields({});
+
+      } else {
+         console.error("Profile update API call reported failure or returned unexpected format.", response);
+          const errorMessage = response?.message || "Failed to update profile.";
+          toast.error(errorMessage);
       }
-      
-      // Update the user state with new values
-      setUser(prev => prev ? {...prev, ...updateData} : null);
-      
-      toast.success("Profile updated successfully");
-      
-      // Reset updated fields tracking
-      setUpdatedFields({});
+
     } catch (error) {
       console.error("Profile update error:", error);
       handleApiError(error);

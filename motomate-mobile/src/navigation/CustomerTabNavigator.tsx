@@ -1,15 +1,27 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
 // Import your screens
 import OrderHistoryScreen from '../screens/customer/OrderHistoryScreen';
+import OrderDetailsScreen from '../screens/customer/OrderDetailsScreen';
 import NewOrderScreen from '../screens/customer/NewOrderScreen';
 import VehiclesScreen from '../screens/customer/VehiclesScreen';
 import NotificationsScreen from 'screens/customer/NotificationsScreen';
 import ProfileScreen from 'screens/customer/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
+const OrdersStack = createNativeStackNavigator();
+
+const OrdersNavigator = () => {
+  return (
+    <OrdersStack.Navigator screenOptions={{ headerShown: false }}>
+      <OrdersStack.Screen name="OrderHistoryMain" component={OrderHistoryScreen} />
+      <OrdersStack.Screen name="OrderDetails" component={OrderDetailsScreen} />
+    </OrdersStack.Navigator>
+  );
+};
 
 const CustomerTabNavigator = () => {
   return (
@@ -33,7 +45,7 @@ const CustomerTabNavigator = () => {
     >
       <Tab.Screen
         name="Orders"
-        component={OrderHistoryScreen}
+        component={OrdersNavigator}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list" size={size} color={color} />
@@ -58,7 +70,6 @@ const CustomerTabNavigator = () => {
           ),
         }}
       />
-
       <Tab.Screen
         name="Notifications"
         component={NotificationsScreen}
@@ -68,8 +79,7 @@ const CustomerTabNavigator = () => {
           ),
         }}
       />
-
-<Tab.Screen
+      <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{

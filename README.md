@@ -91,3 +91,8 @@ bg-blue-400/10 → bg-primary/10
 from-blue-400/5 to-purple-400/5 → from-primary/5 to-primary/10
 from-blue-50/30 → from-primary/5
 via-blue-950/30 → via-primary/20
+
+
+
+
+ngrok http http://localhost:5177

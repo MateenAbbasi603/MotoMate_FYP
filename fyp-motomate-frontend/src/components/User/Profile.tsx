@@ -341,11 +341,11 @@
                       </div>
                       
                       <div className="flex items-center p-3 bg-muted/30 rounded-lg">
-                        <Car className="h-5 w-5 mr-2 text-muted-foreground" />
+                        {/* <Car className="h-5 w-5 mr-2 text-muted-foreground" />
                         <div>
                           <div className="text-xs text-muted-foreground">Vehicles</div>
                           <div className="font-medium">2</div>
-                        </div>
+                        </div> */}
                       </div>
                     </div>
                   </div>

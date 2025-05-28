@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ModeToggle } from "@/components/ModeToggle";
 
 // Define login form validation schema
 const loginFormSchema = z.object({
@@ -47,15 +48,15 @@ function MotoMateLogo() {
   return (
     <div className="flex items-center gap-3 mb-8">
       <div className="relative">
-        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
-          <Wrench className="w-6 h-6 text-white" />
+        <div className="w-12 h-12 bg-gradient-to-br from-white to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
+          <Wrench className="w-6 h-6 text-red-600 dark:text-red-500" />
         </div>
         <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
           <Shield className="w-2.5 h-2.5 text-white" />
         </div>
       </div>
       <div>
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-red-600 to-red-700 bg-clip-text text-transparent">
           MotoMate
         </h1>
         <p className="text-xs text-muted-foreground font-medium">
@@ -177,7 +178,10 @@ export default function EnhancedLoginForm() {
     <div className="w-full max-w-md mx-auto">
       <MotoMateLogo />
       
-      <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-8 shadow-xl shadow-black/5">
+      <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-8 shadow-xl shadow-black/5 relative">
+        <div className="absolute top-4 right-4">
+          <ModeToggle />
+        </div>
         <div className="mb-8 text-center">
           <h2 className="text-2xl font-semibold text-foreground mb-2">
             Welcome back
@@ -209,7 +213,7 @@ export default function EnhancedLoginForm() {
                   <FormControl>
                     <Input
                       placeholder="Enter your username"
-                      className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      className="h-11 px-4 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
                       {...field}
                     />
                   </FormControl>
@@ -229,7 +233,7 @@ export default function EnhancedLoginForm() {
                     </FormLabel>
                     <Link
                       href="/forgot-password"
-                      className="text-xs text-blue-600 hover:text-primary/90 hover:underline underline-offset-4 transition-colors duration-200"
+                      className="text-xs text-red-600 hover:text-red-700 hover:underline underline-offset-4 transition-colors duration-200"
                     >
                       Forgot password?
                     </Link>
@@ -239,7 +243,7 @@ export default function EnhancedLoginForm() {
                       <Input
                         type={showPassword ? "text" : "password"}
                         placeholder="Enter your password"
-                        className="h-11 px-4 pr-11 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        className="h-11 px-4 pr-11 rounded-lg border-border/50 bg-background/50 transition-all duration-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
                         {...field}
                       />
                       <button
@@ -262,7 +266,7 @@ export default function EnhancedLoginForm() {
 
             <Button 
               type="submit" 
-              className="w-full h-11 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-lg transition-all duration-200 shadow-lg shadow-blue-600/25 hover:shadow-blue-700/30 disabled:opacity-50" 
+              className="w-full h-11 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-medium rounded-lg transition-all duration-200 shadow-lg shadow-red-600/25 hover:shadow-red-700/30 disabled:opacity-50" 
               disabled={isSubmitting}
             >
               {isSubmitting ? (
@@ -292,7 +296,7 @@ export default function EnhancedLoginForm() {
             <div className="text-center">
               <Link
                 href="/register"
-                className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-primary/90 font-medium transition-colors duration-200"
+                className="inline-flex items-center gap-2 text-sm text-red-600 hover:text-red-700 font-medium transition-colors duration-200"
               >
                 Create an account
                 <ArrowRight className="w-3 h-3" />
@@ -304,11 +308,11 @@ export default function EnhancedLoginForm() {
 
       <div className="mt-8 text-xs text-muted-foreground text-center text-balance">
         By signing in, you agree to our{" "}
-        <Link href="/terms" className="text-blue-600 hover:text-primary/90 hover:underline underline-offset-4 transition-colors duration-200">
+        <Link href="/terms" className="text-red-600 hover:text-red-700 hover:underline underline-offset-4 transition-colors duration-200">
           Terms of Service
         </Link>{" "}
         and{" "}
-        <Link href="/privacy" className="text-blue-600 hover:text-primary/90 hover:underline underline-offset-4 transition-colors duration-200">
+        <Link href="/privacy" className="text-red-600 hover:text-red-700 hover:underline underline-offset-4 transition-colors duration-200">
           Privacy Policy
         </Link>
         .

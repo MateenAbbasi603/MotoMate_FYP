@@ -269,7 +269,6 @@ export default function ServiceList() {
             </p>
             
             <div className="flex items-center">
-              <DollarSign className="h-5 w-5 text-primary mr-1" />
               <span className="text-lg font-bold text-primary">
                 PKR {service.price.toLocaleString()}
               </span>
@@ -416,7 +415,6 @@ export default function ServiceList() {
                     </div>
                     
                     <div className="flex items-center">
-                      <DollarSign className="h-5 w-5 text-primary mr-1" />
                       <span className="text-lg font-bold text-primary">
                         PKR {service.price.toLocaleString()}
                       </span>

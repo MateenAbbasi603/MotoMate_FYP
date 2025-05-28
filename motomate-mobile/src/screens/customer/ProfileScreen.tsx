@@ -198,7 +198,7 @@ const ProfileScreen = () => {
           confirmPassword: '',
         });
       } else {
-        Alert.alert('Error', result.message || 'Failed to change password');
+        Alert.alert('Error', result.error || 'Failed to change password');
       }
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred');
@@ -227,9 +227,9 @@ const ProfileScreen = () => {
       quality: 0.8,
     });
 
-    // if (!result.canceled) {
-    //   await uploadProfileImage(result.assets[0].uri);
-    // }
+    if (!result.canceled) {
+      await uploadProfileImage(result.assets[0].uri);
+    }
     setShowImagePicker(false);
   };
 
@@ -246,29 +246,31 @@ const ProfileScreen = () => {
       quality: 0.8,
     });
 
-    // if (!result.canceled) {
-    //   await uploadProfileImage(result.assets[0].uri);
-    // }
+    if (!result.canceled) {
+      await uploadProfileImage(result.assets[0].uri);
+    }
     setShowImagePicker(false);
   };
 
-//   const uploadProfileImage = async (imageUri: string) => {
-//     try {
-//       setIsSaving(true);
-//       const result = await apiService.uploadProfileImage(imageUri);
+  const uploadProfileImage = async (imageUri: string) => {
+    try {
+      setIsSaving(true);
+      const result = await apiService.updateProfile({
+        imgUrl: imageUri
+      });
       
-//       if (result.success) {
-//         setUser(prev => prev ? { ...prev, imgUrl: result.data.imgUrl } : null);
-//         Alert.alert('Success', 'Profile picture updated successfully');
-//       } else {
-//         Alert.alert('Error', result.message || 'Failed to upload image');
-//       }
-//     } catch (error) {
-//       Alert.alert('Error', 'Failed to upload image');
-//     } finally {
-//       setIsSaving(false);
-//     }
-//   };
+      if (result.success) {
+        setUser(prev => prev ? { ...prev, imgUrl: imageUri } : null);
+        Alert.alert('Success', 'Profile picture updated successfully');
+      } else {
+        Alert.alert('Error', result.message || 'Failed to upload image');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to upload image');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(

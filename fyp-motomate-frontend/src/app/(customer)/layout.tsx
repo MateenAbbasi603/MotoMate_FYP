@@ -17,7 +17,7 @@ export default function CustomerLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkPendingReviews = async () => {
       // Skip checks for review page and API routes to prevent infinite redirects
-      if (pathname?.includes("/reviews") || pathname?.startsWith("/api")) {
+      if (pathname?.includes("/reviews") || pathname?.startsWith("/api") || pathname?.startsWith("/admin"))  {
         setIsCheckingReviews(false);
         return;
       }
@@ -30,7 +30,7 @@ export default function CustomerLayout({ children }: { children: ReactNode }) {
           toast.warning("You have pending reviews that must be completed", {
             duration: 5000,
           });
-          router.push("/customer/reviews?forced=true");
+          router.push("/reviews?forced=true");
         }
       } catch (error) {
         console.error("Error checking pending reviews:", error);

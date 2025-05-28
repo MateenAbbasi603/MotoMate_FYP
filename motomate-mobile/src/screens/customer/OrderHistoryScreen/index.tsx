@@ -7,14 +7,19 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
 import { apiService } from '../../../services/apiService';
-import OrderDetailsModal from '../OrderDetailsModal';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 
-// Import the OrderDetailsScreen as a component
+type RootStackParamList = {
+  OrderHistoryMain: undefined;
+  OrderDetails: { orderId: number };
+};
+
+type OrderHistoryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'OrderHistoryMain'>;
 
 interface Order {
   orderId: number;
@@ -42,11 +47,10 @@ interface Order {
 
 const OrderHistoryScreen = () => {
   const { user } = useAuth();
+  const navigation = useNavigation<OrderHistoryScreenNavigationProp>();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
-  const [showOrderDetails, setShowOrderDetails] = useState(false);
 
   const fetchOrders = async () => {
     try {
@@ -113,13 +117,7 @@ const OrderHistoryScreen = () => {
 
   const handleOrderPress = (orderId: number) => {
     console.log('Opening order details for:', orderId);
-    setSelectedOrderId(orderId);
-    setShowOrderDetails(true);
-  };
-
-  const closeOrderDetails = () => {
-    setShowOrderDetails(false);
-    setSelectedOrderId(null);
+    navigation.navigate('OrderDetails', { orderId });
   };
 
   const renderOrderItem = ({ item }: { item: Order }) => (
@@ -251,21 +249,6 @@ const OrderHistoryScreen = () => {
           </View>
         }
       />
-
-      {/* Order Details Modal */}
-      <Modal
-        visible={showOrderDetails}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={closeOrderDetails}
-      >
-        {selectedOrderId && (
-          <OrderDetailsModal
-            orderId={selectedOrderId}
-            onClose={closeOrderDetails}
-          />
-        )}
-      </Modal>
     </View>
   );
 };

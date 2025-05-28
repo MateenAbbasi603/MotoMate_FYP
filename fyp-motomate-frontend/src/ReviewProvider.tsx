@@ -34,6 +34,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
 
   // Exempt paths that don't need review check
   const isExemptPath = [
+    '/',
     '/login',
     '/signup',
     '/register',

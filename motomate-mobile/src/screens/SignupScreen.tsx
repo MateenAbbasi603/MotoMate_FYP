@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  ActionSheetIOS,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
-import * as ImagePicker from 'expo-image-picker';
+import { cloudinaryService } from '../services/cloudinaryService';
 
 type SignupScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Signup'>;
 
@@ -44,20 +45,50 @@ const SignupScreen = () => {
 
   const pickImage = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.5,
-      });
-
-      if (!result.canceled && result.assets[0].uri) {
-        setSelectedImage(result.assets[0].uri);
-        setFormData(prev => ({ ...prev, imgUrl: result.assets[0].uri }));
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          {
+            options: ['Cancel', 'Take Photo', 'Choose from Library'],
+            cancelButtonIndex: 0,
+          },
+          async (buttonIndex) => {
+            if (buttonIndex === 1) {
+              await handleImageSelection('camera');
+            } else if (buttonIndex === 2) {
+              await handleImageSelection('library');
+            }
+          }
+        );
+      } else {
+        Alert.alert(
+          'Profile Picture',
+          'Choose an option',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Take Photo', onPress: () => handleImageSelection('camera') },
+            { text: 'Choose from Library', onPress: () => handleImageSelection('library') }
+          ]
+        );
       }
     } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      console.error('Error showing options:', error);
+      Alert.alert('Error', 'Failed to show options. Please try again.');
+    }
+  };
+
+  const handleImageSelection = async (source: 'camera' | 'library') => {
+    try {
+      const result = await cloudinaryService.uploadProfilePicture(source);
+      
+      if (result.success && result.url) {
+        setSelectedImage(result.url);
+        setFormData(prev => ({ ...prev, imgUrl: result.url }));
+      } else {
+        Alert.alert('Error', result.error || 'Failed to upload image. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      Alert.alert('Error', 'Failed to upload image. Please try again.');
     }
   };
 
@@ -87,7 +118,7 @@ const SignupScreen = () => {
       newErrors.name = 'Name must be at least 2 characters';
     }
 
-    // Phone validation (optional)
+    // Phone validation
     if (formData.phone && !/^\d{11}$/.test(formData.phone)) {
       newErrors.phone = 'Phone number must be exactly 11 digits';
     }
@@ -128,7 +159,7 @@ const SignupScreen = () => {
         password: formData.password,
         confirmPassword: formData.confirmPassword,
         role: 'customer',
-        imgUrl: formData.imgUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(formData.name.trim())
+        imgUrl: formData.imgUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name.trim())}`
       };
 
       const result = await signup(signupData);
@@ -281,16 +312,33 @@ const SignupScreen = () => {
                 styles.inputWrapper,
                 errors.phone ? styles.inputError : null
               ]}>
-                <Ionicons name="call-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <View style={styles.phonePrefixContainer}>
+                  <Image 
+                    source={{ uri: 'https://flagcdn.com/w20/pk.png' }}
+                    style={styles.flagImage}
+                  />
+                  <Text style={styles.phonePrefix}>+92</Text>
+                </View>
                 <TextInput
-                  style={styles.textInput}
-                  placeholder="Enter your phone number"
+                  style={[styles.textInput, styles.phoneInput]}
+                  placeholder="3XXXXXXXXX"
                   value={formData.phone}
-                  onChangeText={(value) => updateFormData('phone', value)}
+                  onChangeText={(value) => {
+                    // Only allow digits and ensure it starts with 3
+                    const cleanValue = value.replace(/\D/g, '');
+                    if (cleanValue.length === 0 || 
+                        (cleanValue.length === 1 && cleanValue === '3') || 
+                        (cleanValue.length > 1 && cleanValue.startsWith('3'))) {
+                      updateFormData('phone', cleanValue);
+                    }
+                  }}
                   keyboardType="phone-pad"
                   maxLength={11}
                 />
               </View>
+              <Text style={styles.phoneHelperText}>
+                Enter 11-digit Pakistani mobile number starting with 3
+              </Text>
               {errors.phone && (
                 <Text style={styles.errorText}>{errors.phone}</Text>
               )}
@@ -584,6 +632,32 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 12,
     textAlign: 'center',
+  },
+  phonePrefixContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingRight: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#D1D5DB',
+  },
+  flagImage: {
+    width: 16,
+    height: 16,
+    borderRadius: 2,
+  },
+  phonePrefix: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  phoneInput: {
+    paddingLeft: 8,
+  },
+  phoneHelperText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
   },
 });
 

@@ -47,7 +47,7 @@ const data = {
     navMain: [
         {
             title: "Dashboard",
-            url: "/admin/dasboard",
+            url: "/admin/dashboard",
             icon: User2Icon,
             isActive: true,
 
@@ -176,7 +176,7 @@ const data = {
     ],
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sidebar> & { user: any }) {
     return (
         <Sidebar collapsible="icon" {...props}>
 
@@ -185,7 +185,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
             </SidebarContent>
             <SidebarFooter>
-                <NavUser user={data.user} />
+                <NavUser user={user} />
             </SidebarFooter>
             <SidebarRail />
         </Sidebar>

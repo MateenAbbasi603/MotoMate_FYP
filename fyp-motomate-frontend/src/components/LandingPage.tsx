@@ -2,12 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, Car, Phone, Star, Calendar, Clock, MessageSquare, ArrowRight, Wrench, LogIn } from 'lucide-react';
+import { ChevronDown, Car, Phone, Star, Calendar, Clock, MessageSquare, ArrowRight, Wrench, LogIn, Home } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { motion } from 'framer-motion';
 import Image from 'next/image';
+import reviewService from '../../services/reviewService';
+
 
 
 interface TestimonialType {
@@ -29,9 +31,15 @@ interface StatItem {
     label: string;
 }
 
+interface WorkshopRatingData {
+  totalReviews: number;
+  averageRating: number;
+}
+
 const LandingPage: React.FC = () => {
     const router = useRouter();
     const [activeTestimonial, setActiveTestimonial] = useState<number>(0);
+    const [workshopRating, setWorkshopRating] = useState<WorkshopRatingData | null>(null);
 
     // Sample testimonials
     const testimonials: TestimonialType[] = [
@@ -100,17 +108,25 @@ const LandingPage: React.FC = () => {
         }
     ];
 
-    // Stats items array
-    const statItems: StatItem[] = [
-        { value: "2500+", label: "Workshops" },
-        { value: "50,000+", label: "Customers" },
-        { value: "120,000+", label: "Services Completed" },
-        { value: "98%", label: "Satisfaction Rate" }
-    ];
+    // Stats items array - This will be replaced by fetched data
+    const statItems: StatItem[] = [];
 
     const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
         e.currentTarget.src = "https://images.unsplash.com/photo-1638241211470-13ca212f0461?q=80&w=1931&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D";
     };
+
+    useEffect(() => {
+        const fetchWorkshopRating = async () => {
+            try {
+                const data = await reviewService.getWorkshopRating();
+                setWorkshopRating(data);
+            } catch (error) {
+                console.error("Error fetching workshop rating:", error);
+            }
+        };
+
+        fetchWorkshopRating();
+    }, []);
 
     // Animation variants for framer-motion
     const fadeIn = {
@@ -461,6 +477,53 @@ const LandingPage: React.FC = () => {
                         variants={staggerContainer}
                         className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center"
                     >
+                        {/* Workshop Rating */}
+                        {workshopRating && (
+                            <motion.div variants={itemVariant}>
+                                <motion.h3
+                                    className="text-4xl lg:text-5xl font-bold mb-2"
+                                    initial={{ opacity: 0, scale: 0.5 }}
+                                    whileInView={{
+                                        opacity: 1,
+                                        scale: 1,
+                                        transition: {
+                                            type: "spring",
+                                            stiffness: 50,
+                                            delay: 0.1
+                                        }
+                                    }}
+                                    viewport={{ once: true }}
+                                >
+                                    {workshopRating.averageRating.toFixed(1)} / 5
+                                </motion.h3>
+                                <p className="text-red-200">Average Rating</p>
+                            </motion.div>
+                        )}
+
+                        {/* Total Reviews */}
+                        {workshopRating && (
+                            <motion.div variants={itemVariant}>
+                                <motion.h3
+                                    className="text-4xl lg:text-5xl font-bold mb-2"
+                                    initial={{ opacity: 0, scale: 0.5 }}
+                                    whileInView={{
+                                        opacity: 1,
+                                        scale: 1,
+                                        transition: {
+                                            type: "spring",
+                                            stiffness: 50,
+                                            delay: 0.2
+                                        }
+                                    }}
+                                    viewport={{ once: true }}
+                                >
+                                    {workshopRating.totalReviews}
+                                </motion.h3>
+                                <p className="text-red-200">Total Reviews</p>
+                            </motion.div>
+                        )}
+
+                        {/* Retain some other stats if desired, or remove */}
                         {statItems.map((stat, index) => (
                             <motion.div
                                 key={index}

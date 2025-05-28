@@ -26,12 +26,24 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.motomate.mobile"
+      "package": "com.motomate.mobile",
+      "permissions": [
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to save invoices.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save invoices to your photo library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
       "expo-secure-store",
       "expo-font"
     ],

@@ -10,10 +10,12 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from 'context/AuthContext';
 import { apiService } from 'services/apiService';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 
 
@@ -150,17 +152,25 @@ const NewOrderScreen = () => {
 
   const fetchTimeSlots = async (date: Date) => {
     try {
-      // Mock time slots - replace with actual API call
-      const mockTimeSlots: TimeSlotInfo[] = [
-        { timeSlot: '09:00 AM - 11:00 AM', availableSlots: 2, totalSlots: 2 },
-        { timeSlot: '11:00 AM - 01:00 PM', availableSlots: 1, totalSlots: 2 },
-        { timeSlot: '02:00 PM - 04:00 PM', availableSlots: 2, totalSlots: 2 },
-        { timeSlot: '04:00 PM - 06:00 PM', availableSlots: 0, totalSlots: 2 },
-      ];
-      
-      setTimeSlots(mockTimeSlots);
+      console.log('[NewOrderScreen] Fetching time slots for date:', date);
+       // Format date to YYYY-MM-DD for the backend
+       const formattedDate = `${date.getFullYear()}-${('0' + (date.getMonth() + 1)).slice(-2)}-${('0' + date.getDate()).slice(-2)}`;
+       
+       const response = await apiService.getTimeSlotsInfo(formattedDate);
+       
+       console.log('[NewOrderScreen] Time slots API response:', response);
+       
+       if (response.success && response.timeSlotInfos) {
+         setTimeSlots(response.timeSlotInfos);
+       } else {
+         console.error('[NewOrderScreen] Failed to fetch time slots:', response.message);
+         setTimeSlots([]); // Clear time slots on error or no data
+         Alert.alert('Error', response.message || 'Failed to load time slots');
+       }
     } catch (error) {
       console.error('Error fetching time slots:', error);
+      setTimeSlots([]); // Clear time slots on error
+      Alert.alert('Error', 'Failed to fetch time slots');
     }
   };
 
@@ -186,7 +196,7 @@ const NewOrderScreen = () => {
     }
   };
 
-  const addAdditionalService = (service: Service) => {
+  const handleAddAdditionalService = (service: Service) => {
     if (additionalServices.find(s => s.serviceId === service.serviceId)) {
       Alert.alert('Error', 'Service already added');
       return;
@@ -263,29 +273,32 @@ const NewOrderScreen = () => {
       Alert.alert('Error', 'Please select at least one inspection');
       return;
     }
-
+  
     setLoading(true);
     setShowPaymentModal(false);
-
+  
     try {
-      const primaryInspection = selectedSubcategories[0];
-      const additionalSubcategoryIds = selectedSubcategories.slice(1).map(s => s.serviceId);
-      const additionalServiceIds = additionalServices.map(s => s.serviceId);
-
+      // Create a single order with all selected subcategories
       const orderData = {
         vehicleId: selectedVehicle!.vehicleId,
-        inspectionTypeId: primaryInspection.serviceId,
-        subCategory: primaryInspection.serviceName,
+        inspectionTypeId: selectedSubcategories[0].serviceId, // Primary inspection
         serviceId: includeService && selectedService ? selectedService.serviceId : null,
-        additionalServiceIds: [...additionalServiceIds, ...additionalSubcategoryIds],
-        inspectionDate: selectedDate.toISOString(),
+        inspectionDate: formatBackendDate(selectedDate),
         timeSlot: selectedTimeSlot,
         notes: notes || '',
         paymentMethod: paymentMethod,
+        orderType: paymentMethod === 'online' ? 'Online' : 'Cash',
+        totalAmount: calculateTotal(),
+        includesInspection: true,
+        subCategory: selectedSubcategories[0].serviceName, // Primary subcategory
+        // Include all selected subcategories as additional services
+        additionalServiceIds: [
+          ...selectedSubcategories.slice(1).map(sub => sub.serviceId),
+          ...additionalServices.map(service => service.serviceId)
+        ]
       };
-
-      console.log('Creating order with data:', orderData);
-
+  
+      console.log('Creating order with data:', JSON.stringify(orderData, null, 2));
       const response = await apiService.createOrder(orderData);
       
       if (response.success) {
@@ -293,9 +306,7 @@ const NewOrderScreen = () => {
           { 
             text: 'OK', 
             onPress: () => {
-              // Reset form and navigate back
               resetForm();
-              // You might want to navigate to order details or dashboard here
             }
           }
         ]);
@@ -303,7 +314,7 @@ const NewOrderScreen = () => {
         Alert.alert('Error', response.message || 'Failed to create order');
       }
     } catch (error) {
-      console.error('Error creating order:', error);
+      console.error('Create order error:', error);
       Alert.alert('Error', 'Failed to create order. Please try again.');
     } finally {
       setLoading(false);
@@ -330,6 +341,87 @@ const NewOrderScreen = () => {
       day: 'numeric',
     });
   };
+
+  // New helper function to format date for backend
+  const formatBackendDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = ('0' + (date.getMonth() + 1)).slice(-2);
+    const day = ('0' + date.getDate()).slice(-2);
+    const hours = ('0' + date.getHours()).slice(-2);
+    const minutes = ('0' + date.getMinutes()).slice(-2);
+    const seconds = ('0' + date.getSeconds()).slice(-2);
+
+    // Format: YYYY-MM-DDTHH:mm:ss
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+  };
+
+  const renderServiceModalContent = () => (
+    <ScrollView style={styles.modalBody}>
+      <Text style={styles.modalSubtitle}>Select Main Service</Text>
+      {services.map((service) => (
+        <TouchableOpacity
+          key={service.serviceId}
+          style={[
+            styles.serviceModalCard,
+            selectedService?.serviceId === service.serviceId && styles.selectedServiceCard
+          ]}
+          onPress={() => {
+            setSelectedService(service);
+            setShowServiceModal(false);
+          }}
+        >
+          <View style={styles.serviceModalInfo}>
+            <Text style={styles.serviceModalName}>{service.serviceName}</Text>
+            {service.description && (
+              <Text style={styles.serviceModalDescription}>{service.description}</Text>
+            )}
+          </View>
+          <Text style={styles.serviceModalPrice}>PKR {service.price}</Text>
+        </TouchableOpacity>
+      ))}
+
+      <Text style={[styles.modalSubtitle, { marginTop: 20 }]}>Add Additional Services</Text>
+      {services.map((service) => (
+        <TouchableOpacity
+          key={service.serviceId}
+          style={[
+            styles.serviceModalCard,
+            additionalServices.find(s => s.serviceId === service.serviceId) && styles.selectedServiceCard
+          ]}
+          onPress={() => handleAddAdditionalService(service)}
+        >
+          <View style={styles.serviceModalInfo}>
+            <Text style={styles.serviceModalName}>{service.serviceName}</Text>
+            {service.description && (
+              <Text style={styles.serviceModalDescription}>{service.description}</Text>
+            )}
+          </View>
+          <Text style={styles.serviceModalPrice}>PKR {service.price}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+
+  const ServiceSelectionModal = () => (
+    <Modal
+      visible={showServiceModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowServiceModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Services</Text>
+            <TouchableOpacity onPress={() => setShowServiceModal(false)}>
+              <Ionicons name="close" size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+          {renderServiceModalContent()}
+        </View>
+      </View>
+    </Modal>
+  );
 
   if (initialLoading) {
     return (
@@ -714,44 +806,7 @@ const NewOrderScreen = () => {
       </Modal>
 
       {/* Service Selection Modal */}
-      <Modal
-        visible={showServiceModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowServiceModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Service</Text>
-              <TouchableOpacity onPress={() => setShowServiceModal(false)}>
-                <Ionicons name="close" size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.modalBody}>
-              {services.map((service) => (
-                <TouchableOpacity
-                  key={service.serviceId}
-                  style={styles.serviceModalCard}
-                  onPress={() => {
-                    setSelectedService(service);
-                    setShowServiceModal(false);
-                  }}
-                >
-                  <View style={styles.serviceModalInfo}>
-                    <Text style={styles.serviceModalName}>{service.serviceName}</Text>
-                    {service.description && (
-                      <Text style={styles.serviceModalDescription}>{service.description}</Text>
-                    )}
-                  </View>
-                  <Text style={styles.serviceModalPrice}>PKR {service.price}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <ServiceSelectionModal />
 
       {/* Payment Method Modal */}
       <Modal
@@ -826,6 +881,24 @@ const NewOrderScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Date Picker Modal */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event: any, date?: Date) => {
+            setShowDatePicker(false);
+            if (date) {
+              setSelectedDate(date);
+              fetchTimeSlots(date);
+              setSelectedTimeSlot('');
+            }
+          }}
+          minimumDate={new Date()}
+        />
+      )}
     </View>
   );
 };
@@ -1413,6 +1486,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  selectedServiceCard: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
   },
 });
 
