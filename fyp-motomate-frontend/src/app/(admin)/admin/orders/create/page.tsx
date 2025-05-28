@@ -19,7 +19,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -102,7 +101,7 @@ interface Mechanic {
   status: string;
 }
 
-// Form schema - updated to make inspectionId completely optional
+// Updated form schema with proper validation for all scenarios
 const orderFormSchema = z.object({
   serviceId: z.number().optional(),
   inspectionId: z.number().optional(),
@@ -110,7 +109,19 @@ const orderFormSchema = z.object({
   includesInspection: z.boolean().default(false),
   totalAmount: z.number().min(0, "Total amount must be positive"),
   inspectionSubCategory: z.string().optional(),
-  mechanicId: z.number().optional(), // Added mechanicId field
+  mechanicId: z.number().optional(),
+}).refine((data) => {
+  // Must have either a service or inspection (or both)
+  return data.serviceId || (data.includesInspection && data.inspectionId);
+}, {
+  message: "Must select either a service or inspection (or both)",
+  path: ["serviceId"]
+}).refine((data) => {
+  // If includesInspection is true, must have inspectionId
+  return !data.includesInspection || data.inspectionId;
+}, {
+  message: "Inspection type is required when inspection is included",
+  path: ["inspectionId"]
 });
 
 // Form schema for user creation
@@ -161,8 +172,7 @@ export default function CreateWalkInOrderPage() {
       orderNotes: "",
       includesInspection: false,
       totalAmount: 0,
-      mechanicId: undefined, // Initialize mechanicId
-
+      mechanicId: undefined,
     },
   });
 
@@ -186,6 +196,7 @@ export default function CreateWalkInOrderPage() {
     },
   });
 
+  // Load mechanics
   useEffect(() => {
     const fetchAvailableMechanics = async () => {
       try {
@@ -205,7 +216,6 @@ export default function CreateWalkInOrderPage() {
           }
         );
 
-        // Handle different response formats
         let mechanicsData: Mechanic[] = [];
         if (response.data && response.data.$values) {
           mechanicsData = response.data.$values;
@@ -259,7 +269,6 @@ export default function CreateWalkInOrderPage() {
           }
         );
 
-        // Handle different response formats
         let servicesData: Service[] = [];
         if (response.data && response.data.$values) {
           servicesData = response.data.$values;
@@ -272,7 +281,6 @@ export default function CreateWalkInOrderPage() {
 
         setServices(servicesData);
 
-        // Split services into inspection and regular
         const inspections = servicesData.filter(
           service => service.category.toLowerCase() === 'inspection'
         );
@@ -293,29 +301,40 @@ export default function CreateWalkInOrderPage() {
     fetchServices();
   }, []);
 
-  // Update price when services are selected
+  // Update price calculation for all scenarios
   useEffect(() => {
     const servicePrice = selectedService?.price || 0;
     const inspectionPrice = selectedInspection?.price || 0;
-    const total = servicePrice + (orderForm.getValues().includesInspection ? inspectionPrice : 0);
+    
+    let total = 0;
+    
+    // Add service price if service is selected
+    if (selectedService) {
+      total += servicePrice;
+    }
+    
+    // Add inspection price if inspection is included and selected
+    if (orderForm.watch('includesInspection') && selectedInspection) {
+      total += inspectionPrice;
+    }
 
     orderForm.setValue('totalAmount', total);
 
-    // Update service and inspection IDs in the form
+    // Update form values
     if (selectedService) {
       orderForm.setValue('serviceId', selectedService.serviceId);
     } else {
       orderForm.setValue('serviceId', undefined);
     }
 
-    if (selectedInspection && orderForm.getValues().includesInspection) {
+    if (selectedInspection && orderForm.watch('includesInspection')) {
       orderForm.setValue('inspectionId', selectedInspection.serviceId);
       orderForm.setValue('inspectionSubCategory', selectedInspection.subCategory);
     } else {
       orderForm.setValue('inspectionId', undefined);
       orderForm.setValue('inspectionSubCategory', undefined);
     }
-  }, [selectedService, selectedInspection, orderForm]);
+  }, [selectedService, selectedInspection, orderForm.watch('includesInspection')]);
 
   // Handle service selection
   const handleServiceSelect = (serviceId: string) => {
@@ -387,8 +406,7 @@ export default function CreateWalkInOrderPage() {
     fetchUserVehicles(user.userId);
   };
 
-
-  // Fetch user vehicles - improved data handling
+  // Fetch user vehicles
   const fetchUserVehicles = async (userId: number) => {
     try {
       setLoadingVehicles(true);
@@ -407,14 +425,12 @@ export default function CreateWalkInOrderPage() {
         }
       );
 
-      // Improved response data handling
       let vehiclesData: Vehicle[] = [];
       if (response.data && response.data.$values) {
         vehiclesData = response.data.$values;
       } else if (Array.isArray(response.data)) {
         vehiclesData = response.data;
       } else if (response.data && typeof response.data === 'object') {
-        // Handle single vehicle response or unexpected formats
         if (response.data.vehicleId) {
           vehiclesData = [response.data];
         } else if (response.data.data && Array.isArray(response.data.data)) {
@@ -430,7 +446,6 @@ export default function CreateWalkInOrderPage() {
         return;
       }
 
-      // Add validation to ensure all vehicle objects have the required fields
       vehiclesData = vehiclesData.filter(vehicle => {
         return vehicle && typeof vehicle === 'object' &&
           vehicle.vehicleId !== undefined &&
@@ -445,6 +460,7 @@ export default function CreateWalkInOrderPage() {
       setLoadingVehicles(false);
     }
   };
+
   // Create new user
   const createUser = async (data: z.infer<typeof userFormSchema>) => {
     try {
@@ -455,7 +471,6 @@ export default function CreateWalkInOrderPage() {
         return;
       }
 
-      // Generate username from name (first letter of first name + last name, lowercase)
       const nameParts = data.name.split(' ');
       let username = '';
       if (nameParts.length > 1) {
@@ -463,12 +478,9 @@ export default function CreateWalkInOrderPage() {
       } else {
         username = data.name.toLowerCase();
       }
-      username += Math.floor(Math.random() * 1000); // Add random number to avoid duplicates
+      username += Math.floor(Math.random() * 1000);
 
-      // Generate a random password
       const password = `${username}${Math.floor(Math.random() * 100)}!`;
-      console.log("PASSWORD --- ", password);
-
 
       const payload = {
         username,
@@ -540,7 +552,6 @@ export default function CreateWalkInOrderPage() {
         toast.success('Vehicle added successfully');
         setSelectedVehicle(response.data);
         setAddVehicleDialogOpen(false);
-        // Refresh user vehicles
         fetchUserVehicles(selectedUser.userId);
       } else {
         toast.error('Failed to add vehicle');
@@ -553,7 +564,7 @@ export default function CreateWalkInOrderPage() {
     }
   };
 
-  // Submit order - fixed validation
+  // Fixed submit order for all scenarios
   const submitOrder = async (data: z.infer<typeof orderFormSchema>) => {
     if (!selectedUser) {
       setUserSearchDialogOpen(true);
@@ -566,15 +577,17 @@ export default function CreateWalkInOrderPage() {
       return;
     }
 
-    // Fixed validation - At least one service OR inspection
-    if (!data.serviceId && !data.includesInspection) {
+    // SCENARIO VALIDATION:
+    const hasService = !!data.serviceId;
+    const hasInspection = data.includesInspection && !!data.inspectionId;
+
+    if (!hasService && !hasInspection) {
       toast.error("Please select at least one service or inspection");
       return;
     }
 
-    // Validate that if includesInspection is true, an inspection must be selected
     if (data.includesInspection && !data.inspectionId) {
-      toast.error("Please select an inspection type");
+      toast.error("Please select an inspection type when inspection is included");
       return;
     }
 
@@ -589,15 +602,16 @@ export default function CreateWalkInOrderPage() {
       const payload = {
         userId: selectedUser.userId,
         vehicleId: selectedVehicle.vehicleId,
-        serviceId: data.serviceId,
+        serviceId: data.serviceId || null,
         includesInspection: data.includesInspection,
-        inspectionTypeId: data.includesInspection ? data.inspectionId : undefined,
+        inspectionTypeId: data.includesInspection ? data.inspectionId : null,
         inspectionSubCategory: data.includesInspection ? data.inspectionSubCategory : "",
         totalAmount: data.totalAmount,
-        notes: data.orderNotes,
-        mechanicId: data.mechanicId // Include mechanicId in payload
-
+        notes: data.orderNotes || "",
+        mechanicId: data.mechanicId || null
       };
+
+      console.log('Submitting payload:', payload);
 
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Orders/walkin`,
@@ -610,14 +624,28 @@ export default function CreateWalkInOrderPage() {
       );
 
       if (response.data) {
-        toast.success('Walk-in order created successfully');
+        let successMessage = 'Walk-in order created successfully';
+        if (payload.includesInspection && payload.serviceId) {
+          successMessage += ' with inspection and service';
+        } else if (payload.includesInspection) {
+          successMessage += ' with inspection only';
+        } else {
+          successMessage += ' with service only';
+        }
+
+        if (payload.mechanicId) {
+          successMessage += ' and mechanic assigned';
+        }
+
+        toast.success(successMessage);
         router.push(`/admin/orders/${response.data.orderId}`);
       } else {
         toast.error('Failed to create walk-in order');
       }
     } catch (err: any) {
       console.error('Error creating walk-in order:', err);
-      toast.error(err.response?.data?.message || 'Failed to create walk-in order');
+      const errorMessage = err.response?.data?.message || 'Failed to create walk-in order';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -641,7 +669,7 @@ export default function CreateWalkInOrderPage() {
                 <CardHeader>
                   <CardTitle>Walk-In Order Details</CardTitle>
                   <CardDescription>
-                    Create a new walk-in order for a customer without requiring scheduled inspection
+                    Create a new walk-in order for a customer. Select service only, inspection only, or both.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -651,11 +679,165 @@ export default function CreateWalkInOrderPage() {
                       {orderForm.watch('includesInspection') && (
                         <TabsTrigger value="inspection">Inspection</TabsTrigger>
                       )}
-                      <TabsTrigger value="notes">Notes</TabsTrigger>
                       <TabsTrigger value="mechanic">Mechanic</TabsTrigger>
-
+                      <TabsTrigger value="notes">Notes</TabsTrigger>
                     </TabsList>
-                    {/* Add new tab for mechanic selection */}
+
+                    <TabsContent value="service" className="space-y-4">
+                      {/* Service Selection */}
+                      <div className="space-y-4">
+                        <div className="flex items-center space-x-2 mb-4">
+                          <Checkbox
+                            id="includesInspection"
+                            checked={orderForm.watch('includesInspection')}
+                            onCheckedChange={handleInspectionToggle}
+                          />
+                          <label
+                            htmlFor="includesInspection"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            Include Inspection
+                          </label>
+                        </div>
+
+                        <div className="mt-6">
+                          <FormField
+                            control={orderForm.control}
+                            name="serviceId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>
+                                  Select Service {!orderForm.watch('includesInspection') ? '(Required)' : '(Optional)'}
+                                </FormLabel>
+                                <Select
+                                  disabled={loadingServices}
+                                  value={selectedService ? selectedService.serviceId.toString() : ""}
+                                  onValueChange={handleServiceSelect}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select a service" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {loadingServices ? (
+                                      <SelectItem value="loading" disabled>
+                                        Loading services...
+                                      </SelectItem>
+                                    ) : regularServices.length === 0 ? (
+                                      <SelectItem value="none" disabled>
+                                        No services available
+                                      </SelectItem>
+                                    ) : (
+                                      regularServices.map((service) => (
+                                        <SelectItem
+                                          key={service.serviceId}
+                                          value={service.serviceId.toString()}
+                                        >
+                                          {service.serviceName} - ${service.price.toFixed(2)}
+                                        </SelectItem>
+                                      ))
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                                <FormDescription>
+                                  {orderForm.watch('includesInspection') 
+                                    ? "You can select a service, an inspection, or both"
+                                    : "Service is required if inspection is not selected"
+                                  }
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Display selected service details */}
+                          {selectedService && (
+                            <div className="bg-muted p-4 rounded-md mt-4">
+                              <h3 className="font-medium text-primary">
+                                {selectedService.serviceName}
+                              </h3>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {selectedService.description || 'No description available'}
+                              </p>
+                              <div className="flex justify-between items-center mt-3">
+                                <span className="text-sm">Service Price</span>
+                                <span className="font-medium">${selectedService.price.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="inspection">
+                      <div className="space-y-2">
+                        <FormField
+                          control={orderForm.control}
+                          name="inspectionId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Select Inspection Type (Required when inspection is included)</FormLabel>
+                              <Select
+                                disabled={loadingServices}
+                                value={selectedInspection ? selectedInspection.serviceId.toString() : ""}
+                                onValueChange={handleInspectionSelect}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select an inspection type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {loadingServices ? (
+                                    <SelectItem value="loading" disabled>
+                                      Loading inspection types...
+                                    </SelectItem>
+                                  ) : inspectionServices.length === 0 ? (
+                                    <SelectItem value="none" disabled>
+                                      No inspection types available
+                                    </SelectItem>
+                                  ) : (
+                                    inspectionServices.map((service) => (
+                                      <SelectItem
+                                        key={service.serviceId}
+                                        value={service.serviceId.toString()}
+                                      >
+                                        {service.serviceName} - ${service.price.toFixed(2)}
+                                        {service.subCategory ? ` (${service.subCategory})` : ''}
+                                      </SelectItem>
+                                    ))
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Display selected inspection details */}
+                        {selectedInspection && (
+                          <div className="bg-muted p-4 rounded-md mt-4">
+                            <h3 className="font-medium text-primary">
+                              {selectedInspection.serviceName}
+                            </h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {selectedInspection.description || 'No description available'}
+                            </p>
+                            {selectedInspection.subCategory && (
+                              <p className="text-sm mt-1">
+                                <span className="text-muted-foreground">Type:</span> {selectedInspection.subCategory}
+                              </p>
+                            )}
+                            <div className="flex justify-between items-center mt-3">
+                              <span className="text-sm">Inspection Price</span>
+                              <span className="font-medium">${selectedInspection.price.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+
                     <TabsContent value="mechanic">
                       <div className="space-y-2">
                         <FormField
@@ -744,144 +926,8 @@ export default function CreateWalkInOrderPage() {
                         )}
                       </div>
                     </TabsContent>
-                    <TabsContent value="service" className="space-y-4">
-                      {/* Service Selection */}
-                      <div className="space-y-2">
-                        <div className="flex items-center space-x-2 mb-4">
-                          <Checkbox
-                            id="includesInspection"
-                            checked={orderForm.watch('includesInspection')}
-                            onCheckedChange={handleInspectionToggle}
-                          />
-                          <label
-                            htmlFor="includesInspection"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                          >
-                            Include Inspection (Optional)
-                          </label>
-                        </div>
-
-                        <div className="mt-6">
-                          <h3 className="text-sm font-medium mb-2">Service Selection (Optional if inspection is selected)</h3>
-                          <FormField
-                            control={orderForm.control}
-                            name="serviceId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Select Service</FormLabel>
-                                <Select
-                                  disabled={loadingServices}
-                                  value={selectedService ? selectedService.serviceId.toString() : ""}
-                                  onValueChange={handleServiceSelect}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a service" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {loadingServices ? (
-                                      <SelectItem value="loading" disabled>
-                                        Loading services...
-                                      </SelectItem>
-                                    ) : regularServices.length === 0 ? (
-                                      <SelectItem value="none" disabled>
-                                        No services available
-                                      </SelectItem>
-                                    ) : (
-                                      regularServices.map((service) => (
-                                        <SelectItem
-                                          key={service.serviceId}
-                                          value={service.serviceId.toString()}
-                                        >
-                                          {service.serviceName} - ${service.price.toFixed(2)}
-                                        </SelectItem>
-                                      ))
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                                <FormDescription>
-                                  You can select a service, an inspection, or both
-                                </FormDescription>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="inspection">
-                      {/* Inspection Selection */}
-                      <div className="space-y-2">
-                        <FormField
-                          control={orderForm.control}
-                          name="inspectionId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Select Inspection Type</FormLabel>
-                              <Select
-                                disabled={loadingServices}
-                                value={selectedInspection ? selectedInspection.serviceId.toString() : ""}
-                                onValueChange={handleInspectionSelect}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select an inspection type" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {loadingServices ? (
-                                    <SelectItem value="loading" disabled>
-                                      Loading inspection types...
-                                    </SelectItem>
-                                  ) : inspectionServices.length === 0 ? (
-                                    <SelectItem value="none" disabled>
-                                      No inspection types available
-                                    </SelectItem>
-                                  ) : (
-                                    inspectionServices.map((service) => (
-                                      <SelectItem
-                                        key={service.serviceId}
-                                        value={service.serviceId.toString()}
-                                      >
-                                        {service.serviceName} - ${service.price.toFixed(2)}
-                                        {service.subCategory ? ` (${service.subCategory})` : ''}
-                                      </SelectItem>
-                                    ))
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        {/* Display selected inspection details */}
-                        {selectedInspection && (
-                          <div className="bg-muted p-4 rounded-md mt-4">
-                            <h3 className="font-medium text-primary">
-                              {selectedInspection.serviceName}
-                            </h3>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {selectedInspection.description || 'No description available'}
-                            </p>
-                            {selectedInspection.subCategory && (
-                              <p className="text-sm mt-1">
-                                <span className="text-muted-foreground">Type:</span> {selectedInspection.subCategory}
-                              </p>
-                            )}
-                            <div className="flex justify-between items-center mt-3">
-                              <span className="text-sm">Inspection Price</span>
-                              <span className="font-medium">${selectedInspection.price.toFixed(2)}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </TabsContent>
 
                     <TabsContent value="notes">
-                      {/* Order Notes */}
                       <FormField
                         control={orderForm.control}
                         name="orderNotes"
@@ -979,8 +1025,6 @@ export default function CreateWalkInOrderPage() {
                             </div>
                           ) : userVehicles.length > 0 ? (
                             <div className="space-y-2">
-
-
                               {userVehicles.map((vehicle) => (
                                 <div
                                   key={vehicle.vehicleId || Math.random()}
@@ -1003,7 +1047,6 @@ export default function CreateWalkInOrderPage() {
                                   </Button>
                                 </div>
                               ))}
-
                             </div>
                           ) : (
                             <p className="text-sm text-muted-foreground">No vehicles found</p>
@@ -1021,7 +1064,7 @@ export default function CreateWalkInOrderPage() {
                     </div>
                   )}
 
-
+                  {/* Mechanic Info */}
                   {selectedMechanic && (
                     <div>
                       <h3 className="text-sm font-medium mb-2">Assigned Mechanic</h3>
@@ -1036,7 +1079,6 @@ export default function CreateWalkInOrderPage() {
                       </div>
                     </div>
                   )}
-
 
                   {/* Price Summary */}
                   <div>
@@ -1058,6 +1100,25 @@ export default function CreateWalkInOrderPage() {
                         <span>Total</span>
                         <span>${orderForm.watch('totalAmount').toFixed(2)}</span>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Order Type Indicator */}
+                  <div>
+                    <h3 className="text-sm font-medium mb-2">Order Type</h3>
+                    <div className="bg-blue-50 p-3 rounded-md">
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 text-blue-600 mr-2" />
+                        <span className="font-medium text-blue-800">Walk-In Order</span>
+                      </div>
+                      <p className="text-sm text-blue-600 mt-1">
+                        {orderForm.watch('includesInspection') && selectedService 
+                          ? "Service + Inspection"
+                          : orderForm.watch('includesInspection')
+                          ? "Inspection Only"
+                          : "Service Only"
+                        }
+                      </p>
                     </div>
                   </div>
                 </CardContent>
@@ -1086,6 +1147,11 @@ export default function CreateWalkInOrderPage() {
                 placeholder="Search by name, email, or phone"
                 value={userSearchTerm}
                 onChange={(e) => setUserSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    searchUsers();
+                  }
+                }}
               />
             </div>
             <Button onClick={searchUsers} disabled={searchingUsers}>
@@ -1134,7 +1200,10 @@ export default function CreateWalkInOrderPage() {
             <Button
               variant="outline"
               className="sm:w-auto w-full"
-              onClick={() => setAddUserDialogOpen(true)}
+              onClick={() => {
+                setUserSearchDialogOpen(false);
+                setAddUserDialogOpen(true);
+              }}
             >
               <PlusCircle className="mr-2 h-4 w-4" />
               Create New Customer
@@ -1293,7 +1362,7 @@ export default function CreateWalkInOrderPage() {
                         type="number"
                         placeholder="2023"
                         {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || new Date().getFullYear())}
                       />
                     </FormControl>
                     <FormMessage />

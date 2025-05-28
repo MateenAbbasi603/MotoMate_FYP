@@ -22,9 +22,7 @@ import {
 } from "lucide-react"
 
 import { NavMain } from "@/components/layout/AdminSideBar/nav-main"
-import { NavProjects } from "@/components/layout/AdminSideBar/nav-projects"
 import { NavUser } from "@/components/layout/AdminSideBar/nav-user"
-import { TeamSwitcher } from "@/components/layout/AdminSideBar/team-switcher"
 import {
     Sidebar,
     SidebarContent,
@@ -32,9 +30,7 @@ import {
     SidebarHeader,
     SidebarRail,
 } from "@/components/ui/sidebar"
-import Link from "next/link"
-import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button"
+
 
 // This is sample data.
 const data = {
