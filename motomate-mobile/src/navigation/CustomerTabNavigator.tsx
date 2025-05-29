@@ -44,11 +44,11 @@ const CustomerTabNavigator = () => {
       }}
     >
       <Tab.Screen
-        name="Orders"
+        name="Home"
         component={OrdersNavigator}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="list" size={size} color={color} />
+            <Ionicons name="home" size={size} color={color} />
           ),
         }}
       />

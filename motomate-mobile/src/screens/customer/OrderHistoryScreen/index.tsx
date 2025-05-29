@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
@@ -17,9 +19,13 @@ import { StackNavigationProp } from '@react-navigation/stack';
 type RootStackParamList = {
   OrderHistoryMain: undefined;
   OrderDetails: { orderId: number };
+  'New Order': undefined;
+  Vehicles: undefined;
+  Profile: undefined;
+  Notifications: undefined;
 };
 
-type OrderHistoryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'OrderHistoryMain'>;
+type OrderHistoryScreenNavigationProp = StackNavigationProp<RootStackParamList>;
 
 interface Order {
   orderId: number;
@@ -32,6 +38,11 @@ interface Order {
   includesInspection?: boolean;
   orderType?: string;
   paymentMethod?: string;
+  invoice?: {
+    invoiceId: number;
+    status: string;
+    totalAmount: number;
+  };
   vehicle?: {
     make: string;
     model: string;
@@ -46,11 +57,17 @@ interface Order {
 }
 
 const OrderHistoryScreen = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigation = useNavigation<OrderHistoryScreenNavigationProp>();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<string>('all');
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [totalSpent, setTotalSpent] = useState(0);
+  const [totalTax, setTotalTax] = useState(0);
+  const [totalWithTax, setTotalWithTax] = useState(0);
 
   const fetchOrders = async () => {
     try {
@@ -64,6 +81,19 @@ const OrderHistoryScreen = () => {
         const ordersData = Array.isArray(response.data) ? response.data : [];
         console.log('Orders data:', ordersData);
         setOrders(ordersData);
+
+        // Calculate financial statistics
+        const spent = ordersData
+          .filter(order => order.status.toLowerCase() === 'completed' || order.status.toLowerCase() === 'paid')
+          .reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+        
+        // Calculate total SST (18% of completed/paid orders)
+        const tax = spent * 0.18;
+        const withTax = spent + tax;
+
+        setTotalSpent(spent);
+        setTotalTax(tax);
+        setTotalWithTax(withTax);
       } else {
         const errorMessage = response.message || 'Failed to fetch orders';
         console.error('Failed to fetch orders:', errorMessage);
@@ -81,6 +111,35 @@ const OrderHistoryScreen = () => {
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  useEffect(() => {
+    filterOrders(selectedFilter);
+  }, [orders, selectedFilter]);
+
+  const filterOrders = (filter: string) => {
+    switch (filter) {
+      case 'all':
+        setFilteredOrders(orders);
+        break;
+      case 'pending':
+        setFilteredOrders(orders.filter(order => order.status.toLowerCase() === 'pending'));
+        break;
+      case 'in-progress':
+        setFilteredOrders(orders.filter(order => 
+          order.status.toLowerCase() === 'in progress' || 
+          order.status.toLowerCase() === 'inprogress'
+        ));
+        break;
+      case 'completed':
+        setFilteredOrders(orders.filter(order => order.status.toLowerCase() === 'completed'));
+        break;
+      case 'cancelled':
+        setFilteredOrders(orders.filter(order => order.status.toLowerCase() === 'cancelled'));
+        break;
+      default:
+        setFilteredOrders(orders);
+    }
+  };
 
   const formatDate = (dateString: string) => {
     try {
@@ -183,11 +242,155 @@ const OrderHistoryScreen = () => {
     </TouchableOpacity>
   );
 
+  const renderFilterModal = () => (
+    <View style={styles.filterModal}>
+      <View style={styles.filterHeader}>
+        <Text style={styles.filterTitle}>Filter Orders</Text>
+        <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+          <Ionicons name="close" size={24} color="#6B7280" />
+        </TouchableOpacity>
+      </View>
+      <ScrollView style={styles.filterOptions}>
+        {[
+          { label: 'All Orders', value: 'all' },
+          { label: 'Pending', value: 'pending' },
+          { label: 'In Progress', value: 'in-progress' },
+          { label: 'Completed', value: 'completed' },
+          { label: 'Cancelled', value: 'cancelled' },
+        ].map((filter) => (
+          <TouchableOpacity
+            key={filter.value}
+            style={[
+              styles.filterOption,
+              selectedFilter === filter.value && styles.selectedFilter
+            ]}
+            onPress={() => {
+              setSelectedFilter(filter.value);
+              setShowFilterModal(false);
+            }}
+          >
+            <Text style={[
+              styles.filterOptionText,
+              selectedFilter === filter.value && styles.selectedFilterText
+            ]}>
+              {filter.label}
+            </Text>
+            {selectedFilter === filter.value && (
+              <Ionicons name="checkmark" size={20} color="#3B82F6" />
+            )}
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+
+  const renderUserSection = () => (
+    <View style={styles.userSection}>
+      <View style={styles.userInfo}>
+        <Image
+          source={{ uri: user?.imgUrl || 'https://via.placeholder.com/100' }}
+          style={styles.userAvatar}
+        />
+        <View style={styles.userDetails}>
+          <Text style={styles.userName}>{user?.name || 'User'}</Text>
+          <Text style={styles.userEmail}>{user?.email || 'user@example.com'}</Text>
+        </View>
+      </View>
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{orders.length}</Text>
+          <Text style={styles.statLabel}>Total Orders</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>
+            {orders.filter(o => o.status.toLowerCase() === 'completed').length}
+          </Text>
+          <Text style={styles.statLabel}>Completed</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>
+            {orders.filter(o => o.status.toLowerCase() === 'pending').length}
+          </Text>
+          <Text style={styles.statLabel}>Pending</Text>
+        </View>
+      </View>
+      <View style={styles.financialStatsContainer}>
+        <View style={styles.financialStatItem}>
+          <View style={styles.financialStatHeader}>
+            <Ionicons name="wallet" size={20} color="#10B981" />
+            <Text style={styles.financialStatLabel}>Total Spent (Excl. SST)</Text>
+          </View>
+          <Text style={styles.financialStatValue}>{formatCurrency(totalSpent)}</Text>
+        </View>
+        <View style={styles.financialStatItem}>
+          <View style={styles.financialStatHeader}>
+            <Ionicons name="calculator" size={20} color="#F59E0B" />
+            <Text style={styles.financialStatLabel}>Total SST (18%)</Text>
+          </View>
+          <Text style={styles.financialStatValue}>{formatCurrency(totalTax)}</Text>
+        </View>
+        <View style={[styles.financialStatItem, styles.totalWithTaxItem]}>
+          <View style={styles.financialStatHeader}>
+            <Ionicons name="cash" size={20} color="#3B82F6" />
+            <Text style={styles.financialStatLabel}>Total Amount (Incl. SST)</Text>
+          </View>
+          <Text style={[styles.financialStatValue, styles.totalWithTaxValue]}>
+            {formatCurrency(totalWithTax)}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderShortcuts = () => (
+    <View style={styles.shortcutsContainer}>
+      <Text style={styles.sectionTitle}>Quick Actions</Text>
+      <View style={styles.shortcutsGrid}>
+        <TouchableOpacity
+          style={styles.shortcutItem}
+          onPress={() => navigation.navigate('New Order')}
+        >
+          <View style={[styles.shortcutIcon, { backgroundColor: '#EBF4FF' }]}>
+            <Ionicons name="add-circle" size={24} color="#3B82F6" />
+          </View>
+          <Text style={styles.shortcutLabel}>New Service</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.shortcutItem}
+          onPress={() => navigation.navigate('Vehicles')}
+        >
+          <View style={[styles.shortcutIcon, { backgroundColor: '#F0FDF4' }]}>
+            <Ionicons name="car" size={24} color="#10B981" />
+          </View>
+          <Text style={styles.shortcutLabel}>My Vehicles</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.shortcutItem}
+          onPress={() => navigation.navigate('Profile')}
+        >
+          <View style={[styles.shortcutIcon, { backgroundColor: '#FEF3C7' }]}>
+            <Ionicons name="person" size={24} color="#F59E0B" />
+          </View>
+          <Text style={styles.shortcutLabel}>Profile</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.shortcutItem}
+          onPress={() => navigation.navigate('Notifications')}
+        >
+          <View style={[styles.shortcutIcon, { backgroundColor: '#FEE2E2' }]}>
+            <Ionicons name="notifications" size={24} color="#EF4444" />
+          </View>
+          <Text style={styles.shortcutLabel}>Notifications</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={styles.loadingText}>Loading orders...</Text>
+        <Text style={styles.loadingText}>Loading dashboard...</Text>
       </View>
     );
   }
@@ -196,11 +399,11 @@ const OrderHistoryScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Order History</Text>
+          <Text style={styles.title}>Dashboard</Text>
         </View>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={64} color="#EF4444" />
-          <Text style={styles.errorTitle}>Error Loading Orders</Text>
+          <Text style={styles.errorTitle}>Error Loading Dashboard</Text>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity
             style={styles.retryButton}
@@ -216,39 +419,52 @@ const OrderHistoryScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Order History</Text>
+        <Text style={styles.title}>Dashboard</Text>
         <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => {
-            Alert.alert('Coming Soon', 'Filter functionality will be implemented soon');
-          }}
+          style={styles.logoutButton}
+          onPress={logout}
         >
-          <Ionicons name="filter" size={24} color="#3B82F6" />
+          <Ionicons name="log-out-outline" size={24} color="#EF4444" />
         </TouchableOpacity>
       </View>
-
-      <FlatList
-        data={orders}
-        renderItem={renderOrderItem}
-        keyExtractor={(item) => item.orderId?.toString() || Math.random().toString()}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshing={loading}
-        onRefresh={fetchOrders}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="document-text" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>No orders found</Text>
-            <Text style={styles.emptySubtext}>Your service history will appear here</Text>
+      <ScrollView>
+        {renderUserSection()}
+        {renderShortcuts()}
+        
+        <View style={styles.ordersSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Orders</Text>
             <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={fetchOrders}
+              style={styles.filterButton}
+              onPress={() => setShowFilterModal(true)}
             >
-              <Text style={styles.refreshButtonText}>Refresh</Text>
+              <Ionicons name="filter" size={24} color="#3B82F6" />
             </TouchableOpacity>
           </View>
-        }
-      />
+
+          <FlatList
+            data={filteredOrders}
+            renderItem={renderOrderItem}
+            keyExtractor={(item) => item.orderId?.toString() || Math.random().toString()}
+            scrollEnabled={false}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Ionicons name="document-text" size={64} color="#D1D5DB" />
+                <Text style={styles.emptyText}>No orders found</Text>
+                <Text style={styles.emptySubtext}>Your service history will appear here</Text>
+                <TouchableOpacity
+                  style={styles.refreshButton}
+                  onPress={fetchOrders}
+                >
+                  <Text style={styles.refreshButtonText}>Refresh</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        </View>
+      </ScrollView>
+
+      {showFilterModal && renderFilterModal()}
     </View>
   );
 };
@@ -284,6 +500,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1F2937',
+  },
+  logoutButton: {
+    padding: 8,
   },
   filterButton: {
     padding: 8,
@@ -423,6 +642,180 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '500',
+  },
+  userSection: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  userAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+  },
+  userDetails: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  shortcutsContainer: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    marginTop: 1,
+  },
+  shortcutsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 16,
+    marginHorizontal: -8,
+  },
+  shortcutItem: {
+    width: '50%',
+    padding: 8,
+    alignItems: 'center',
+  },
+  shortcutIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  shortcutLabel: {
+    fontSize: 14,
+    color: '#4B5563',
+    textAlign: 'center',
+  },
+  ordersSection: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    marginTop: 1,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  filterModal: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  filterTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  filterOptions: {
+    maxHeight: 300,
+  },
+  filterOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  selectedFilter: {
+    backgroundColor: '#EBF4FF',
+  },
+  filterOptionText: {
+    fontSize: 16,
+    color: '#4B5563',
+  },
+  selectedFilterText: {
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  financialStatsContainer: {
+    marginTop: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+  },
+  financialStatItem: {
+    marginBottom: 12,
+  },
+  financialStatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  financialStatLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 8,
+  },
+  financialStatValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginLeft: 28,
+  },
+  totalWithTaxItem: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  totalWithTaxValue: {
+    fontSize: 20,
+    color: '#3B82F6',
   },
 });
 

@@ -343,7 +343,7 @@ const OrderDetailsScreen: React.FC = () => {
 
     const handlePayInvoice = () => {
         if (invoice?.invoice?.invoiceId) {
-            Alert.alert('Payment', 'Payment functionality will be implemented soon');
+            Alert.alert('Payment', 'Pay Using Your Web Page On Browser.');
         }
     };
 
