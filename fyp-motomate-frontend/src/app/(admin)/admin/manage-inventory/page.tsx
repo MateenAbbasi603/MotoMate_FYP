@@ -965,7 +965,7 @@ export default function ManageInventoryPage() {
                         <FormControl>
                           <div className="relative">
                             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                              <span className="text-muted-foreground">$</span>
+                              <span className="text-muted-foreground">Rs</span>
                             </div>
                             <Input
                               type="number"
@@ -1340,7 +1340,7 @@ export default function ManageInventoryPage() {
       <div className="flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center flex-grow">
-            <div className="relative flex-grow max-w-md">
+            <div className="relative flex-grow maxw-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search tools..."

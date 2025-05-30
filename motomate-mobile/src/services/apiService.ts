@@ -4,9 +4,9 @@ import * as SecureStore from 'expo-secure-store';
 
 // Update API URL based on platform
 const API_URL = Platform.select({
-  android: 'https://26cd-202-47-38-69.ngrok-free.app',
-  ios: 'https://26cd-202-47-38-69.ngrok-free.app',
-  default: 'https://26cd-202-47-38-69.ngrok-free.app'
+  android: 'https://ba65-2401-ba80-ac0d-eb21-f57c-b399-eabe-3ad4.ngrok-free.app',
+  ios: ' https://ba65-2401-ba80-ac0d-eb21-f57c-b399-eabe-3ad4.ngrok-free.app',
+  default: 'https://ba65-2401-ba80-ac0d-eb21-f57c-b399-eabe-3ad4.ngrok-free.app'
 });
 
 // Create axios instance with custom config

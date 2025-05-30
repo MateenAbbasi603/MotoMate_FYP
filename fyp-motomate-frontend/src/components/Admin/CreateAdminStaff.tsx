@@ -77,7 +77,7 @@ const staffFormSchema = z.object({
     .regex(/[a-z]/, { message: "Password must contain at least one lowercase letter." })
     .regex(/[0-9]/, { message: "Password must contain at least one number." })
     .regex(/[^a-zA-Z0-9]/, { message: "Password must contain at least one special character." }),
-  role: z.enum(["admin", "service_agent", "mechanic", "finance_officer"], {
+  role: z.enum(["admin", "mechanic", "finance_officer"], {
     message: "Please select a valid role.",
   }),
   name: z.string().min(1, {
@@ -278,10 +278,7 @@ export default function CreateStaffForm() {
               <div className="space-y-4">
                 <div className="text-center">
                   <h3 className="font-medium text-lg">{fullName || "New Staff Member"}</h3>
-                  <Badge variant="outline" className="mt-1">
-                    {selectedRole === "service_agent" ? "Service Agent" : 
-                     selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}
-                  </Badge>
+                  
                 </div>
                 
                 <Separator />
@@ -362,12 +359,6 @@ export default function CreateStaffForm() {
                                 <div className="flex items-center">
                                   <ShieldAlert className="h-4 w-4 mr-2 text-blue-500" />
                                   Administrator
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="service_agent">
-                                <div className="flex items-center">
-                                  <UserCog className="h-4 w-4 mr-2 text-green-500" />
-                                  Service Agent
                                 </div>
                               </SelectItem>
                               <SelectItem value="mechanic">

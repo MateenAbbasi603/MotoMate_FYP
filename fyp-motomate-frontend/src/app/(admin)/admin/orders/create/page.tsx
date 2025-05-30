@@ -734,7 +734,7 @@ export default function CreateWalkInOrderPage() {
                                           key={service.serviceId}
                                           value={service.serviceId.toString()}
                                         >
-                                          {service.serviceName} - ${service.price.toFixed(2)}
+                                          {service.serviceName} - Rs {service.price.toFixed(2)}
                                         </SelectItem>
                                       ))
                                     )}
@@ -762,7 +762,7 @@ export default function CreateWalkInOrderPage() {
                               </p>
                               <div className="flex justify-between items-center mt-3">
                                 <span className="text-sm">Service Price</span>
-                                <span className="font-medium">${selectedService.price.toFixed(2)}</span>
+                                <span className="font-medium">Rs {selectedService.price.toFixed(2)}</span>
                               </div>
                             </div>
                           )}
@@ -803,7 +803,7 @@ export default function CreateWalkInOrderPage() {
                                         key={service.serviceId}
                                         value={service.serviceId.toString()}
                                       >
-                                        {service.serviceName} - ${service.price.toFixed(2)}
+                                        {service.serviceName} - Rs {service.price.toFixed(2)}
                                         {service.subCategory ? ` (${service.subCategory})` : ''}
                                       </SelectItem>
                                     ))
@@ -831,7 +831,7 @@ export default function CreateWalkInOrderPage() {
                             )}
                             <div className="flex justify-between items-center mt-3">
                               <span className="text-sm">Inspection Price</span>
-                              <span className="font-medium">${selectedInspection.price.toFixed(2)}</span>
+                              <span className="font-medium">Rs {selectedInspection.price.toFixed(2)}</span>
                             </div>
                           </div>
                         )}
@@ -1087,18 +1087,18 @@ export default function CreateWalkInOrderPage() {
                       {selectedService && (
                         <div className="flex justify-between">
                           <span className="text-sm">Service</span>
-                          <span>${selectedService.price.toFixed(2)}</span>
+                          <span>Rs {selectedService.price.toFixed(2)}</span>
                         </div>
                       )}
                       {selectedInspection && orderForm.watch('includesInspection') && (
                         <div className="flex justify-between">
                           <span className="text-sm">Inspection</span>
-                          <span>${selectedInspection.price.toFixed(2)}</span>
+                          <span>Rs {selectedInspection.price.toFixed(2)}</span>
                         </div>
                       )}
                       <div className="flex justify-between font-medium pt-2 border-t">
                         <span>Total</span>
-                        <span>${orderForm.watch('totalAmount').toFixed(2)}</span>
+                        <span>Rs {orderForm.watch('totalAmount').toFixed(2)}</span>
                       </div>
                     </div>
                   </div>

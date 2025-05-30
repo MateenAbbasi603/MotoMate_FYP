@@ -391,7 +391,7 @@ namespace fyp_motomate.Controllers
 
         // POST: api/Orders/walkin
         [HttpPost("walkin")]
-        [Authorize(Roles = "super_admin,admin,service_agent")]
+        [Authorize(Roles = "super_admin,admin")]
         public async Task<ActionResult<Order>> CreateWalkInOrder([FromBody] WalkInOrderRequest request)
         {
             try

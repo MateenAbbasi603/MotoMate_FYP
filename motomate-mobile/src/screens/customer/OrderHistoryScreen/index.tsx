@@ -155,7 +155,7 @@ const OrderHistoryScreen = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return `PKR ${amount?.toFixed(2) || '0.00'}`;
+    return `Rs ${amount?.toFixed(2) || '0.00'}`;
   };
 
   const getStatusColor = (status: string) => {

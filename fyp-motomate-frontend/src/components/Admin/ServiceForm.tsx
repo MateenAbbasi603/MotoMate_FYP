@@ -350,12 +350,12 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
                     <FormItem>
                       <FormLabel className="flex items-center text-base font-medium">
                         <DollarSign className="h-4 w-4 mr-2" />
-                        Price (PKR)
+                        Price (Rs)
                       </FormLabel>
                       <FormControl>
                         <div className="relative">
                           <span className="absolute inset-y-0 left-3 flex items-center text-muted-foreground pointer-events-none">
-                            PKR
+                            Rs
                           </span>
                           <Input
                             type="number"
@@ -372,11 +372,11 @@ export default function ServiceForm({ serviceId }: ServiceFormProps) {
                       </FormControl>
                       <div className="flex justify-between items-center mt-1">
                         <FormDescription className="text-xs text-muted-foreground">
-                          The price of the service in PKR.
+                          The price of the service in Rs.
                         </FormDescription>
                         <Badge variant="outline" className={`${price > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
                           }`}>
-                          {price > 0 ? `PKR ${price.toFixed(2)}` : 'No price set'}
+                          {price > 0 ? `Rs ${price.toFixed(2)}` : 'No price set'}
                         </Badge>
                       </div>
                       <FormMessage />

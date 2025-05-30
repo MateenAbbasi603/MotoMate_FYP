@@ -292,9 +292,8 @@ const OrderDetailsScreen: React.FC = () => {
         }
     };
 
-    const formatCurrency = (amount: number | string): string => {
-        const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-        return `PKR ${numAmount?.toFixed(2) || '0.00'}`;
+    const formatCurrency = (amount: number) => {
+        return `Rs ${amount?.toFixed(2) || '0.00'}`;
     };
 
     const getStatusColor = (status: string) => {

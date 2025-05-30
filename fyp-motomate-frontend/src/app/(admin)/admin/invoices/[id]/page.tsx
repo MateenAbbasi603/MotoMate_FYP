@@ -217,12 +217,12 @@ export default function InvoiceDetailPage({
                                                     <td className="px-4 py-3">{item.description}</td>
                                                     <td className="px-4 py-3 text-center">{item.quantity}</td>
                                                     <td className="px-4 py-3 text-right">
-                                                        ${typeof item.unitPrice === 'number'
+                                                        Rs {typeof item.unitPrice === 'number'
                                                             ? item.unitPrice.toFixed(2)
                                                             : parseFloat(item.unitPrice || '0').toFixed(2)}
                                                     </td>
                                                     <td className="px-4 py-3 text-right">
-                                                        ${typeof item.totalPrice === 'number'
+                                                        Rs {typeof item.totalPrice === 'number'
                                                             ? item.totalPrice.toFixed(2)
                                                             : parseFloat(item.totalPrice || '0').toFixed(2)}
                                                     </td>
@@ -241,7 +241,7 @@ export default function InvoiceDetailPage({
                                     <tr>
                                         <td colSpan={3} className="px-4 py-3 text-right font-medium">Subtotal</td>
                                         <td className="px-4 py-3 text-right">
-                                            ${typeof invoice?.invoice?.subTotal === 'number'
+                                            Rs {typeof invoice?.invoice?.subTotal === 'number'
                                                 ? invoice.invoice.subTotal.toFixed(2)
                                                 : parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0').toFixed(2)}
                                         </td>
@@ -251,7 +251,7 @@ export default function InvoiceDetailPage({
                                             Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
                                         </td>
                                         <td className="px-4 py-3 text-right">
-                                            ${typeof invoice?.invoice?.taxAmount === 'number'
+                                            Rs {typeof invoice?.invoice?.taxAmount === 'number'
                                                 ? invoice.invoice.taxAmount.toFixed(2)
                                                 : (parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0') * 0.18).toFixed(2)}
                                         </td>
@@ -259,7 +259,7 @@ export default function InvoiceDetailPage({
                                     <tr className="font-bold">
                                         <td colSpan={3} className="px-4 py-3 text-right">Total Amount</td>
                                         <td className="px-4 py-3 text-right">
-                                            ${typeof invoice?.invoice?.totalAmount === 'number'
+                                            Rs {typeof invoice?.invoice?.totalAmount === 'number'
                                                 ? invoice.invoice.totalAmount.toFixed(2)
                                                 : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
                                         </td>

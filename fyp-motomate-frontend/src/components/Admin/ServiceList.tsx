@@ -276,24 +276,7 @@ export default function ServiceList() {
           </CardContent>
           
           <CardFooter className="border-t bg-muted/30 p-4 flex justify-end gap-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="transition-all duration-200 border-primary/20 text-primary hover:bg-primary hover:text-primary-foreground"
-                    onClick={() => router.push(`/admin/services/edit/${service.serviceId}`)}
-                  >
-                    <Pencil className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Edit service details</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            
             
             <AlertDialog>
               <TooltipProvider>

@@ -10,6 +10,8 @@ export const formatDate = (date: string | Date): string => {
 export const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
-        currency: 'PKR'
-    }).format(amount);
+        currency: 'PKR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(amount).replace('PKR', 'Rs ');
 }; 
