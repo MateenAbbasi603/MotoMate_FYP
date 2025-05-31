@@ -14,6 +14,8 @@ namespace fyp_motomate.Models.DTOs
         public DateTime? InspectionDate { get; set; }
         public decimal TotalAmount { get; set; }
         public string Notes { get; set; }
+
+        
     }
 
     public class OrderUpdateRequest
@@ -92,6 +94,8 @@ namespace fyp_motomate.Models.DTOs
 
         public string InvoiceStatus { get; set; } = "none";
         public int? InvoiceId { get; set; }
+
+        
 
         // Related entities
         public UserDetailsDto User { get; set; }

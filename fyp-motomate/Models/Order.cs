@@ -39,7 +39,7 @@ namespace fyp_motomate.Models
 
 
         [StringLength(20)]
-        public string PaymentMethod { get; set; } = "online"; // Default to online payment
+        public string paymentMethod { get; set; } = "online"; // Default to online payment
 
 
         [Required]
@@ -62,6 +62,8 @@ namespace fyp_motomate.Models
         [ForeignKey("ServiceId")]
         [JsonIgnore]
         public virtual Service Service { get; set; }
+
+        
 
         // Navigation property to related inspection
         [JsonIgnore]

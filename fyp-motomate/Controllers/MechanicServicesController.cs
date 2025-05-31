@@ -108,47 +108,50 @@ namespace fyp_motomate.Controllers
         }
 
         // GET: api/Mechanics/available
-        [HttpGet("available")]
-        [Authorize(Roles = "super_admin,admin,service_agent")]
-        public async Task<ActionResult<IEnumerable<object>>> GetAvailableMechanics()
+        // api/MechanicServices/available endpoint
+[HttpGet("available")]
+[Authorize(Roles = "super_admin,admin,service_agent")]
+public async Task<ActionResult<IEnumerable<object>>> GetAvailableMechanics()
+{
+    try
+    {
+        // Get all mechanics (users with role 'mechanic')
+        var mechanics = await _context.Users
+            .Where(u => u.Role.ToLower() == "mechanic")
+            .Select(u => new
+            {
+                u.UserId,
+                u.Name,
+                u.Email,
+                u.Phone,
+                // Get ONLY ACTIVE appointments to determine availability
+                CurrentAppointments = _context.Appointments
+                    .Count(a => a.MechanicId == u.UserId &&
+                               (a.Status == "scheduled" || a.Status == "in progress")) // Only count active appointments
+            })
+            .ToListAsync();
+
+        // Add availability status based on current active workload
+        var availableMechanics = mechanics.Select(m => new
         {
-            try
-            {
-                // Get all mechanics (users with role 'mechanic')
-                var mechanics = await _context.Users
-                    .Where(u => u.Role.ToLower() == "mechanic")
-                    .Select(u => new
-                    {
-                        u.UserId,
-                        u.Name,
-                        u.Email,
-                        u.Phone,
-                        // Get current appointments to determine availability
-                        CurrentAppointments = _context.Appointments
-                            .Count(a => a.MechanicId == u.UserId &&
-                                       (a.Status == "scheduled" || a.Status == "in progress"))
-                    })
-                    .ToListAsync();
+            mechanicId = m.UserId,
+            name = m.Name,
+            email = m.Email,
+            phone = m.Phone,
+            currentAppointments = m.CurrentAppointments,
+            status = m.CurrentAppointments < 3 ? "Available" : "Busy" // Threshold of 3 concurrent appointments
+        });
 
-                // Add availability status based on current workload
-                var availableMechanics = mechanics.Select(m => new
-                {
-                    mechanicId = m.UserId,
-                    name = m.Name,
-                    email = m.Email,
-                    phone = m.Phone,
-                    currentAppointments = m.CurrentAppointments,
-                    status = m.CurrentAppointments < 3 ? "Available" : "Busy" // Threshold of 3 concurrent appointments
-                });
+        return Ok(availableMechanics);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error retrieving available mechanics");
+        return StatusCode(500, new { message = "An error occurred while retrieving available mechanics", error = ex.Message });
+    }
+}
 
-                return Ok(availableMechanics);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving available mechanics");
-                return StatusCode(500, new { message = "An error occurred while retrieving available mechanics", error = ex.Message });
-            }
-        }
+
 
         // GET: api/MechanicServices/5
         [HttpGet("{id}")]

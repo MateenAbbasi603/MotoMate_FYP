@@ -62,7 +62,7 @@ namespace fyp_motomate.Controllers
                         message = "Invoice already exists for this order",
                         invoice = existingInvoice,
                         invoiceItems = existingInvoice.InvoiceItems,
-                        paymentMethod = order.PaymentMethod ?? "online",
+                        paymentMethod = order.paymentMethod ?? "online",
                         isExisting = true
                     });
                 }
@@ -115,9 +115,9 @@ namespace fyp_motomate.Controllers
                     TaxAmount = taxAmount,
                     TotalAmount = totalAmount,
                     InvoiceDate = DateTime.Now,
-                    Status = order.PaymentMethod?.ToLower() == "cash" ? "pending_cash" : "issued", // Different status for cash
+                    Status = order.paymentMethod?.ToLower() == "cash" ? "pending_cash" : "issued", // Different status for cash
                     DueDate = DateTime.Now.AddDays(30),
-                    Notes = $"Invoice for Order #{orderId} - Payment Method: {order.PaymentMethod?.ToUpper() ?? "ONLINE"}"
+                    Notes = $"Invoice for Order #{orderId} - Payment Method: {order.paymentMethod?.ToUpper() ?? "ONLINE"}"
                 };
 
                 // Add any additional details if appointment exists
@@ -207,7 +207,7 @@ namespace fyp_motomate.Controllers
                 var notification = new Notification
                 {
                     UserId = order.UserId,
-                    Message = order.PaymentMethod?.ToLower() == "cash"
+                    Message = order.paymentMethod?.ToLower() == "cash"
                         ? $"Invoice #{invoice.InvoiceId} has been generated for your order. Please pay at the workshop."
                         : $"Invoice #{invoice.InvoiceId} has been generated for your order",
                     Status = "unread",
@@ -216,7 +216,7 @@ namespace fyp_motomate.Controllers
                 _context.Notifications.Add(notification);
 
                 // Create notification for admin about cash payment
-                if (order.PaymentMethod?.ToLower() == "cash")
+                if (order.paymentMethod?.ToLower() == "cash")
                 {
                     var adminNotification = new Notification
                     {
@@ -237,7 +237,7 @@ namespace fyp_motomate.Controllers
                     message = "Invoice generated successfully",
                     invoice,
                     invoiceItems,
-                    paymentMethod = order.PaymentMethod ?? "online",
+                    paymentMethod = order.paymentMethod ?? "online",
                     isExisting = false
                 });
             }

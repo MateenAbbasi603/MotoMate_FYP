@@ -64,14 +64,16 @@ import {
   RotateCcw,
   Loader2,
   Calendar,
-  ArrowUpDown
+  ArrowUpDown,
+  Store,
+  Globe,
+  Banknote,
+  Receipt,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import orderApi from '../../../../../services/orderApi';
 import invoiceService from '../../../../../services/invoiceService';
-
-
 
 // Define TypeScript interfaces for our data
 interface Vehicle {
@@ -111,6 +113,7 @@ interface Order {
   service?: Service;
   invoiceStatus?: string;
   invoiceId?: number;
+  OrderType?: string; // Added property for order type
 }
 
 interface CombinedInfo {
@@ -195,6 +198,7 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [orderTypeFilter, setOrderTypeFilter] = useState('all'); // Added order type filter
   const [processingOrder, setProcessingOrder] = useState<number | null>(null);
   const [generatingInvoice, setGeneratingInvoice] = useState<number | null>(null);
   const [transferringService, setTransferringService] = useState<number | null>(null);
@@ -273,6 +277,7 @@ export default function OrdersPage() {
       setLoading(false);
     }
   };
+  
   // Handle sort
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -289,6 +294,14 @@ export default function OrdersPage() {
   const filteredOrders = orders.filter(order => {
     // Status filter
     if (statusFilter !== 'all' && order.status?.toLowerCase() !== statusFilter) {
+      return false;
+    }
+
+    // Order type filter
+    if (orderTypeFilter === 'online' && order.OrderType !== 'Online') {
+      return false;
+    }
+    if (orderTypeFilter === 'walkin' && order.OrderType !== 'Walk-In') {
       return false;
     }
 
@@ -365,6 +378,7 @@ export default function OrdersPage() {
         return order.service || combinedInfo.service || { serviceName: 'Custom Service', serviceId: order.serviceId };
     }
   };
+  
   // Handle Transfer to Service
   const handleTransferToService = async (order: Order) => {
     try {
@@ -486,15 +500,41 @@ export default function OrdersPage() {
               </SelectContent>
             </Select>
           </div>
-          {statusFilter !== 'all' && (
+          
+          {/* New order type filter */}
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-muted/50">
+              <Store className="h-3.5 w-3.5 mr-1" />
+              Order Type
+            </Badge>
+            <Select
+              value={orderTypeFilter}
+              onValueChange={setOrderTypeFilter}
+            >
+              <SelectTrigger className="w-[180px] bg-muted/40">
+                <SelectValue placeholder="Filter by order type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Orders</SelectItem>
+                <SelectItem value="online">Online</SelectItem>
+                <SelectItem value="walkin">Walk-In</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Clear filters button */}
+          {(statusFilter !== 'all' || orderTypeFilter !== 'all') && (
             <Button
               variant="ghost"
               size="sm"
               className="h-10"
-              onClick={() => setStatusFilter('all')}
+              onClick={() => {
+                setStatusFilter('all');
+                setOrderTypeFilter('all');
+              }}
             >
               <RotateCcw className="h-3.5 w-3.5 mr-1" />
-              Clear Filter
+              Clear Filters
             </Button>
           )}
         </div>
@@ -525,13 +565,18 @@ export default function OrdersPage() {
               </Badge>
               {statusFilter !== 'all' && (
                 <Badge className="font-normal">
-                  Filtered by: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+                  Status: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+                </Badge>
+              )}
+              {orderTypeFilter !== 'all' && (
+                <Badge className="font-normal">
+                  Type: {orderTypeFilter.charAt(0).toUpperCase() + orderTypeFilter.slice(1)}
                 </Badge>
               )}
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 flex flex-col">
           {loading ? (
             <div className="space-y-2 p-4">
               {[...Array(5)].map((_, i) => (
@@ -586,9 +631,25 @@ export default function OrdersPage() {
                           <TableCell className="font-medium">
                             <div className="flex flex-col">
                               <span>#{order.orderId}</span>
-                              {order.invoiceStatus && (
-                                <InvoiceStatusBadge status={order.invoiceStatus} />
-                              )}
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {order.OrderType && (
+                                  <Badge className={
+                                    order.OrderType === 'Walk-In' 
+                                      ? "bg-purple-100 text-purple-800 border-purple-200" 
+                                      : "bg-blue-100 text-blue-800 border-blue-200"
+                                  } variant="outline">
+                                    {order.OrderType === 'Walk-In' ? (
+                                      <Store className="h-3 w-3 mr-1" />
+                                    ) : (
+                                      <Globe className="h-3 w-3 mr-1" />
+                                    )}
+                                    {order.OrderType}
+                                  </Badge>
+                                )}
+                                {order.invoiceStatus && (
+                                  <InvoiceStatusBadge status={order.invoiceStatus} />
+                                )}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -655,10 +716,7 @@ export default function OrdersPage() {
                                     <Eye className="mr-2 h-4 w-4" />
                                     View Details
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => router.push(`/admin/orders/${order.orderId}/edit`)}>
-                                    <Pencil className="mr-2 h-4 w-4" />
-                                    Edit Order
-                                  </DropdownMenuItem>
+                                  
                                 </DropdownMenuGroup>
 
                                 <DropdownMenuSeparator />
@@ -722,11 +780,11 @@ export default function OrdersPage() {
                           </div>
                           <h3 className="font-medium text-lg">No orders found</h3>
                           <p className="text-muted-foreground">
-                            {searchTerm || statusFilter !== 'all'
+                            {searchTerm || statusFilter !== 'all' || orderTypeFilter !== 'all'
                               ? 'Try changing your search or filter criteria'
                               : 'Start by creating a new order'}
                           </p>
-                          {(searchTerm || statusFilter !== 'all') && (
+                          {(searchTerm || statusFilter !== 'all' || orderTypeFilter !== 'all') && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -734,6 +792,7 @@ export default function OrdersPage() {
                               onClick={() => {
                                 setSearchTerm('');
                                 setStatusFilter('all');
+                                setOrderTypeFilter('all');
                               }}
                             >
                               <RotateCcw className="mr-2 h-3.5 w-3.5" />
@@ -749,7 +808,7 @@ export default function OrdersPage() {
             </ScrollArea>
           )}
         </CardContent>
-        {/* <CardFooter className="border-t p-4 bg-muted/20">
+        <CardFooter className="border-t p-4 bg-muted/20 flex-shrink-0">
           <div className="flex justify-between items-center w-full text-sm text-muted-foreground">
             <div>
               Showing {filteredOrders.length} of {orders.length} orders
@@ -765,14 +824,8 @@ export default function OrdersPage() {
               </Badge>
             </div>
           </div>
-        </CardFooter> */}
+        </CardFooter>
       </Card>
-
-      {/* <Separator className="my-2" />
-
-      <div className="text-center text-xs text-muted-foreground">
-        Use the actions menu to view details, edit orders, transfer to service, or generate invoices
-      </div> */}
     </div>
   );
 }

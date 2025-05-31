@@ -61,6 +61,7 @@ import { Separator } from '@/components/ui/separator';
 import axios from 'axios';
 import { formatLabel } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { toast } from 'sonner';
 
 interface AppointmentData {
   appointmentId: number;
@@ -102,6 +103,11 @@ export default function MechanicDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [reportFormData, setReportFormData] = useState<any>(null);
+  const [currentAppointment, setCurrentAppointment] = useState<AppointmentData | null>(null);
+  const [currentOrder, setCurrentOrder] = useState<any>(null);
   const router = useRouter();
 
   // Stats for dashboard
@@ -354,6 +360,90 @@ export default function MechanicDashboard() {
     const parts = name.split(' ');
     if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
     return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+  };
+
+  const handleSubmitReport = async () => {
+    try {
+      setIsSubmittingReport(true);
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication token not found. Please log in again.');
+        return;
+      }
+
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+
+      // Find the inspection ID from the order data
+      const inspectionId = currentOrder?.inspection?.inspectionId;
+
+      if (!inspectionId) {
+        toast.error('Inspection ID not found. Cannot submit report.');
+        return;
+      }
+
+      console.log("Submitting report data:", reportFormData);
+
+      // Submit the inspection report update
+      await axios.post(
+        `${API_URL}/api/Inspections/${inspectionId}/report`,
+        reportFormData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Update appointment status to completed - simpler request
+      await axios.put(
+        `${API_URL}/api/Appointments/${currentAppointment?.appointmentId}`,
+        {
+          status: 'completed',
+          notes: reportFormData.notes || "Inspection completed"
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Update local state
+      if (currentAppointment) {
+        setCurrentAppointment({
+          ...currentAppointment,
+          status: 'completed'
+        });
+      }
+
+      if (currentOrder && currentOrder.inspection) {
+        setCurrentOrder({
+          ...currentOrder,
+          inspection: {
+            ...currentOrder.inspection,
+            ...reportFormData,
+            status: 'completed'
+          }
+        });
+      }
+
+      toast.success('Inspection report submitted successfully');
+      setIsReportDialogOpen(false);
+      
+      // Refresh the data to get updated status
+      setTimeout(() => {
+        fetchAppointments();
+      }, 1000);
+      
+    } catch (err: any) {
+      console.error('Failed to submit inspection report:', err);
+      toast.error(err.response?.data?.message || 'Failed to submit report. Please try again.');
+    } finally {
+      setIsSubmittingReport(false);
+    }
   };
 
   return (

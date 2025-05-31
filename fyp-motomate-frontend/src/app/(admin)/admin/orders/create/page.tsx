@@ -1,3 +1,4 @@
+// app/(dashboard)/admin/walk-in/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -62,6 +63,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Badge } from '@/components/ui/badge';
+import WalkInBillModal from '@/components/Admin/WalkInBillModal';
+
 
 // Service type definition
 interface Service {
@@ -109,7 +112,9 @@ const orderFormSchema = z.object({
   includesInspection: z.boolean().default(false),
   totalAmount: z.number().min(0, "Total amount must be positive"),
   inspectionSubCategory: z.string().optional(),
-  mechanicId: z.number().optional(),
+  mechanicId: z.number({
+    required_error: "A mechanic must be assigned for walk-in orders"
+  }), // Mechanic is required
 }).refine((data) => {
   // Must have either a service or inspection (or both)
   return data.serviceId || (data.includesInspection && data.inspectionId);
@@ -164,6 +169,8 @@ export default function CreateWalkInOrderPage() {
   const [mechanics, setMechanics] = useState<Mechanic[]>([]);
   const [loadingMechanics, setLoadingMechanics] = useState(false);
   const [selectedMechanic, setSelectedMechanic] = useState<Mechanic | null>(null);
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [billData, setBillData] = useState<any>(null);
 
   // Form setup
   const orderForm = useForm<z.infer<typeof orderFormSchema>>({
@@ -244,8 +251,6 @@ export default function CreateWalkInOrderPage() {
     setSelectedMechanic(mechanic || null);
     if (mechanic) {
       orderForm.setValue('mechanicId', mechanic.mechanicId);
-    } else {
-      orderForm.setValue('mechanicId', undefined);
     }
   };
 
@@ -305,14 +310,14 @@ export default function CreateWalkInOrderPage() {
   useEffect(() => {
     const servicePrice = selectedService?.price || 0;
     const inspectionPrice = selectedInspection?.price || 0;
-    
+
     let total = 0;
-    
+
     // Add service price if service is selected
     if (selectedService) {
       total += servicePrice;
     }
-    
+
     // Add inspection price if inspection is included and selected
     if (orderForm.watch('includesInspection') && selectedInspection) {
       total += inspectionPrice;
@@ -591,6 +596,12 @@ export default function CreateWalkInOrderPage() {
       return;
     }
 
+    // Add mechanic validation check
+    if (!data.mechanicId) {
+      toast.error("Please select a mechanic for the walk-in order");
+      return;
+    }
+
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
@@ -638,7 +649,10 @@ export default function CreateWalkInOrderPage() {
         }
 
         toast.success(successMessage);
-        router.push(`/admin/orders/${response.data.orderId}`);
+
+        // Set bill data and show modal instead of immediate navigation
+        setBillData(response.data);
+        setShowBillModal(true);
       } else {
         toast.error('Failed to create walk-in order');
       }
@@ -648,6 +662,22 @@ export default function CreateWalkInOrderPage() {
       toast.error(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Add handler for bill modal close
+  const handleBillModalClose = () => {
+    setShowBillModal(false);
+
+    // Navigate based on order type after bill is closed
+    if (billData) {
+      if (!orderForm.watch('includesInspection') && orderForm.watch('serviceId')) {
+        // Service only - go to mechanic services
+        router.push('/admin/mechanic-services');
+      } else {
+        // Inspection or both - go to orders
+        router.push('/admin/orders');
+      }
     }
   };
 
@@ -741,7 +771,7 @@ export default function CreateWalkInOrderPage() {
                                   </SelectContent>
                                 </Select>
                                 <FormDescription>
-                                  {orderForm.watch('includesInspection') 
+                                  {orderForm.watch('includesInspection')
                                     ? "You can select a service, an inspection, or both"
                                     : "Service is required if inspection is not selected"
                                   }
@@ -845,7 +875,7 @@ export default function CreateWalkInOrderPage() {
                           name="mechanicId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Select Available Mechanic (Optional)</FormLabel>
+                              <FormLabel>Select Available Mechanic (Required)</FormLabel>
                               <Select
                                 disabled={loadingMechanics}
                                 value={selectedMechanic ? selectedMechanic.mechanicId.toString() : ""}
@@ -874,15 +904,15 @@ export default function CreateWalkInOrderPage() {
                                       >
                                         {mechanic.name} - {mechanic.status}
                                         {mechanic.status === "Available" ?
-                                          ` (${mechanic.currentAppointments} appointments)` :
-                                          " (Too many appointments)"}
+                                          ` (${mechanic.currentAppointments}/3 appointments)` :
+                                          " (Too many active appointments)"}
                                       </SelectItem>
                                     ))
                                   )}
                                 </SelectContent>
                               </Select>
                               <FormDescription>
-                                You can assign a mechanic now or leave it for later assignment
+                                A mechanic must be assigned for all walk-in orders. Mechanics can have up to 3 active appointments at a time.
                               </FormDescription>
                               <FormMessage />
                             </FormItem>
@@ -906,7 +936,7 @@ export default function CreateWalkInOrderPage() {
                               </div>
                               <div>
                                 <p className="text-sm text-muted-foreground">Current Workload</p>
-                                <p className="text-sm">{selectedMechanic.currentAppointments} appointments</p>
+                                <p className="text-sm">{selectedMechanic.currentAppointments}/3 active appointments</p>
                               </div>
                               <div>
                                 <p className="text-sm text-muted-foreground">Status</p>
@@ -1112,11 +1142,11 @@ export default function CreateWalkInOrderPage() {
                         <span className="font-medium text-blue-800">Walk-In Order</span>
                       </div>
                       <p className="text-sm text-blue-600 mt-1">
-                        {orderForm.watch('includesInspection') && selectedService 
+                        {orderForm.watch('includesInspection') && selectedService
                           ? "Service + Inspection"
                           : orderForm.watch('includesInspection')
-                          ? "Inspection Only"
-                          : "Service Only"
+                            ? "Inspection Only"
+                            : "Service Only"
                         }
                       </p>
                     </div>
@@ -1407,6 +1437,15 @@ export default function CreateWalkInOrderPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Bill Modal */}
+      {showBillModal && billData && (
+        <WalkInBillModal
+          isOpen={showBillModal}
+          onClose={handleBillModalClose}
+          orderData={billData}
+        />
+      )}
     </div>
   );
 }

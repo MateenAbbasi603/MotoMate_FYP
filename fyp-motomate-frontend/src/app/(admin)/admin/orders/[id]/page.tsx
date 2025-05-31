@@ -152,7 +152,6 @@ interface OrderData {
   service?: ServiceData;
   inspection?: InspectionData;
   paymentMethod: string;
-
   additionalServices?: ServiceData[] | { $values?: ServiceData[] };
 }
 
@@ -269,18 +268,17 @@ export default function OrderDetailPage({
   const [appointment, setAppointment] = useState<any>(null);
   const [loadingAppointment, setLoadingAppointment] = useState(false);
   const [isTransferringService, setIsTransferringService] = useState<boolean>(false);
+  const [serviceTransferred, setServiceTransferred] = useState<boolean>(false);
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [invoiceId, setInvoiceId] = useState<number | null>(null);
   const [isDialogMounted, setIsDialogMounted] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
 
 
-
   // Helper function to check if this is an inspection-only order
   const isInspectionOnlyOrder = (): boolean => {
     return Boolean(!order?.service && !order?.serviceId && order?.includesInspection && order?.inspection);
   };
-
 
   const handleProcessCashPayment = async () => {
     if (!order || !invoiceId) return;
@@ -294,8 +292,11 @@ export default function OrderDetailPage({
       }
 
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Payments/process-cash-payment`,
-        { invoiceId },
+        `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Payments/process-safepay`,
+        {
+          invoiceId,
+          transactionId: `CASH_${Date.now()}` // Generate a cash transaction ID
+        },
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -306,14 +307,11 @@ export default function OrderDetailPage({
       if (response.data && response.data.success) {
         toast.success("Cash payment processed successfully");
 
-        // Update the order and invoice status in the UI
+        // Update the order state to reflect payment received
         setOrder({
           ...order,
           invoiceStatus: 'paid'
         });
-
-        // Refresh page data
-        router.refresh();
       } else {
         toast.error(response.data?.message || "Failed to process payment");
       }
@@ -324,6 +322,7 @@ export default function OrderDetailPage({
       setProcessingPayment(false);
     }
   };
+
   const handleGenerateInvoice = async () => {
     if (!order) return;
 
@@ -333,34 +332,31 @@ export default function OrderDetailPage({
 
       if (response.success) {
         toast.success(response.isExisting ? 'Invoice already exists' : 'Invoice generated successfully');
+
+        // Set the invoice ID to trigger the button change
         setInvoiceId(response.invoice.invoiceId);
 
-        // Update the order state with payment method and invoice status
+        // Update the order state with invoice information
         setOrder({
           ...order,
-          paymentMethod: response.paymentMethod || order.paymentMethod || 'online',
+          paymentMethod: order.paymentMethod || 'Cash',
           invoiceStatus: response.invoice.status,
           invoiceId: response.invoice.invoiceId
         });
 
-        // Redirect to the invoice page if not cash payment
-        if (response.paymentMethod !== 'cash') {
+        // Only redirect for online payments
+        if (order.paymentMethod !== 'Cash' && order.paymentMethod !== 'cash') {
           router.push(`/admin/invoices/${response.invoice.invoiceId}`);
         }
       } else {
         toast.error(response.message || 'Failed to generate invoice');
       }
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Error generating invoice:', error);
       const errorMessage = error.response?.data?.message ||
         error.response?.data?.error ||
         'Failed to generate invoice';
       toast.error(errorMessage);
-
-      // Show more detailed error in console for debugging
-      if (error.response?.data?.innerError) {
-        console.error('Inner error:', error.response.data.innerError);
-      }
     } finally {
       setGeneratingInvoice(false);
     }
@@ -368,6 +364,11 @@ export default function OrderDetailPage({
 
   const handleTransferToService = async () => {
     if (!order || !appointment || !appointment.mechanic) {
+      console.error('Transfer validation failed:', {
+        hasOrder: !!order,
+        hasAppointment: !!appointment,
+        hasMechanic: !!appointment?.mechanic
+      });
       toast.error("Cannot transfer: No mechanic assigned to inspection");
       return;
     }
@@ -380,6 +381,8 @@ export default function OrderDetailPage({
         return;
       }
 
+      console.log('Attempting to transfer service for order:', order.orderId);
+
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Orders/${order.orderId}/transfer-to-service`,
         {},
@@ -389,6 +392,8 @@ export default function OrderDetailPage({
           }
         }
       );
+
+      console.log('Transfer response:', response.data);
 
       if (response.data && response.data.success) {
         toast.success("Service successfully transferred to mechanic");
@@ -401,6 +406,9 @@ export default function OrderDetailPage({
           });
         }
 
+        // Mark service as transferred to hide the button
+        setServiceTransferred(true);
+
         // Refresh page data after successful transfer
         router.refresh();
       } else {
@@ -408,11 +416,14 @@ export default function OrderDetailPage({
       }
     } catch (error: any) {
       console.error('Error transferring service:', error);
+      console.error('Error response:', error.response?.data);
       toast.error(error.response?.data?.message || "Failed to transfer service");
     } finally {
       setIsTransferringService(false);
     }
   };
+
+
 
   // Helper function to normalize additionalServices
   const normalizeAdditionalServices = (orderData: OrderData): ServiceData[] => {
@@ -436,121 +447,132 @@ export default function OrderDetailPage({
     return [];
   };
 
-  // Fetch order and services
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!id) return;
+  // Update the useEffect that fetches order data
+useEffect(() => {
+  const fetchData = async () => {
+    if (!id) return;
 
-      try {
-        setLoading(true);
-        setError(null);
+    try {
+      setLoading(true);
+      setError(null);
 
-        // Call both API requests in parallel
-        const [orderData, servicesResponse] = await Promise.all([
-          orderService.getOrderById(id),
-          axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Services`)
-        ]);
+      // Call both API requests in parallel
+      const [orderResponse, servicesResponse] = await Promise.all([
+        axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Orders/${id}`),
+        axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Services`)
+      ]);
 
-        // Process order data
-        if (!orderData) {
-          setError('Order not found');
-          setLoading(false);
-          return;
+      // Process order data from the updated response format
+      const orderData = orderResponse.data.order;
+      const appointmentData = orderResponse.data.appointment;
+
+      if (!orderData) {
+        setError('Order not found');
+        setLoading(false);
+        return;
+      }
+
+      // Initialize order with the data we have
+      let enhancedOrder = {
+        ...orderData,
+        paymentMethod: orderData.paymentMethod || 'online'
+      };
+
+      // Normalize additionalServices
+      const normalizedAdditionalServices = normalizeAdditionalServices(enhancedOrder);
+      enhancedOrder.additionalServices = normalizedAdditionalServices;
+
+      // Set appointment data if it exists
+      if (appointmentData) {
+        console.log('Setting appointment data:', appointmentData);
+        setAppointment(appointmentData);
+      } else {
+        console.log('No appointment data found for this order');
+        setAppointment(null);
+      }
+
+      // If the order details don't include user or vehicle data, fetch it separately
+      if ((!enhancedOrder.user || !enhancedOrder.vehicle) && orderData.userId && orderData.vehicleId) {
+        try {
+          const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+          const combinedResponse = await axios.get(
+            `${API_URL}/api/Detail/combined-details?userId=${orderData.userId}&vehicleId=${orderData.vehicleId}${orderData.serviceId ? `&serviceId=${orderData.serviceId}` : ''}`
+          );
+
+          // Update order with combined details
+          enhancedOrder = {
+            ...enhancedOrder,
+            user: combinedResponse.data.user || enhancedOrder.user,
+            vehicle: combinedResponse.data.vehicle || enhancedOrder.vehicle,
+            service: combinedResponse.data.service || enhancedOrder.service
+          };
+        } catch (combinedErr) {
+          console.error('Failed to fetch combined details:', combinedErr);
         }
+      }
 
-        // Initialize order with the data we have
-        let enhancedOrder = {
-          ...orderData,
-          paymentMethod: orderData.paymentMethod || 'online'
-        };
+      // If the order includes an inspection but doesn't have price info, fetch the inspection service details
+      if (enhancedOrder.includesInspection && enhancedOrder.inspection && !enhancedOrder.inspection.price) {
+        try {
+          const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+          const inspectionServiceId = enhancedOrder.inspection.serviceId || orderData.inspection?.serviceId;
 
-
-        // Normalize additionalServices
-        const normalizedAdditionalServices = normalizeAdditionalServices(enhancedOrder);
-        enhancedOrder.additionalServices = normalizedAdditionalServices;
-
-        // If the order details don't include user or vehicle data, fetch it separately
-        if ((!enhancedOrder.user || !enhancedOrder.vehicle) && orderData.userId && orderData.vehicleId) {
-          try {
-            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-            const combinedResponse = await axios.get(
-              `${API_URL}/api/Detail/combined-details?userId=${orderData.userId}&vehicleId=${orderData.vehicleId}${orderData.serviceId ? `&serviceId=${orderData.serviceId}` : ''}`
+          if (inspectionServiceId) {
+            const inspectionServiceResponse = await axios.get(
+              `${API_URL}/api/Services/${inspectionServiceId}`
             );
 
-            // Update order with combined details
+            // Update the inspection with the service price
             enhancedOrder = {
               ...enhancedOrder,
-              user: combinedResponse.data.user || enhancedOrder.user,
-              vehicle: combinedResponse.data.vehicle || enhancedOrder.vehicle,
-              service: combinedResponse.data.service || enhancedOrder.service
+              inspection: {
+                ...enhancedOrder.inspection,
+                price: inspectionServiceResponse.data.price
+              }
             };
-          } catch (combinedErr) {
-            console.error('Failed to fetch combined details:', combinedErr);
           }
+        } catch (serviceErr) {
+          console.error('Failed to fetch inspection service details:', serviceErr);
         }
-
-        // If the order includes an inspection but doesn't have price info, fetch the inspection service details
-        if (enhancedOrder.includesInspection && enhancedOrder.inspection && !enhancedOrder.inspection.price) {
-          try {
-            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-            const inspectionServiceId = enhancedOrder.inspection.serviceId || orderData.inspection?.serviceId;
-
-            if (inspectionServiceId) {
-              const inspectionServiceResponse = await axios.get(
-                `${API_URL}/api/Services/${inspectionServiceId}`
-              );
-
-              // Update the inspection with the service price
-              enhancedOrder = {
-                ...enhancedOrder,
-                inspection: {
-                  ...enhancedOrder.inspection,
-                  price: inspectionServiceResponse.data.price
-                }
-              };
-            }
-          } catch (serviceErr) {
-            console.error('Failed to fetch inspection service details:', serviceErr);
-          }
-        }
-
-        setOrder(enhancedOrder);
-
-        // Fetch appointment data if the order exists
-        if (enhancedOrder.orderId) {
-          fetchAppointmentData(enhancedOrder.orderId);
-        }
-
-        // Process services data
-        let servicesData = [];
-        if (servicesResponse.data && servicesResponse.data.$values) {
-          // If data is in $values array format
-          servicesData = servicesResponse.data.$values;
-        } else if (Array.isArray(servicesResponse.data)) {
-          // If data is directly an array
-          servicesData = servicesResponse.data;
-        } else {
-          console.error("Invalid services data format:", servicesResponse.data);
-          toast.error("Failed to load services data");
-        }
-
-        // Filter out inspection services
-        const nonInspectionServices = servicesData.filter(
-          (service: ServiceData) => service.category.toLowerCase() !== 'inspection'
-        );
-
-        setServices(nonInspectionServices);
-      } catch (err) {
-        console.error(`Failed to fetch order ${id} or services:`, err);
-        setError('Failed to load order details. Please try again.');
-        setOrder(null);
-      } finally {
-        setLoading(false);
       }
-    };
 
-    fetchData();
-  }, [id]);
+      // Set invoiceId if it exists in the order
+      if (enhancedOrder.invoiceId) {
+        setInvoiceId(enhancedOrder.invoiceId);
+      }
+
+      setOrder(enhancedOrder);
+
+      // Process services data
+      let servicesData = [];
+      if (servicesResponse.data && servicesResponse.data.$values) {
+        servicesData = servicesResponse.data.$values;
+      } else if (Array.isArray(servicesResponse.data)) {
+        servicesData = servicesResponse.data;
+      } else {
+        console.error("Invalid services data format:", servicesResponse.data);
+        toast.error("Failed to load services data");
+      }
+
+      // Filter out inspection services
+      const nonInspectionServices = servicesData.filter(
+        (service: ServiceData) => service.category.toLowerCase() !== 'inspection'
+      );
+
+      setServices(nonInspectionServices);
+    } catch (err) {
+      console.error(`Failed to fetch order ${id} or services:`, err);
+      setError('Failed to load order details. Please try again.');
+      setOrder(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchData();
+}, [id]);
+
+
 
   // Format dates
   const formatDate = (dateString: string | undefined): string => {
@@ -573,20 +595,6 @@ export default function OrderDetailPage({
     }
   };
 
-  // Handle status update
-  const handleStatusUpdate = async (newStatus: string) => {
-    if (!order) return;
-
-    try {
-      await orderService.updateOrder(order.orderId, { status: newStatus });
-      setOrder({ ...order, status: newStatus });
-      toast.success(`Order status updated to ${newStatus}`);
-    } catch (err) {
-      console.error('Failed to update order status:', err);
-      toast.error('Failed to update order status');
-    }
-  };
-
   // Calculate total amount including inspection fee
   const calculateTotalAmount = () => {
     const servicePrice = order?.service?.price || 0;
@@ -600,8 +608,14 @@ export default function OrderDetailPage({
       );
     }
 
-    return servicePrice + inspectionPrice + additionalServicesTotal;
+    const subtotal = servicePrice + inspectionPrice + additionalServicesTotal;
+    // Add 18% SST to the subtotal
+    const totalWithTax = subtotal * 1.18;
+
+    return totalWithTax;
   };
+
+
 
   // Handle adding a service to the order
   const handleAddService = useCallback(async () => {
@@ -614,7 +628,6 @@ export default function OrderDetailPage({
       setIsAddingService(true);
       const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
 
-      // Get the authentication token from localStorage
       const token = localStorage.getItem('token');
       if (!token) {
         toast.error('Authentication token not found. Please log in again.');
@@ -629,83 +642,59 @@ export default function OrderDetailPage({
         },
         {
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
           }
         }
       );
 
-      // Fetch the full order details after adding the service to ensure we have all data
-      const updatedOrderData = await orderService.getOrderById(id);
+      if (response.data && response.data.addedService) {
+        // Update the order state with the new service
+        const updatedAdditionalServices = [
+          ...(Array.isArray(order?.additionalServices) ? order.additionalServices : []),
+          response.data.addedService
+        ];
 
-      if (!updatedOrderData) {
-        toast.error('Failed to retrieve updated order information');
-        return;
+        setOrder(prevOrder => ({
+          ...prevOrder!,
+          additionalServices: updatedAdditionalServices,
+          status: response.data.updatedOrder.status,
+          totalAmount: response.data.updatedOrder.totalAmount,
+          notes: response.data.updatedOrder.notes
+        }));
+
+        // Reset form
+        setSelectedServiceId('');
+        setServiceNotes('');
+        setIsDialogOpen(false);
+
+        toast.success('Service added to order successfully');
+      } else {
+        toast.error('Failed to add service to order');
       }
-
-      // Make sure we have the complete user, vehicle, and services data
-      let enhancedOrder = { ...updatedOrderData };
-
-      // Normalize additionalServices
-      enhancedOrder.additionalServices = normalizeAdditionalServices(enhancedOrder);
-
-      if (updatedOrderData.userId && updatedOrderData.vehicleId) {
-        try {
-          const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-          const combinedResponse = await axios.get(
-            `${API_URL}/api/Detail/combined-details?userId=${updatedOrderData.userId}&vehicleId=${updatedOrderData.vehicleId}${updatedOrderData.serviceId ? `&serviceId=${updatedOrderData.serviceId}` : ''}`
-          );
-
-          // Update order with combined details
-          enhancedOrder = {
-            ...enhancedOrder,
-            user: combinedResponse.data.user || enhancedOrder.user,
-            vehicle: combinedResponse.data.vehicle || enhancedOrder.vehicle,
-            service: combinedResponse.data.service || enhancedOrder.service
-          };
-        } catch (combinedErr) {
-          console.error('Failed to fetch combined details:', combinedErr);
-        }
-      }
-
-      // If there's a newly added service from the response, make sure it's in the additionalServices
-      if (response.data.addedService) {
-        let addedService = response.data.addedService;
-
-        // Remove any $id property if present (just to be safe)
-        if (addedService.$id) {
-          const { $id, ...serviceData } = addedService;
-          addedService = serviceData;
-        }
-
-        const additionalServices = Array.isArray(enhancedOrder.additionalServices)
-          ? enhancedOrder.additionalServices
-          : [];
-
-        // Check if this service already exists in the additionalServices array
-        const existingIndex = additionalServices.findIndex(
-          (s: any) => s.serviceId === addedService.serviceId
-        );
-
-        if (existingIndex === -1) {
-          // Add it if it doesn't already exist
-          enhancedOrder.additionalServices = [...additionalServices, addedService];
-        }
-      }
-
-      setOrder(enhancedOrder);
-
-      // Reset form
-      setSelectedServiceId('');
-      setServiceNotes('');
-      setIsDialogOpen(false);
-
-      toast.success('Service added to order successfully');
     } catch (err: any) {
       console.error('Failed to add service to order:', err);
-      if (err.response?.status === 401) {
+
+      // Handle specific validation errors
+      if (err.response?.status === 400) {
+        const errorMessage = err.response.data?.message;
+        if (errorMessage?.includes('invoice has already been generated')) {
+          toast.error('Cannot add services: Invoice already generated');
+          // Update the order state to reflect invoice status
+          setOrder(prevOrder => ({
+            ...prevOrder!,
+            invoiceStatus: err.response.data.invoiceStatus || 'issued',
+            invoiceId: err.response.data.invoiceId
+          }));
+        } else {
+          toast.error(errorMessage || 'Cannot add this service to the order');
+        }
+      } else if (err.response?.status === 401) {
         toast.error('You are not authorized to perform this action. Please log in again.');
+      } else if (err.response?.status === 404) {
+        toast.error('Order or service not found');
       } else {
-        toast.error(err.response?.data?.message || 'Failed to add service to order');
+        toast.error('Failed to add service to order');
       }
     } finally {
       setIsAddingService(false);
@@ -725,7 +714,7 @@ export default function OrderDetailPage({
     return [];
   };
 
-  const fetchAppointmentData = async (orderId: string) => {
+  const fetchAppointmentData = async (orderId: number) => {
     try {
       setLoadingAppointment(true);
       const token = localStorage.getItem('token');
@@ -733,22 +722,30 @@ export default function OrderDetailPage({
         console.error('No authentication token found');
         return;
       }
-
+  
+      console.log(`Fetching appointment data for order ${orderId}`);
+  
       const response = await axios.get(
         `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177'}/api/Orders/${orderId}/appointment`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
       );
-
+  
       if (response.data) {
+        console.log('Appointment data received:', response.data);
         setAppointment(response.data);
       }
     } catch (error: any) {
       console.error('Error fetching appointment data:', error);
-      // If we get a 404, it means there's no appointment yet - this is normal
+      // Only show error toast for non-404 errors
       if (error.response && error.response.status !== 404) {
-        toast.error('Failed to load appointment data');
+        console.error('Failed to load appointment data');
+      }
+      // For 404, set appointment to null but don't show error
+      if (error.response && error.response.status === 404) {
+        console.log('No appointment found for this order');
+        setAppointment(null);
       }
     } finally {
       setLoadingAppointment(false);
@@ -925,6 +922,9 @@ export default function OrderDetailPage({
       return !additionalServices.some(addedService => addedService.serviceId === service.serviceId);
     });
 
+    // Check if invoice exists
+    const hasInvoice = Boolean(order?.invoiceId && order?.invoiceStatus);
+
     return (
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
         setIsDialogOpen(open);
@@ -934,7 +934,12 @@ export default function OrderDetailPage({
         }
       }}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-2 shadow-sm">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 shadow-sm"
+            disabled={hasInvoice}
+          >
             <Plus className="h-4 w-4" />
             Add Service
           </Button>
@@ -943,69 +948,99 @@ export default function OrderDetailPage({
           <DialogHeader>
             <DialogTitle>Add Additional Service</DialogTitle>
             <DialogDescription>
-              Select a service to add to this order
+              {hasInvoice
+                ? "Cannot add services to this order. An invoice has already been generated."
+                : "Select a service to add to this order"
+              }
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="service">Service</Label>
-              <Select
-                value={selectedServiceId}
-                onValueChange={setSelectedServiceId}
-              >
-                <SelectTrigger id="service" className="w-full">
-                  <SelectValue placeholder="Select a service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableServices.length > 0 ? (
-                    availableServices.map((service) => (
-                      <SelectItem key={service.serviceId} value={service.serviceId.toString()}>
-                        <div className="flex items-center justify-between w-full">
-                          <span>{service.serviceName}</span>
-                          <Badge variant="outline" className="ml-2 bg-muted/30">
-                            PKR {service.price?.toFixed(2) || '0.00'}
-                          </Badge>
-                        </div>
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="no-services" disabled>
-                      No additional services available
-                    </SelectItem>
+
+          {hasInvoice ? (
+            <div className="py-4">
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Invoice Already Generated</AlertTitle>
+                <AlertDescription>
+                  You cannot add additional services to this order because an invoice has already been generated.
+                  {order?.invoiceId && (
+                    <div className="mt-2">
+                      <Button variant="link" asChild className="p-0 h-auto">
+                        <Link href={`/admin/invoices/${order.invoiceId}`}>
+                          View Invoice #{order.invoiceId} →
+                        </Link>
+                      </Button>
+                    </div>
                   )}
-                </SelectContent>
-              </Select>
+                </AlertDescription>
+              </Alert>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
-              <Textarea
-                id="notes"
-                value={serviceNotes}
-                onChange={(e) => setServiceNotes(e.target.value)}
-                placeholder="Add any specific requirements or details"
-                className="min-h-24"
-              />
+          ) : (
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="service">Service</Label>
+                <Select
+                  value={selectedServiceId}
+                  onValueChange={setSelectedServiceId}
+                >
+                  <SelectTrigger id="service" className="w-full">
+                    <SelectValue placeholder="Select a service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableServices.length > 0 ? (
+                      availableServices.map((service) => (
+                        <SelectItem key={service.serviceId} value={service.serviceId.toString()}>
+                          <div className="flex items-center justify-between w-full">
+                            <span>{service.serviceName}</span>
+                            <Badge variant="outline" className="ml-2 bg-muted/30">
+                              PKR {service.price?.toFixed(2) || '0.00'}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-services" disabled>
+                        No additional services available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Textarea
+                  id="notes"
+                  value={serviceNotes}
+                  onChange={(e) => setServiceNotes(e.target.value)}
+                  placeholder="Add any specific requirements or details"
+                  className="min-h-24"
+                />
+              </div>
             </div>
-          </div>
+          )}
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-            <Button
-              onClick={handleAddService}
-              disabled={isAddingService || !selectedServiceId || availableServices.length === 0}
-              className="gap-2"
-            >
-              {isAddingService ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Adding...
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4" />
-                  Add Service
-                </>
-              )}
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              {hasInvoice ? 'Close' : 'Cancel'}
             </Button>
+            {!hasInvoice && (
+              <Button
+                onClick={handleAddService}
+                disabled={isAddingService || !selectedServiceId || availableServices.length === 0}
+                className="gap-2"
+              >
+                {isAddingService ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Add Service
+                  </>
+                )}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1102,8 +1137,6 @@ export default function OrderDetailPage({
                   </div>
                   <div className="flex items-center gap-2">
                     <AddServiceDialog />
-
-
                   </div>
                 </div>
               </CardHeader>
@@ -1597,18 +1630,32 @@ export default function OrderDetailPage({
                             </div>
                           )}
 
-                          <div className="flex justify-between items-center pt-3 font-semibold">
-                            <span className="text-lg">Total Amount</span>
-                            <span className="text-lg text-primary">PKR {order.totalAmount?.toFixed(2) || calculateTotalAmount().toFixed(2)}</span>
+                          {/* Calculate subtotal */}
+                          {(() => {
+                            const servicePrice = order?.service?.price || 0;
+                            const inspectionPrice = order?.includesInspection ? order.inspection?.price || 0 : 0;
+                            const additionalServicesPrice = getAdditionalServices().reduce((sum, service) => sum + (service.price || 0), 0);
+                            const subtotal = servicePrice + inspectionPrice + additionalServicesPrice;
+                            const taxAmount = subtotal * 0.18;
+                            const totalWithTax = subtotal + taxAmount;
 
-                          </div>
-                          <div className="flex justify-between items-center pt-3 font-semibold">
-                            <span className="text-lg"></span>
-
-                            <Badge>Exclusive of 18% SST</Badge>
-
-                          </div>
-
+                            return (
+                              <>
+                                <div className="flex justify-between items-center pt-3 pb-3 border-b">
+                                  <span className="font-medium">Subtotal</span>
+                                  <span className="font-medium">PKR {subtotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-3 border-b">
+                                  <span>SST (18%)</span>
+                                  <span>PKR {taxAmount.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between items-center pt-3 font-semibold">
+                                  <span className="text-lg">Total Amount</span>
+                                  <span className="text-lg text-primary">PKR {totalWithTax.toFixed(2)}</span>
+                                </div>
+                              </>
+                            );
+                          })()}
 
                           {/* Invoice status if any */}
                           {order.invoiceStatus && (
@@ -1930,40 +1977,84 @@ export default function OrderDetailPage({
 
                 <Separator />
 
-                {/* Quick actions */}
-                <div>
-                  <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-                    <ArrowRight className="h-4 w-4 text-primary" />
-                    Quick Actions
-                  </h3>
-                  <div className="space-y-2">
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start shadow-sm"
-                      asChild
-                    >
-                      <Link href={`/admin/users/${order.user?.userId}`}>
-                        <User className="mr-2 h-4 w-4" />
-                        View Customer Profile
-                      </Link>
-                    </Button>
+                {/* Transfer to Service button - Enhanced logic with detailed debugging */}
+                {(() => {
+                  const showTransferButton = () => {
+                    // Enhanced debugging
+                    const debugInfo = {
+                      isInspectionOnlyOrder: isInspectionOnlyOrder(),
+                      orderServiceId: order?.serviceId,
+                      orderIncludesInspection: order?.includesInspection,
+                      inspectionExists: !!order?.inspection,
+                      inspectionStatus: order?.inspection?.status,
+                      appointmentExists: !!appointment,
+                      mechanicExists: !!appointment?.mechanic,
+                      mechanicId: appointment?.mechanic?.userId,
+                      orderStatus: order?.status,
+                      additionalServices: getAdditionalServices(),
+                      hasNonInspectionAdditionalServices: getAdditionalServices().some(
+                        service => service.category.toLowerCase() !== 'inspection'
+                      ),
+                      serviceTransferred: serviceTransferred,
+                      hasInvoice: !!(order?.invoiceId && order?.invoiceStatus)
+                    };
 
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start shadow-sm"
-                      asChild
-                    >
-                      <Link href={`/admin/orders/create?userId=${order.user?.userId}`}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create New Order
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
+                    console.log('Transfer button debug info:', debugInfo);
 
-                {/* Key actions based on order state - Hide transfer for inspection-only orders */}
-                {!isInspectionOnlyOrder() && appointment && appointment.mechanic && order.service && order.serviceId &&
-                  (!order.invoiceStatus || order.invoiceStatus.toLowerCase() !== 'paid') && (
+                    // Don't show if invoice is generated
+                    if (debugInfo.hasInvoice) {
+                      console.log('Transfer button hidden: Invoice already generated');
+                      return false;
+                    }
+
+                    // Don't show if already transferred
+                    if (serviceTransferred) {
+                      console.log('Transfer button hidden: Service already transferred');
+                      return false;
+                    }
+
+                    // Don't show if no appointment or mechanic
+                    if (!debugInfo.appointmentExists || !debugInfo.mechanicExists) {
+                      console.log('Transfer button hidden: No appointment or mechanic assigned');
+                      return false;
+                    }
+
+                    // Don't show if inspection not completed
+                    if (debugInfo.inspectionStatus?.toLowerCase() !== 'completed') {
+                      console.log('Transfer button hidden: Inspection not completed');
+                      return false;
+                    }
+
+                    // Don't show if order already completed
+                    if (debugInfo.orderStatus === 'completed') {
+                      console.log('Transfer button hidden: Order already completed');
+                      return false;
+                    }
+
+                    // FOR INSPECTION-ONLY ORDERS
+                    if (debugInfo.isInspectionOnlyOrder) {
+                      const hasServicesToTransfer = debugInfo.hasNonInspectionAdditionalServices;
+                      console.log('Inspection-only order - has services to transfer:', hasServicesToTransfer);
+                      return hasServicesToTransfer;
+                    }
+
+                    // FOR REGULAR ORDERS (with main service)
+                    if (!debugInfo.isInspectionOnlyOrder &&
+                      debugInfo.orderServiceId &&
+                      debugInfo.orderIncludesInspection &&
+                      debugInfo.inspectionExists) {
+                      console.log('Regular order with main service and inspection - showing transfer button');
+                      return true;
+                    }
+
+                    console.log('Transfer button hidden: No matching conditions');
+                    return false;
+                  };
+
+                  const shouldShow = showTransferButton();
+                  console.log('Final transfer button decision:', shouldShow);
+
+                  return shouldShow && (
                     <div className="pt-4 border-t space-y-3">
                       <h3 className="text-sm font-medium flex items-center gap-2">
                         <Wrench className="h-4 w-4 text-primary" />
@@ -1988,46 +2079,14 @@ export default function OrderDetailPage({
                         )}
                       </Button>
                       <p className="text-xs text-muted-foreground">
-                        Assign the mechanic from inspection to perform the service work
+                        Transfer the mechanic from inspection to perform the service work
                       </p>
                     </div>
-                  )}
+                  );
+                })()}
 
 
-
-                {/* Invoice generation section
-                {order && order.status.toLowerCase() === 'completed' && (
-                  <div className="pt-4 border-t space-y-3">
-                    <h3 className="text-sm font-medium flex items-center gap-2">
-                      <Receipt className="h-4 w-4 text-primary" />
-                      Invoice Management
-                    </h3>
-                    <Button
-                      className="w-full shadow-sm"
-                      variant="default"
-                      onClick={handleGenerateInvoice}
-                      disabled={generatingInvoice}
-                    >
-                      {generatingInvoice ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <FileText className="mr-2 h-4 w-4" />
-                          {invoiceId ? 'View Invoice' : 'Generate Invoice'}
-                        </>
-                      )}
-                    </Button>
-                    <p className="text-xs text-muted-foreground">
-                      {invoiceId ? 'View the generated invoice' : 'Create a detailed invoice from this order'}
-                    </p>
-                  </div>
-                )} */}
-
-
-                {/* Invoice generation and payment handling section */}
+                {/* Invoice Management Section */}
                 {order && order.status.toLowerCase() === 'completed' && (
                   <div className="pt-4 border-t space-y-3">
                     <h3 className="text-sm font-medium flex items-center gap-2">
@@ -2035,110 +2094,87 @@ export default function OrderDetailPage({
                       Invoice Management
                     </h3>
 
-                    {/* Show Generate Invoice or View Invoice button */}
-                    <Button
-                      className="w-full shadow-sm"
-                      variant="default"
-                      onClick={handleGenerateInvoice}
-                      disabled={generatingInvoice}
-                    >
-                      {generatingInvoice ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <FileText className="mr-2 h-4 w-4" />
-                          {invoiceId ? 'View Invoice' : 'Generate Invoice'}
-                        </>
-                      )}
-                    </Button>
-
-                    {/* Show Receive Payment button for cash invoices - modified condition */}
-                    {invoiceId &&
-                      ((order.paymentMethod && order.paymentMethod === 'cash') ||
-                        (order.invoiceStatus &&
-                          (order.invoiceStatus === 'pending_cash' || order.invoiceStatus === 'pending'))) && (
-                        <Button
-                          className="w-full mt-2 shadow-sm"
-                          variant="outline"
-                          onClick={handleProcessCashPayment}
-                          disabled={processingPayment}
-                        >
-                          {processingPayment ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Processing...
-                            </>
-                          ) : (
-                            <>
-                              <Banknote className="mr-2 h-4 w-4 text-green-600" />
-                              Receive Cash Payment
-                            </>
-                          )}
-                        </Button>
-                      )}
+                    {/* Show Generate Invoice button when no invoice exists */}
+                    {!invoiceId ? (
+                      <Button
+                        className="w-full shadow-sm"
+                        variant="default"
+                        onClick={handleGenerateInvoice}
+                        disabled={generatingInvoice}
+                      >
+                        {generatingInvoice ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="mr-2 h-4 w-4" />
+                            Generate Invoice
+                          </>
+                        )}
+                      </Button>
+                    ) : (
+                      // Show appropriate button based on payment method and status
+                      <>
+                        {order.paymentMethod?.toLowerCase() === 'cash' && order.invoiceStatus !== 'paid' ? (
+                          // Show Receive Cash Payment button for unpaid cash orders
+                          <Button
+                            className="w-full shadow-sm"
+                            variant="default"
+                            onClick={handleProcessCashPayment}
+                            disabled={processingPayment}
+                          >
+                            {processingPayment ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <Banknote className="mr-2 h-4 w-4 text-green-600" />
+                                Receive Cash Payment
+                              </>
+                            )}
+                          </Button>
+                        ) : order.invoiceStatus === 'paid' ? (
+                          // Show status for paid invoices
+                          <Button
+                            className="w-full shadow-sm"
+                            variant="outline"
+                            disabled
+                          >
+                            <CheckCheck className="mr-2 h-4 w-4 text-green-600" />
+                            Payment Received
+                          </Button>
+                        ) : (
+                          // Show View Invoice button for online payments
+                          <Button
+                            className="w-full shadow-sm"
+                            variant="outline"
+                            asChild
+                          >
+                            <Link href={`/admin/invoices/${invoiceId}`}>
+                              <FileText className="mr-2 h-4 w-4" />
+                              View Invoice
+                            </Link>
+                          </Button>
+                        )}
+                      </>
+                    )}
 
                     <p className="text-xs text-muted-foreground">
-                      {invoiceId
-                        ? ((order.paymentMethod === 'cash' || order.invoiceStatus === 'pending_cash')
-                          ? 'View the invoice or process cash payment'
-                          : 'View the generated invoice')
-                        : 'Create a detailed invoice from this order'
+                      {!invoiceId
+                        ? 'Create a detailed invoice from this order'
+                        : order.paymentMethod?.toLowerCase() === 'cash' && order.invoiceStatus !== 'paid'
+                          ? 'Click when cash payment is received from customer'
+                          : order.invoiceStatus === 'paid'
+                            ? 'Payment has been successfully processed'
+                            : 'View the generated invoice details'
                       }
                     </p>
                   </div>
                 )}
-                {/* Status update */}
-                <div className="pt-4 border-t space-y-3">
-                  <h3 className="text-sm font-medium flex items-center gap-2">
-                    <BadgeCheck className="h-4 w-4 text-primary" />
-                    Update Status
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => handleStatusUpdate('in progress')}
-                      disabled={order.status === 'in progress'}
-                      className="shadow-sm"
-                      variant={order.status === 'in progress' ? 'outline' : 'secondary'}
-                    >
-                      <Activity className="mr-1.5 h-3.5 w-3.5" />
-                      In Progress
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleStatusUpdate('completed')}
-                      disabled={order.status === 'completed'}
-                      variant={order.status === 'completed' ? 'outline' : 'default'}
-                      className="shadow-sm"
-                    >
-                      <CircleCheck className="mr-1.5 h-3.5 w-3.5" />
-                      Completed
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleStatusUpdate('pending')}
-                      disabled={order.status === 'pending'}
-                      variant={order.status === 'pending' ? 'outline' : 'secondary'}
-                      className="shadow-sm"
-                    >
-                      <CircleDashed className="mr-1.5 h-3.5 w-3.5" />
-                      Pending
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleStatusUpdate('cancelled')}
-                      disabled={order.status === 'cancelled'}
-                      variant={order.status === 'cancelled' ? 'outline' : 'destructive'}
-                      className="shadow-sm"
-                    >
-                      <XCircle className="mr-1.5 h-3.5 w-3.5" />
-                      Cancelled
-                    </Button>
-                  </div>
-                </div>
 
                 {/* Order timeline */}
                 <div className="pt-4 border-t space-y-3">
@@ -2232,8 +2268,6 @@ export default function OrderDetailPage({
                 </div>
               </CardContent>
             </Card>
-
-            {/* Additional info cards can be added here */}
           </div>
         </div>
       ) : (

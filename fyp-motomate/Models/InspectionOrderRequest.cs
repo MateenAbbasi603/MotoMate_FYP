@@ -24,5 +24,7 @@ namespace fyp_motomate.Models
     public string TimeSlot { get; set; }
 
     public string Notes { get; set; }
+
+    public string paymentMethod { get; set; }
 }
 }
