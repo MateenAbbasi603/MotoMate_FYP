@@ -74,106 +74,6 @@ import { toast } from 'sonner';
 import authService from '../../../../../../../services/authService';
 import { formatLabel, cn } from '@/lib/utils';
 
-interface AppointmentData {
-  appointmentId: number;
-  orderId: number;
-  appointmentDate: string;
-  timeSlot: string;
-  status: string;
-  notes: string;
-  mechanicId: number;
-  serviceId: number | null;
-  user: {
-    userId: number;
-    name: string;
-    email: string;
-    phone: string;
-    address?: string;
-  };
-  vehicle: {
-    vehicleId: number;
-    make: string;
-    model: string;
-    year: number;
-    licensePlate: string;
-  };
-  service: {
-    serviceId: number;
-    serviceName: string;
-    price: number;
-    description: string;
-    category: string;
-    subCategory?: string;
-  } | null;
-}
-
-interface OrderData {
-  orderId: number;
-  userId: number;
-  vehicleId?: number;
-  status: string;
-  orderDate: string;
-  totalAmount: number;
-  notes?: string;
-  includesInspection: boolean;
-  user: {
-    userId: number;
-    name: string;
-    email: string;
-    phone: string;
-    address?: string;
-  };
-  vehicle: {
-    vehicleId: number;
-    make: string;
-    model: string;
-    year: number;
-    licensePlate: string;
-  };
-  service?: {
-    serviceId: number;
-    serviceName: string;
-    price: number;
-    description: string;
-    category: string;
-    subCategory?: string;
-  };
-  inspection?: {
-    inspectionId: number;
-    scheduledDate: string;
-    status: string;
-    timeSlot: string;
-    bodyCondition: string;
-    engineCondition: string;
-    electricalCondition: string;
-    tireCondition: string;
-    brakeCondition: string;
-    transmissionCondition?: string;
-    notes?: string;
-    price?: number;
-    serviceId?: number;
-  };
-  additionalServices?: Array<{
-    serviceId: number;
-    serviceName: string;
-    price: number;
-    description: string;
-    category: string;
-    subCategory?: string;
-  }>;
-}
-
-interface InspectionReportFormData {
-  bodyCondition: string;
-  engineCondition: string;
-  electricalCondition: string;
-  tireCondition: string;
-  brakeCondition: string;
-  transmissionCondition: string;
-  notes: string;
-  mechanicId: number
-}
-
 const conditionOptions = [
   { value: 'Excellent', label: 'Excellent', color: 'text-green-600', bg: 'bg-green-100' },
   { value: 'Good', label: 'Good', color: 'text-blue-600', bg: 'bg-blue-100' },
@@ -196,15 +96,15 @@ export default function MechanicAppointmentDetail({
   const resolvedParams = use(params);
   const id = resolvedParams.id;
 
-  const [appointment, setAppointment] = useState<AppointmentData | null>(null);
-  const [order, setOrder] = useState<OrderData | any>(null);
+  const [appointment, setAppointment] = useState<any | null>(null);
+  const [order, setOrder] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [reportFormData, setReportFormData] = useState<InspectionReportFormData>({
+  const [reportFormData, setReportFormData] = useState({
     bodyCondition: '',
     engineCondition: '',
     electricalCondition: '',
@@ -247,16 +147,21 @@ export default function MechanicAppointmentDetail({
       );
       console.log("Appointment data:", appointmentResponse.data);
 
-      if (appointmentResponse.data) {
-        setAppointment(appointmentResponse.data);
+      // Handle the nested response structure
+      const appointmentData = appointmentResponse.data && appointmentResponse.data.$id
+        ? appointmentResponse.data.appointment || appointmentResponse.data
+        : appointmentResponse.data;
+
+      if (appointmentData) {
+        setAppointment(appointmentData);
       }
 
       const user = await authService.getCurrentUser();
 
       // Fetch order details if orderId is available
-      if (appointmentResponse.data && appointmentResponse.data.orderId) {
+      if (appointmentData && appointmentData.orderId) {
         const orderResponse = await axios.get(
-          `${API_URL}/api/Orders/${appointmentResponse.data.orderId}`,
+          `${API_URL}/api/Orders/${appointmentData.orderId}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -266,19 +171,24 @@ export default function MechanicAppointmentDetail({
 
         console.log("Order data:", orderResponse.data);
 
-        if (orderResponse.data) {
-          setOrder(orderResponse.data);
+        // Handle the nested response structure
+        const orderData = orderResponse.data && orderResponse.data.$id
+          ? orderResponse.data.order || orderResponse.data
+          : orderResponse.data;
+
+        if (orderData) {
+          setOrder(orderData);
 
           // Initialize report form data if inspection exists
-          if (orderResponse.data.inspection) {
+          if (orderData.inspection) {
             setReportFormData({
-              bodyCondition: orderResponse.data.inspection.bodyCondition || '',
-              engineCondition: orderResponse.data.inspection.engineCondition || '',
-              electricalCondition: orderResponse.data.inspection.electricalCondition || '',
-              tireCondition: orderResponse.data.inspection.tireCondition || '',
-              brakeCondition: orderResponse.data.inspection.brakeCondition || '',
-              transmissionCondition: orderResponse.data.inspection.transmissionCondition || '',
-              notes: orderResponse.data.inspection.notes || '',
+              bodyCondition: orderData.inspection.bodyCondition || '',
+              engineCondition: orderData.inspection.engineCondition || '',
+              electricalCondition: orderData.inspection.electricalCondition || '',
+              tireCondition: orderData.inspection.tireCondition || '',
+              brakeCondition: orderData.inspection.brakeCondition || '',
+              transmissionCondition: orderData.inspection.transmissionCondition || '',
+              notes: orderData.inspection.notes || '',
               mechanicId: user.userId // Set mechanic ID from the logged-in user
             });
           }
@@ -374,28 +284,6 @@ export default function MechanicAppointmentDetail({
     return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
   };
 
-  // Helper for safely accessing service info
-  const getServiceInfo = (service: any) => {
-    if (!service) {
-      return {
-        name: "Service information unavailable",
-        price: "N/A",
-        description: "No details available",
-        category: "Unknown"
-      };
-    }
-
-    return {
-      name: service.serviceName +
-        (service.category === "Inspection" &&
-          service.subCategory ?
-          ` (${service.subCategory})` : ""),
-      price: `PKR ${service.price.toFixed(2)}`,
-      description: service.description || "No description available",
-      category: service.category
-    };
-  };
-
   // Calculate inspection report progress
   const calculateReportProgress = () => {
     if (!order?.inspection) return 0;
@@ -417,7 +305,7 @@ export default function MechanicAppointmentDetail({
   };
 
   // Handle input change for report form
-  const handleInputChange = (field: keyof InspectionReportFormData, value: string) => {
+  const handleInputChange = (field: string, value: string) => {
     setReportFormData(prev => ({
       ...prev,
       [field]: value
@@ -447,7 +335,7 @@ export default function MechanicAppointmentDetail({
 
       console.log("Submitting report data:", reportFormData);
 
-      // Submit the inspection report update
+      // Step 1: Submit the inspection report update
       await axios.post(
         `${API_URL}/api/Inspections/${inspectionId}/report`,
         reportFormData,
@@ -458,13 +346,15 @@ export default function MechanicAppointmentDetail({
         }
       );
 
-      // Update appointment status to completed
+      // Step 2: Update appointment status to completed
+      // Make sure to include ALL required fields for the appointment update
       await axios.put(
         `${API_URL}/api/Appointments/${id}`,
         {
           status: 'completed',
-          notes: "Done Job",
-          timeSlot: appointment?.timeSlot,
+          notes: "Inspection completed successfully",
+          // Make sure to include the timeSlot to avoid the 400 error
+          timeSlot: appointment?.timeSlot || ""
         },
         {
           headers: {
@@ -494,6 +384,12 @@ export default function MechanicAppointmentDetail({
 
       toast.success('Inspection report submitted successfully');
       setIsReportDialogOpen(false);
+
+      // Refresh data after submission
+      setTimeout(() => {
+        fetchData();
+      }, 1000);
+
     } catch (err: any) {
       console.error('Failed to submit inspection report:', err);
       toast.error(err.response?.data?.message || 'Failed to submit report. Please try again.');
@@ -502,8 +398,20 @@ export default function MechanicAppointmentDetail({
     }
   };
 
+
+  // Safe getter for additional services array
+  const getAdditionalServices = () => {
+    if (order?.additionalServices?.$values) {
+      return order.additionalServices.$values;
+    } else if (Array.isArray(order?.additionalServices)) {
+      return order.additionalServices;
+    }
+    return [];
+  };
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-7xl">
+      {/* Header Section with title and back button */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div className="flex items-center gap-3">
           <Button
@@ -530,6 +438,7 @@ export default function MechanicAppointmentDetail({
         </Button>
       </div>
 
+      {/* Error display */}
       {error && (
         <Alert variant="destructive" className="mb-6 shadow-sm">
           <AlertTriangle className="h-4 w-4" />
@@ -538,6 +447,7 @@ export default function MechanicAppointmentDetail({
         </Alert>
       )}
 
+      {/* Loading skeleton */}
       {loading ? (
         <div className="space-y-6">
           <div className="flex items-center space-x-4">
@@ -665,8 +575,6 @@ export default function MechanicAppointmentDetail({
                         Inspection Information
                       </h3>
 
-                      
-
                       {order.inspection && order.inspection.serviceName && (
                         <div className="bg-background p-4 rounded-lg border mb-4 shadow-sm">
                           <div className="flex items-start justify-between">
@@ -691,53 +599,49 @@ export default function MechanicAppointmentDetail({
                       )}
 
                       {/* Additional Services */}
-                      {order.additionalServices && order.additionalServices.$values && order.additionalServices.$values.length > 0 && (
-                        <div>
-                          {/* Filter inspection services */}
-                          {(() => {
-                            const inspectionServices = order.additionalServices.$values.filter(
-                              (service: any) => service.category.toLowerCase() === "inspection"
-                            );
+                      {(() => {
+                        const additionalServices = getAdditionalServices();
+                        if (!additionalServices.length) return null;
 
-                            if (inspectionServices.length === 0) {
-                              return null;
-                            }
+                        // Filter inspection services
+                        const inspectionServices = additionalServices.filter(
+                          (service: any) => service.category?.toLowerCase() === "inspection"
+                        );
 
-                            return (
-                              <>
-                                <h4 className="text-base font-medium mb-2 flex items-center">
-                                  <ShieldCheck className="h-4 w-4 mr-2 text-blue-600" />
-                                  Additional Inspection Services
-                                </h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  {inspectionServices.map((service: any, index: number) => (
-                                    <div key={service.serviceId || index} className="bg-background p-4 rounded-lg border shadow-sm">
-                                      <div className="flex justify-between items-start">
-                                        <h5 className="font-medium text-blue-700">
-                                          {service.serviceName}
-                                          {service.subCategory && ` (${service.subCategory})`}
-                                        </h5>
-                                        {/* <Badge className="bg-blue-50 text-blue-700 border-blue-200">
-                                          PKR {service.price?.toFixed(2) || '0.00'}
-                                        </Badge> */}
-                                      </div>
-                                      <p className="text-sm text-muted-foreground mt-1 mb-2">
-                                        {service.description || 'No description available'}
-                                      </p>
-                                      <div className="pt-2 border-t flex justify-between items-center">
-                                        <span className="text-xs text-muted-foreground">Inspection Type</span>
-                                        <Badge variant="outline" className="text-xs bg-blue-50/50 text-blue-700">
-                                          {service.subCategory || 'General'}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  ))}
+                        if (inspectionServices.length === 0) {
+                          return null;
+                        }
+
+                        return (
+                          <>
+                            <h4 className="text-base font-medium mb-2 flex items-center">
+                              <ShieldCheck className="h-4 w-4 mr-2 text-blue-600" />
+                              Additional Inspection Services
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {inspectionServices.map((service: any, index: number) => (
+                                <div key={service.serviceId || index} className="bg-background p-4 rounded-lg border shadow-sm">
+                                  <div className="flex justify-between items-start">
+                                    <h5 className="font-medium text-blue-700">
+                                      {service.serviceName}
+                                      {service.subCategory && ` (${service.subCategory})`}
+                                    </h5>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mt-1 mb-2">
+                                    {service.description || 'No description available'}
+                                  </p>
+                                  <div className="pt-2 border-t flex justify-between items-center">
+                                    <span className="text-xs text-muted-foreground">Inspection Type</span>
+                                    <Badge variant="outline" className="text-xs bg-blue-50/50 text-blue-700">
+                                      {service.subCategory || 'General'}
+                                    </Badge>
+                                  </div>
                                 </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      )}
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </TabsContent>
 
@@ -787,9 +691,6 @@ export default function MechanicAppointmentDetail({
                               <h4 className="font-medium text-indigo-700">
                                 {appointment.service.serviceName}
                               </h4>
-                              {/* <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200">
-                                PKR {appointment.service.price.toFixed(2)}
-                              </Badge> */}
                             </div>
 
                             {appointment.service.subCategory && (
@@ -912,7 +813,7 @@ export default function MechanicAppointmentDetail({
                           </div>
                         )}
 
-                        {order.inspection.status !== 'completed' && appointment.status !== 'completed' && (
+                        {(order.inspection.status !== 'completed' && appointment.status !== 'completed') && (
                           <div className="mt-6 flex justify-center">
                             <Button
                               size="lg"
@@ -1034,7 +935,6 @@ export default function MechanicAppointmentDetail({
 
                 <Separator className="my-5" />
 
-                
                 {/* Order timeline */}
                 <div>
                   <h3 className="text-sm font-medium mb-3 flex items-center">

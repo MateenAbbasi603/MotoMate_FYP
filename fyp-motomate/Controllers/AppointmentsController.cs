@@ -262,6 +262,7 @@ namespace fyp_motomate.Controllers
                     }
                 };
 
+                // Return just the DTO directly, not wrapped in any additional object
                 return Ok(appointmentDto);
             }
             catch (Exception ex)
@@ -559,6 +560,7 @@ namespace fyp_motomate.Controllers
                 return StatusCode(500, new { message = "An error occurred while updating the appointment", error = ex.Message });
             }
         }
+
 
 
         // DELETE: api/Appointments/5
