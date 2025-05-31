@@ -37,11 +37,7 @@ const mechanicNavItems = [
         icon: Wrench,
     },
    
-    {
-        title: "Messages",
-        url: "/admin/mechanic/messages",
-        icon: MessageSquare,
-    },
+  
 ]
 
 export function MechanicSidebar({ user, ...props }: React.ComponentProps<typeof Sidebar> & { user: any }) {

@@ -113,7 +113,7 @@ interface Order {
   service?: Service;
   invoiceStatus?: string;
   invoiceId?: number;
-  OrderType?: string; // Added property for order type
+  orderType?: string; // Added property for order type
 }
 
 interface CombinedInfo {
@@ -277,7 +277,7 @@ export default function OrdersPage() {
       setLoading(false);
     }
   };
-  
+
   // Handle sort
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -298,10 +298,10 @@ export default function OrdersPage() {
     }
 
     // Order type filter
-    if (orderTypeFilter === 'online' && order.OrderType !== 'Online') {
+    if (orderTypeFilter === 'online' && order.orderType !== 'Online') {
       return false;
     }
-    if (orderTypeFilter === 'walkin' && order.OrderType !== 'Walk-In') {
+    if (orderTypeFilter === 'walkin' && order.orderType !== 'Walk-In') {
       return false;
     }
 
@@ -378,7 +378,7 @@ export default function OrdersPage() {
         return order.service || combinedInfo.service || { serviceName: 'Custom Service', serviceId: order.serviceId };
     }
   };
-  
+
   // Handle Transfer to Service
   const handleTransferToService = async (order: Order) => {
     try {
@@ -500,7 +500,7 @@ export default function OrdersPage() {
               </SelectContent>
             </Select>
           </div>
-          
+
           {/* New order type filter */}
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="bg-muted/50">
@@ -521,7 +521,7 @@ export default function OrdersPage() {
               </SelectContent>
             </Select>
           </div>
-          
+
           {/* Clear filters button */}
           {(statusFilter !== 'all' || orderTypeFilter !== 'all') && (
             <Button
@@ -616,6 +616,8 @@ export default function OrdersPage() {
                       </div>
                     </TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Order Type</TableHead>
+
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -632,20 +634,7 @@ export default function OrdersPage() {
                             <div className="flex flex-col">
                               <span>#{order.orderId}</span>
                               <div className="flex flex-wrap gap-1 mt-1">
-                                {order.OrderType && (
-                                  <Badge className={
-                                    order.OrderType === 'Walk-In' 
-                                      ? "bg-purple-100 text-purple-800 border-purple-200" 
-                                      : "bg-blue-100 text-blue-800 border-blue-200"
-                                  } variant="outline">
-                                    {order.OrderType === 'Walk-In' ? (
-                                      <Store className="h-3 w-3 mr-1" />
-                                    ) : (
-                                      <Globe className="h-3 w-3 mr-1" />
-                                    )}
-                                    {order.OrderType}
-                                  </Badge>
-                                )}
+
                                 {order.invoiceStatus && (
                                   <InvoiceStatusBadge status={order.invoiceStatus} />
                                 )}
@@ -699,6 +688,18 @@ export default function OrdersPage() {
                           <TableCell>
                             <StatusBadge status={order.status} />
                           </TableCell>
+                          <TableCell>
+                            {order.orderType && (
+                              <Badge className={order.orderType === "Walk-In" ? "bg-purple-100 text-purple-800 border-purple-200" : "bg-blue-100 text-blue-800 border-blue-200"} variant="outline">
+                                {order.orderType === 'Walk-In' ? (
+                                  <Store className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <Globe className="h-3 w-3 mr-1" />
+                                )}
+                                {order.orderType}
+                              </Badge>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -716,7 +717,7 @@ export default function OrdersPage() {
                                     <Eye className="mr-2 h-4 w-4" />
                                     View Details
                                   </DropdownMenuItem>
-                                  
+
                                 </DropdownMenuGroup>
 
                                 <DropdownMenuSeparator />
@@ -808,7 +809,7 @@ export default function OrdersPage() {
             </ScrollArea>
           )}
         </CardContent>
-        <CardFooter className="border-t p-4 bg-muted/20 flex-shrink-0">
+        {/* <CardFooter className="border-t p-4 bg-muted/20 flex-shrink-0 ">
           <div className="flex justify-between items-center w-full text-sm text-muted-foreground">
             <div>
               Showing {filteredOrders.length} of {orders.length} orders
@@ -824,7 +825,7 @@ export default function OrdersPage() {
               </Badge>
             </div>
           </div>
-        </CardFooter>
+        </CardFooter> */}
       </Card>
     </div>
   );
