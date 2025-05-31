@@ -63,7 +63,9 @@ import {
 import { format } from 'date-fns';
 import apiClient from '../../../../../services/apiClient';
 
+// Updated interface to match the actual API response structure
 interface OrderData {
+  id?: string;
   orderId: number;
   userId: number;
   vehicleId: number;
@@ -73,11 +75,68 @@ interface OrderData {
   status: string;
   totalAmount: number;
   notes?: string;
-  user?: any;
-  vehicle?: any;
-  service?: any;
-  inspection?: any;
-  additionalServices?: any[];
+  invoiceStatus?: string;
+  invoiceId?: number;
+  paymentMethod?: string;
+  user?: {
+    id?: string;
+    userId: number;
+    name: string;
+    email: string;
+    phone?: string;
+    address?: string;
+  };
+  vehicle?: {
+    id?: string;
+    vehicleId: number;
+    make: string;
+    model: string;
+    year: number;
+    licensePlate: string;
+  };
+  service?: {
+    id?: string;
+    serviceId: number;
+    serviceName: string;
+    category: string;
+    price: number;
+    description?: string;
+    subCategory?: string;
+  };
+  inspection?: {
+    id?: string;
+    inspectionId: number;
+    serviceId?: number;
+    serviceName?: string;
+    subCategory?: string;
+    scheduledDate: string;
+    status: string;
+    timeSlot?: string;
+    bodyCondition?: string;
+    engineCondition?: string;
+    electricalCondition?: string;
+    tireCondition?: string;
+    brakeCondition?: string;
+    transmissionCondition?: string;
+    notes?: string;
+    price?: number;
+  };
+  additionalServices?: Array<{
+    id?: string;
+    serviceId: number;
+    serviceName: string;
+    category: string;
+    price: number;
+    description?: string;
+    subCategory?: string;
+  }>;
+}
+
+// Interface for the nested API response
+interface ApiResponse {
+  id: string;
+  order: OrderData;
+  appointment?: any;
 }
 
 type PageProps = {
@@ -108,15 +167,41 @@ export default function OrderDetailPage({
         setError(null);
 
         const response = await apiClient.get(`/api/orders/${id}`);
+        console.log('Raw API Response:', response.data);
 
-        console.log(response.data);
+        // Handle different response structures
+        let orderData: OrderData | null = null;
 
         if (response.data) {
-          setOrder(response.data);
+          // Check if response is an array (multiple items)
+          if (Array.isArray(response.data)) {
+            const foundItem = response.data.find((item: ApiResponse) =>
+              item.id === id || item.order?.orderId.toString() === id
+            );
+            if (foundItem && foundItem.order) {
+              orderData = foundItem.order;
+            }
+          }
+          // Check if response has nested structure
+          else if (response.data.order) {
+            orderData = response.data.order;
+          }
+          // Direct order data
+          else if (response.data.orderId || response.data.id) {
+            orderData = response.data;
+          }
 
-          // If order is completed, check for invoice
-          if (response.data.status.toLowerCase() === 'completed') {
-            checkForInvoice(response.data.orderId);
+          if (orderData) {
+            console.log('Processed Order Data:', orderData);
+            setOrder(orderData);
+
+            // If order is completed, check for invoice
+            if (orderData.status?.toLowerCase() === 'completed' || orderData.invoiceId) {
+              const orderIdToCheck = orderData.orderId || parseInt(id);
+              checkForInvoice(orderIdToCheck);
+            }
+          } else {
+            setError('Order not found or invalid response structure');
           }
         } else {
           setError('Order not found');
@@ -138,11 +223,24 @@ export default function OrderDetailPage({
   const checkForInvoice = async (orderId: number) => {
     try {
       setLoadingInvoice(true);
-      const response = await apiClient.get(`/api/Invoices/customer/${orderId}`);
-      console.log(response.data);
-      
 
-      if (response.data.success) {
+      // Try the customer endpoint first
+      let response;
+      try {
+        response = await apiClient.get(`/api/Invoices/customer/${orderId}`);
+      } catch (customerError) {
+        // If customer endpoint fails, try the general invoice endpoint
+        try {
+          response = await apiClient.get(`/api/Invoices/${order?.invoiceId || orderId}`);
+        } catch (generalError) {
+          console.error('Error checking for invoice:', generalError);
+          return;
+        }
+      }
+
+      console.log('Invoice Response:', response.data);
+
+      if (response.data && (response.data.success || response.data.invoice)) {
         setInvoice(response.data);
         console.log("Invoice found:", response.data);
       }
@@ -258,7 +356,7 @@ export default function OrderDetailPage({
             <Skeleton className="h-4 w-32" />
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <Card className="border-muted-foreground/20">
@@ -309,7 +407,7 @@ export default function OrderDetailPage({
             <p className="text-muted-foreground">View your service order information</p>
           </div>
         </div>
-        
+
         <Alert variant="destructive" className="max-w-2xl mx-auto">
           <AlertTriangle className="h-5 w-5" />
           <AlertTitle className="mb-2">Error Loading Order</AlertTitle>
@@ -327,9 +425,9 @@ export default function OrderDetailPage({
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
       <div className="flex items-center gap-3 mb-8">
-        <Button 
-          variant="outline" 
-          size="icon" 
+        <Button
+          variant="outline"
+          size="icon"
           onClick={() => router.push('/orders')}
           className="h-9 w-9 rounded-full"
         >
@@ -354,10 +452,15 @@ export default function OrderDetailPage({
                       <span>{order.status}</span>
                     </span>
                   </Badge>
-                  {invoice && (
+                  {(invoice || order.invoiceStatus !== 'none') && (
                     <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800">
                       <Receipt className="h-3 w-3 mr-1" />
                       Invoice Available
+                    </Badge>
+                  )}
+                  {order.paymentMethod && (
+                    <Badge variant="outline" className="capitalize">
+                      {order.paymentMethod}
                     </Badge>
                   )}
                 </div>
@@ -366,35 +469,35 @@ export default function OrderDetailPage({
                   Reference ID: {order.orderId}
                 </CardDescription>
               </div>
-              
+
               <div className="flex flex-col items-end mt-0.5">
                 <span className="text-sm text-muted-foreground">Total Amount</span>
-                <span className="text-xl font-bold">PKR {order.totalAmount.toFixed(2)}</span>
+                <span className="text-xl font-bold">PKR {order.totalAmount?.toFixed(2) || '0.00'}</span>
               </div>
             </CardHeader>
 
             <CardContent className="pt-6">
               <Tabs defaultValue="details" value={currentTab} onValueChange={setCurrentTab} className="w-full">
                 <TabsList className="w-full grid grid-cols-3 mb-6 p-1 rounded-lg bg-muted/40">
-                  <TabsTrigger 
-                    value="details" 
+                  <TabsTrigger
+                    value="details"
                     className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
                   >
                     <FileText className="h-4 w-4 mr-2" />
                     Order Details
                   </TabsTrigger>
                   {order.includesInspection && order.inspection && (
-                    <TabsTrigger 
-                      value="inspection" 
+                    <TabsTrigger
+                      value="inspection"
                       className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
                     >
                       <ShieldCheck className="h-4 w-4 mr-2" />
                       Inspection Results
                     </TabsTrigger>
                   )}
-                  {invoice && (
-                    <TabsTrigger 
-                      value="invoice" 
+                  {(invoice || order.invoiceId) && (
+                    <TabsTrigger
+                      value="invoice"
                       data-value="invoice"
                       className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
                     >
@@ -430,7 +533,7 @@ export default function OrderDetailPage({
                           </div>
                         </div>
                       )}
-                      
+
                       <div className="flex flex-col justify-between h-full space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Registration No.</span>
@@ -474,16 +577,16 @@ export default function OrderDetailPage({
                           </p>
                         </div>
                       </div>
-                      
+
                       <Separator className="my-4" />
-                      
+
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium">Service Category</span>
                         <Badge className="capitalize">
                           {order.service?.category || 'Service'}
                         </Badge>
                       </div>
-                      
+
                       <div className="flex justify-between items-center mt-3">
                         <span className="text-sm font-medium">Service Price</span>
                         <span className="font-medium">PKR {order.service?.price?.toFixed(2) || '0.00'}</span>
@@ -567,19 +670,19 @@ export default function OrderDetailPage({
                         <span>Total Amount</span>
                         <span className="text-primary">PKR {order.totalAmount?.toFixed(2) || '0.00'}</span>
                       </div>
-                      
-                      {invoice && (
+
+                      {(invoice || order.invoiceStatus !== 'none') && (
                         <div className="mt-4 pt-4 border-t border-dashed">
                           <div className="flex justify-between items-center">
                             <span className="font-medium">Payment Status</span>
-                            <Badge 
+                            <Badge
                               className={
-                                invoice.invoice.status === 'paid' ? 
-                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
-                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                (invoice?.invoice?.status === 'paid' || order.invoiceStatus === 'paid') ?
+                                  'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                  'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                               }
                             >
-                              {invoice.invoice.status === 'paid' ? (
+                              {(invoice?.invoice?.status === 'paid' || order.invoiceStatus === 'paid') ? (
                                 <span className="flex items-center gap-1.5">
                                   <CheckCircle2 className="h-3.5 w-3.5" />
                                   <span>Paid</span>
@@ -592,11 +695,11 @@ export default function OrderDetailPage({
                               )}
                             </Badge>
                           </div>
-                          {invoice.invoice.status !== 'paid' && (
+                          {(invoice?.invoice?.status !== 'paid' && order.invoiceStatus !== 'paid') && order.invoiceId && (
                             <Button
                               variant="default"
                               className="w-full mt-3 bg-green-600 hover:bg-green-700"
-                              onClick={() => router.push(`/invoice/pay/${invoice.invoice.invoiceId}`)}
+                              onClick={() => router.push(`/invoice/pay/${order.invoiceId}`)}
                             >
                               <DollarSign className="mr-2 h-4 w-4" />
                               Pay Now
@@ -614,7 +717,7 @@ export default function OrderDetailPage({
                         <FileText className="mr-2 h-5 w-5 text-primary" />
                         Order Notes
                       </h3>
-                      <p className="text-muted-foreground">
+                      <p className="text-muted-foreground whitespace-pre-line">
                         {order.notes}
                       </p>
                     </div>
@@ -682,76 +785,77 @@ export default function OrderDetailPage({
                           <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
                             <p className="text-sm text-muted-foreground mb-1">Tire Condition</p>
                             <p className="font-medium flex items-center gap-1.5">
-                            <CircleDot className="h-3.5 w-3.5 text-primary" />
-                            {order.inspection.tireCondition || 'Not inspected'}
-                          </p>
-                        </div>
-                        <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
-                          <p className="text-sm text-muted-foreground mb-1">Brake Condition</p>
-                          <p className="font-medium flex items-center gap-1.5">
-                            <CircleDot className="h-3.5 w-3.5 text-primary" />
-                            {order.inspection.brakeCondition || 'Not inspected'}
-                          </p>
-                        </div>
-                        {order.inspection.transmissionCondition && (
-                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
-                            <p className="text-sm text-muted-foreground mb-1">Transmission Condition</p>
-                            <p className="font-medium flex items-center gap-1.5">
                               <CircleDot className="h-3.5 w-3.5 text-primary" />
-                              {order.inspection.transmissionCondition}
+                              {order.inspection.tireCondition || 'Not inspected'}
                             </p>
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center p-8 bg-muted/30 rounded-lg text-center">
-                        {order.inspection.status === 'pending' ? (
-                          <>
-                            <div className="mb-4 bg-yellow-100 dark:bg-yellow-900/30 p-3 rounded-full">
-                              <Clock className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />
-                            </div>
-                            <h4 className="text-lg font-medium mb-2">Inspection Scheduled</h4>
-                            <p className="text-muted-foreground max-w-md">
-                              Your vehicle inspection is scheduled but has not been completed yet.
-                              We'll notify you once the inspection is complete.
+                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
+                            <p className="text-sm text-muted-foreground mb-1">Brake Condition</p>
+                            <p className="font-medium flex items-center gap-1.5">
+                              <CircleDot className="h-3.5 w-3.5 text-primary" />
+                              {order.inspection.brakeCondition || 'Not inspected'}
                             </p>
-                          </>
-                        ) : order.inspection.status === 'in progress' ? (
-                          <>
-                            <div className="mb-4 bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full">
-                              <Timer className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          {order.inspection.transmissionCondition && (
+                            <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
+                              <p className="text-sm text-muted-foreground mb-1">Transmission Condition</p>
+                              <p className="font-medium flex items-center gap-1.5">
+                                <CircleDot className="h-3.5 w-3.5 text-primary" />
+                                {order.inspection.transmissionCondition}
+                              </p>
                             </div>
-                            <h4 className="text-lg font-medium mb-2">Inspection In Progress</h4>
-                            <p className="text-muted-foreground max-w-md">
-                              Your vehicle is currently being inspected by our technicians.
-                              Results will be available soon.
-                            </p>
-                          </>
-                        ) : order.inspection.status === 'cancelled' ? (
-                          <>
-                            <div className="mb-4 bg-red-100 dark:bg-red-900/30 p-3 rounded-full">
-                              <CalendarX className="h-8 w-8 text-red-600 dark:text-red-400" />
-                            </div>
-                            <h4 className="text-lg font-medium mb-2">Inspection Cancelled</h4>
-                            <p className="text-muted-foreground max-w-md">
-                              This inspection was cancelled. Please contact customer service
-                              if you need to reschedule.
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <div className="mb-4 bg-muted p-3 rounded-full">
-                              <CircleDashed className="h-8 w-8 text-muted-foreground" />
-                            </div>
-                            <h4 className="text-lg font-medium mb-2">Inspection Status: {order.inspection.status}</h4>
-                            <p className="text-muted-foreground max-w-md">
-                              The current status of your inspection is {order.inspection.status}.
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    )}
-   </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center p-8 bg-muted/30 rounded-lg text-center">
+                          {order.inspection.status === 'pending' ? (
+                            <>
+                              <div className="mb-4 bg-yellow-100 dark:bg-yellow-900/30 p-3 rounded-full">
+                                <Clock className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />
+                              </div>
+                              <h4 className="text-lg font-medium mb-2">Inspection Scheduled</h4>
+                              <p className="text-muted-foreground max-w-md">
+                                Your vehicle inspection is scheduled but has not been completed yet.
+                                We'll notify you once the inspection is complete.
+                              </p>
+                            </>
+                          ) : order.inspection.status === 'in progress' ? (
+                            <>
+                              <div className="mb-4 bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full">
+                                <Timer className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                              </div>
+                              <h4 className="text-lg font-medium mb-2">Inspection In Progress</h4>
+                              <p className="text-muted-foreground max-w-md">
+                                Your vehicle is currently being inspected by our technicians.
+                                Results will be available soon.
+                              </p>
+                            </>
+                          ) : order.inspection.status === 'cancelled' ? (
+                            <>
+                              <div className="mb-4 bg-red-100 dark:bg-red-900/30 p-3 rounded-full">
+                                <CalendarX className="h-8 w-8 text-red-600 dark:text-red-400" />
+                              </div>
+                              <h4 className="text-lg font-medium mb-2">Inspection Cancelled</h4>
+                              <p className="text-muted-foreground max-w-md">
+                                This inspection was cancelled. Please contact customer service
+                                if you need to reschedule.
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <div className="mb-4 bg-muted p-3 rounded-full">
+                                <CircleDashed className="h-8 w-8 text-muted-foreground" />
+                              </div>
+                              <h4 className="text-lg font-medium mb-2">Inspection Status: {order.inspection.status}</h4>
+                              <p className="text-muted-foreground max-w-md">
+                                The current status of your inspection is {order.inspection.status}.
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     {order.inspection.notes && (
                       <div className="mt-6">
                         <h4 className="font-medium mb-3 flex items-center">
@@ -768,7 +872,7 @@ export default function OrderDetailPage({
                   </TabsContent>
                 )}
 
-                {invoice && (
+                {(invoice || order.invoiceId) && (
                   <TabsContent value="invoice">
                     <div className="p-6 bg-white dark:bg-muted rounded-lg border border-muted-foreground/20 shadow-sm mb-4">
                       <div className="flex items-center justify-between mb-6">
@@ -777,16 +881,18 @@ export default function OrderDetailPage({
                             <ReceiptText className="h-6 w-6 text-primary" />
                           </div>
                           <div>
-                            <h3 className="text-xl font-semibold">Invoice #{invoice.invoice.invoiceId}</h3>
+                            <h3 className="text-xl font-semibold">
+                              Invoice #{invoice?.invoice?.invoiceId || order.invoiceId}
+                            </h3>
                             <p className="text-sm text-muted-foreground">
-                              {formatDate(invoice.invoice.invoiceDate)}
+                              {invoice?.invoice?.invoiceDate ? formatDate(invoice.invoice.invoiceDate) : 'Date not available'}
                             </p>
                           </div>
                         </div>
-                        <Badge className={getStatusBadgeStyle(invoice.invoice.status) + " capitalize px-3 py-1.5"}>
+                        <Badge className={getStatusBadgeStyle(invoice?.invoice?.status || order.invoiceStatus || 'issued') + " capitalize px-3 py-1.5"}>
                           <span className="flex items-center gap-1.5">
-                            {getStatusIcon(invoice.invoice.status)}
-                            <span>{invoice.invoice.status}</span>
+                            {getStatusIcon(invoice?.invoice?.status || order.invoiceStatus || 'issued')}
+                            <span>{invoice?.invoice?.status || order.invoiceStatus || 'issued'}</span>
                           </span>
                         </Badge>
                       </div>
@@ -802,20 +908,22 @@ export default function OrderDetailPage({
                             <div className="space-y-2">
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-muted-foreground">Name</span>
-                                <span className="font-medium">{invoice.customer?.name || 'N/A'}</span>
+                                <span className="font-medium">{invoice?.customer?.name || order.user?.name || 'N/A'}</span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-muted-foreground">Email</span>
-                                <span className="font-medium">{invoice.customer?.email || 'N/A'}</span>
+                                <span className="font-medium">{invoice?.customer?.email || order.user?.email || 'N/A'}</span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-muted-foreground">Phone</span>
-                                <span className="font-medium">{invoice.customer?.phone || 'N/A'}</span>
+                                <span className="font-medium">{invoice?.customer?.phone || order.user?.phone || 'N/A'}</span>
                               </div>
-                              {invoice.customer?.address && (
+                              {(invoice?.customer?.address || order.user?.address) && (
                                 <div className="flex justify-between items-center">
                                   <span className="text-sm text-muted-foreground">Address</span>
-                                  <span className="font-medium text-right max-w-[200px]">{invoice.customer.address}</span>
+                                  <span className="font-medium text-right max-w-[200px]">
+                                    {invoice?.customer?.address || order.user?.address}
+                                  </span>
                                 </div>
                               )}
                             </div>
@@ -826,32 +934,34 @@ export default function OrderDetailPage({
                             <div className="space-y-2">
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-muted-foreground">Issue Date</span>
-                                <span className="font-medium">{formatDate(invoice.invoice.invoiceDate)}</span>
+                                <span className="font-medium">
+                                  {invoice?.invoice?.invoiceDate ? formatDate(invoice.invoice.invoiceDate) : formatDate(order.orderDate)}
+                                </span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-muted-foreground">Due Date</span>
                                 <span className={
-                                  invoice.invoice.status === 'overdue' 
-                                    ? 'text-red-500 font-medium' 
+                                  (invoice?.invoice?.status === 'overdue' || order.invoiceStatus === 'overdue')
+                                    ? 'text-red-500 font-medium'
                                     : 'font-medium'
                                 }>
-                                  {formatDate(invoice.invoice.dueDate)}
+                                  {invoice?.invoice?.dueDate ? formatDate(invoice.invoice.dueDate) : 'N/A'}
                                 </span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-muted-foreground">Order ID</span>
-                                <span className="font-medium">{invoice.invoice.orderId}</span>
+                                <span className="font-medium">{order.orderId}</span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-muted-foreground">Status</span>
                                 <Badge variant="outline" className={
-                                  invoice.invoice.status === 'paid'
+                                  (invoice?.invoice?.status === 'paid' || order.invoiceStatus === 'paid')
                                     ? 'bg-green-50 text-green-700 border-green-200'
-                                    : invoice.invoice.status === 'overdue'
+                                    : (invoice?.invoice?.status === 'overdue' || order.invoiceStatus === 'overdue')
                                       ? 'bg-red-50 text-red-700 border-red-200'
                                       : 'bg-blue-50 text-blue-700 border-blue-200'
                                 }>
-                                  {invoice.invoice.status}
+                                  {invoice?.invoice?.status || order.invoiceStatus || 'issued'}
                                 </Badge>
                               </div>
                             </div>
@@ -873,9 +983,16 @@ export default function OrderDetailPage({
                                 <tr>
                                   <td className="p-3">Subtotal</td>
                                   <td className="p-3 text-right">
-                                    PKR {typeof invoice?.invoice?.subTotal === 'number'
-                                      ? invoice.invoice.subTotal.toFixed(2)
-                                      : parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0').toFixed(2)}
+                                    PKR {(() => {
+                                      const subtotal = invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount;
+                                      if (typeof subtotal === 'number') {
+                                        return subtotal.toFixed(2);
+                                      }
+                                      // Calculate subtotal from total if not available
+                                      const total = parseFloat(invoice?.invoice?.totalAmount || order.totalAmount?.toString() || '0');
+                                      const calculatedSubtotal = total / 1.18; // Assuming 18% tax
+                                      return calculatedSubtotal.toFixed(2);
+                                    })()}
                                   </td>
                                 </tr>
                                 <tr>
@@ -883,17 +1000,28 @@ export default function OrderDetailPage({
                                     Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
                                   </td>
                                   <td className="p-3 text-right">
-                                    PKR {typeof invoice?.invoice?.taxAmount === 'number'
-                                      ? invoice.invoice.taxAmount.toFixed(2)
-                                      : (parseFloat(invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount || '0') * 0.18).toFixed(2)}
+                                    PKR {(() => {
+                                      const taxAmount = invoice?.invoice?.taxAmount;
+                                      if (typeof taxAmount === 'number') {
+                                        return taxAmount.toFixed(2);
+                                      }
+                                      // Calculate tax from total if not available
+                                      const total = parseFloat(invoice?.invoice?.totalAmount || order.totalAmount?.toString() || '0');
+                                      const calculatedTax = total - (total / 1.18);
+                                      return calculatedTax.toFixed(2);
+                                    })()}
                                   </td>
                                 </tr>
                                 <tr className="bg-muted/20">
                                   <td className="p-3 font-semibold">Total</td>
                                   <td className="p-3 text-right font-semibold text-primary">
-                                    PKR {typeof invoice?.invoice?.totalAmount === 'number'
-                                      ? invoice.invoice.totalAmount.toFixed(2)
-                                      : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
+                                    PKR {(() => {
+                                      const total = invoice?.invoice?.totalAmount || order.totalAmount;
+                                      if (typeof total === 'number') {
+                                        return total.toFixed(2);
+                                      }
+                                      return parseFloat(total?.toString() || '0').toFixed(2);
+                                    })()}
                                   </td>
                                 </tr>
                               </tbody>
@@ -911,7 +1039,7 @@ export default function OrderDetailPage({
                             <ReceiptText className="mr-2 h-4 w-4" />
                             View Full Invoice
                           </Button>
-                          
+
                           <Button
                             variant="outline"
                             className="flex-1 border-muted-foreground/20"
@@ -920,7 +1048,7 @@ export default function OrderDetailPage({
                             <Printer className="mr-2 h-4 w-4" />
                             Print
                           </Button>
-                          
+
                           <Button
                             variant="outline"
                             className="flex-1 border-muted-foreground/20"
@@ -931,11 +1059,11 @@ export default function OrderDetailPage({
                         </div>
 
                         {/* Pay Now Button (if not paid) */}
-                        {invoice.invoice.status !== 'paid' && (
+                        {(invoice?.invoice?.status !== 'paid' && order.invoiceStatus !== 'paid') && order.invoiceId && (
                           <Button
                             variant="default"
                             className="w-full bg-green-600 hover:bg-green-700 mt-3"
-                            onClick={() => router.push(`/invoice/pay/${invoice.invoice.invoiceId}`)}
+                            onClick={() => router.push(`/invoice/pay/${order.invoiceId}`)}
                           >
                             <DollarSign className="mr-2 h-4 w-4" />
                             Pay Now
@@ -988,36 +1116,45 @@ export default function OrderDetailPage({
                   </div>
 
                   {/* Invoice section - Show if invoice exists */}
-                  {invoice && (
+                  {(invoice || order.invoiceId) && (
                     <div className="p-4 rounded-lg border border-muted-foreground/20 bg-muted/10 shadow-sm hover:shadow-md transition-all duration-300">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-sm font-medium flex items-center text-primary">
                           <ReceiptText className="mr-2 h-4 w-4" />
-                          Invoice #{invoice.invoice.invoiceId}
+                          Invoice #{invoice?.invoice?.invoiceId || order.invoiceId}
                         </h3>
-                        <Badge className={getStatusBadgeStyle(invoice.invoice.status) + " capitalize"}>
-                          {invoice.invoice.status}
+                        <Badge className={getStatusBadgeStyle(invoice?.invoice?.status || order.invoiceStatus || 'issued') + " capitalize"}>
+                          {invoice?.invoice?.status || order.invoiceStatus || 'issued'}
                         </Badge>
                       </div>
 
                       <div className="flex justify-between items-center text-sm pt-2 mb-2">
                         <span className="font-medium">Total Amount:</span>
                         <span className="font-bold text-primary">
-                          PKR {typeof invoice?.invoice?.totalAmount === 'number'
-                            ? invoice.invoice.totalAmount.toFixed(2)
-                            : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
+                          PKR {(() => {
+                            const total = invoice?.invoice?.totalAmount || order.totalAmount;
+                            if (typeof total === 'number') {
+                              return total.toFixed(2);
+                            }
+                            return parseFloat(total?.toString() || '0').toFixed(2);
+                          })()}
                         </span>
                       </div>
 
                       <div className="text-xs text-muted-foreground mb-4">
                         <div className="flex justify-between mb-1">
                           <span>Issue Date:</span>
-                          <span>{formatDate(invoice.invoice.invoiceDate)}</span>
+                          <span>
+                            {invoice?.invoice?.invoiceDate ? formatDate(invoice.invoice.invoiceDate) : formatDate(order.orderDate)}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span>Due Date:</span>
-                          <span className={invoice.invoice.status === 'overdue' ? 'text-red-500 font-medium' : ''}>
-                            {formatDate(invoice.invoice.dueDate)}
+                          <span className={
+                            (invoice?.invoice?.status === 'overdue' || order.invoiceStatus === 'overdue')
+                              ? 'text-red-500 font-medium' : ''
+                          }>
+                            {invoice?.invoice?.dueDate ? formatDate(invoice.invoice.dueDate) : 'N/A'}
                           </span>
                         </div>
                       </div>
@@ -1033,12 +1170,12 @@ export default function OrderDetailPage({
                           <span className="group-hover:text-primary transition-colors">View Full Invoice</span>
                         </Button>
 
-                        {invoice.invoice.status !== 'paid' && (
+                        {(invoice?.invoice?.status !== 'paid' && order.invoiceStatus !== 'paid') && order.invoiceId && (
                           <Button
                             variant="default"
                             size="sm"
                             className="w-full bg-green-600 hover:bg-green-700"
-                            onClick={() => router.push(`/invoice/pay/${invoice.invoice.invoiceId}`)}
+                            onClick={() => router.push(`/invoice/pay/${order.invoiceId}`)}
                           >
                             <DollarSign className="mr-2 h-4 w-4" />
                             Pay Now
@@ -1062,27 +1199,27 @@ export default function OrderDetailPage({
 
                       {order.includesInspection && order.inspection && (
                         <div className={`relative border-l-2 pl-4 pb-6 
-                          ${order.inspection.status === 'pending' 
-                            ? 'border-yellow-500' 
-                            : order.inspection.status === 'completed' 
-                              ? 'border-green-500' 
-                              : order.inspection.status === 'in progress' 
-                                ? 'border-blue-500' 
+                         ${order.inspection.status === 'pending'
+                            ? 'border-yellow-500'
+                            : order.inspection.status === 'completed'
+                              ? 'border-green-500'
+                              : order.inspection.status === 'in progress'
+                                ? 'border-blue-500'
                                 : 'border-gray-300'}`}>
                           <div className={`absolute w-4 h-4 rounded-full -left-[9px] top-0 ring-4
-                            ${order.inspection.status === 'pending' 
-                              ? 'bg-yellow-500 ring-yellow-50 dark:ring-yellow-900/20' 
-                              : order.inspection.status === 'completed' 
-                                ? 'bg-green-500 ring-green-50 dark:ring-green-900/20' 
-                                : order.inspection.status === 'in progress' 
-                                  ? 'bg-blue-500 ring-blue-50 dark:ring-blue-900/20' 
+                           ${order.inspection.status === 'pending'
+                              ? 'bg-yellow-500 ring-yellow-50 dark:ring-yellow-900/20'
+                              : order.inspection.status === 'completed'
+                                ? 'bg-green-500 ring-green-50 dark:ring-green-900/20'
+                                : order.inspection.status === 'in progress'
+                                  ? 'bg-blue-500 ring-blue-50 dark:ring-blue-900/20'
                                   : 'bg-gray-300 ring-gray-50 dark:ring-gray-900/20'}`}>
                           </div>
                           <p className="text-sm font-medium">
-                            Inspection {order.inspection.status === 'completed' 
-                              ? 'Completed' 
-                              : order.inspection.status === 'in progress' 
-                                ? 'In Progress' 
+                            Inspection {order.inspection.status === 'completed'
+                              ? 'Completed'
+                              : order.inspection.status === 'in progress'
+                                ? 'In Progress'
                                 : 'Scheduled'}
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -1101,17 +1238,17 @@ export default function OrderDetailPage({
                         </div>
                       )}
 
-                      {invoice && (
+                      {(invoice || order.invoiceId) && (
                         <div className="relative border-l-2 pl-4 pb-6 border-blue-500">
                           <div className="absolute w-4 h-4 bg-blue-500 rounded-full -left-[9px] top-0 ring-4 ring-blue-50 dark:ring-blue-900/20"></div>
                           <p className="text-sm font-medium">Invoice Issued</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatDate(invoice.invoice.invoiceDate)}
+                            {invoice?.invoice?.invoiceDate ? formatDate(invoice.invoice.invoiceDate) : formatDate(order.orderDate)}
                           </p>
                         </div>
                       )}
 
-                      {invoice && invoice.invoice.status === 'paid' && (
+                      {(invoice?.invoice?.status === 'paid' || order.invoiceStatus === 'paid') && (
                         <div className="relative border-l-2 pl-4 pb-6 border-green-500">
                           <div className="absolute w-4 h-4 bg-green-500 rounded-full -left-[9px] top-0 ring-4 ring-green-50 dark:ring-green-900/20"></div>
                           <p className="text-sm font-medium">Payment Received</p>
@@ -1142,14 +1279,14 @@ export default function OrderDetailPage({
                       <Phone className="h-4 w-4 text-muted-foreground mt-0.5 mr-3 group-hover:text-primary transition-colors" />
                       <div>
                         <p className="text-xs text-muted-foreground">Phone</p>
-                        <p className="text-sm font-medium group-hover:text-primary transition-colors">+1 (234) 567-8900</p>
+                        <p className="text-sm font-medium group-hover:text-primary transition-colors">+92-336-1800485</p>
                       </div>
                     </div>
                     <div className="flex items-start group">
                       <Mail className="h-4 w-4 text-muted-foreground mt-0.5 mr-3 group-hover:text-primary transition-colors" />
                       <div>
                         <p className="text-xs text-muted-foreground">Email</p>
-                        <p className="text-sm font-medium group-hover:text-primary transition-colors">support@motomate.com</p>
+                        <p className="text-sm font-medium group-hover:text-primary transition-colors">MotoM22@gmail.com</p>
                       </div>
                     </div>
                   </div>
@@ -1161,7 +1298,7 @@ export default function OrderDetailPage({
       </div>
 
       {/* Invoice Full Dialog */}
-      {invoice && (
+      {(invoice || order.invoiceId) && (
         <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
           <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
             <DialogHeader className="border-b pb-4">
@@ -1171,14 +1308,14 @@ export default function OrderDetailPage({
                     <ReceiptText className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <DialogTitle className="text-xl">Invoice #{invoice.invoice.invoiceId}</DialogTitle>
+                    <DialogTitle className="text-xl">Invoice #{invoice?.invoice?.invoiceId || order.invoiceId}</DialogTitle>
                     <DialogDescription>
-                      Issued on {formatDate(invoice.invoice.invoiceDate)}
+                      Issued on {invoice?.invoice?.invoiceDate ? formatDate(invoice.invoice.invoiceDate) : formatDate(order.orderDate)}
                     </DialogDescription>
                   </div>
                 </div>
-                <Badge className={getStatusBadgeStyle(invoice.invoice.status) + " capitalize"}>
-                  {invoice.invoice.status}
+                <Badge className={getStatusBadgeStyle(invoice?.invoice?.status || order.invoiceStatus || 'issued') + " capitalize"}>
+                  {invoice?.invoice?.status || order.invoiceStatus || 'issued'}
                 </Badge>
               </div>
             </DialogHeader>
@@ -1194,20 +1331,22 @@ export default function OrderDetailPage({
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Name</span>
-                      <span className="font-medium">{invoice.customer?.name || 'N/A'}</span>
+                      <span className="font-medium">{invoice?.customer?.name || order.user?.name || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Email</span>
-                      <span className="font-medium">{invoice.customer?.email || 'N/A'}</span>
+                      <span className="font-medium">{invoice?.customer?.email || order.user?.email || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Phone</span>
-                      <span className="font-medium">{invoice.customer?.phone || 'N/A'}</span>
+                      <span className="font-medium">{invoice?.customer?.phone || order.user?.phone || 'N/A'}</span>
                     </div>
-                    {invoice.customer?.address && (
+                    {(invoice?.customer?.address || order.user?.address) && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Address</span>
-                        <span className="font-medium text-right max-w-[200px]">{invoice.customer.address}</span>
+                        <span className="font-medium text-right max-w-[200px]">
+                          {invoice?.customer?.address || order.user?.address}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1222,288 +1361,297 @@ export default function OrderDetailPage({
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Make & Model</span>
                       <span className="font-medium">
-                        {invoice.vehicle ? `${invoice.vehicle.make} ${invoice.vehicle.model}` : 'N/A'}
+                        {(invoice?.vehicle || order.vehicle) ?
+                          `${(invoice?.vehicle || order.vehicle).make} ${(invoice?.vehicle || order.vehicle).model}` : 'N/A'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Year</span>
-                      <span className="font-medium">{invoice.vehicle?.year || 'N/A'}</span>
+                      <span className="font-medium">{(invoice?.vehicle || order.vehicle)?.year || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">License Plate</span>
-                      <span className="font-medium">{invoice.vehicle?.licensePlate || 'N/A'}</span>
+                      <span className="font-medium">{(invoice?.vehicle || order.vehicle)?.licensePlate || 'N/A'}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
+              {/* Invoice Items Table */}
+              <div className="mb-6">
+                <h3 className="text-sm font-medium mb-3">Service Details</h3>
+                <div className="border rounded-lg overflow-hidden shadow-sm">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/30">
+                      <tr>
+                        <th className="text-left p-3 font-medium">Description</th>
+                        <th className="text-center p-3 font-medium">Qty</th>
+                        <th className="text-right p-3 font-medium">Unit Price</th>
+                        <th className="text-right p-3 font-medium">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {(() => {
+                        // Get invoice items - handle different response structures
+                        let items = [];
 
-{/* Invoice Items Table */}
-<div className="mb-6">
-  <h3 className="text-sm font-medium mb-3">Service Details</h3>
-  <div className="border rounded-lg overflow-hidden shadow-sm">
-    <table className="w-full text-sm">
-      <thead className="bg-muted/30">
-        <tr>
-          <th className="text-left p-3 font-medium">Description</th>
-          <th className="text-center p-3 font-medium">Qty</th>
-          <th className="text-right p-3 font-medium">Unit Price</th>
-          <th className="text-right p-3 font-medium">Total</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y">
-        {(() => {
-          // Get invoice items - handle different response structures
-          let items = [];
+                        // Check different possible structures for invoice items
+                        if (invoice?.invoiceItems && Array.isArray(invoice.invoiceItems)) {
+                          items = invoice.invoiceItems;
+                        } else if (invoice?.invoice?.invoiceItems && Array.isArray(invoice.invoice.invoiceItems)) {
+                          items = invoice.invoice.invoiceItems;
+                        } else if (invoice?.invoiceItems?.$values) {
+                          items = invoice.invoiceItems.$values;
+                        } else if (invoice?.invoice?.invoiceItems?.$values) {
+                          items = invoice.invoice.invoiceItems.$values;
+                        }
 
-          // Check different possible structures for invoice items
-          if (invoice?.invoiceItems && Array.isArray(invoice.invoiceItems)) {
-            items = invoice.invoiceItems;
-          } else if (invoice?.invoice?.invoiceItems && Array.isArray(invoice.invoice.invoiceItems)) {
-            items = invoice.invoice.invoiceItems;
-          } else if (invoice?.invoiceItems?.$values) {
-            items = invoice.invoiceItems.$values;
-          } else if (invoice?.invoice?.invoiceItems?.$values) {
-            items = invoice.invoice.invoiceItems.$values;
-          }
+                        console.log('Invoice items found:', items); // Debug log
 
-          console.log('Invoice items found:', items); // Debug log
+                        if (items && items.length > 0) {
+                          return items.map((item: any, index: number) => (
+                            <tr key={item.invoiceItemId || index} className="hover:bg-muted/10">
+                              <td className="px-4 py-3">{item.description || 'Service Item'}</td>
+                              <td className="px-4 py-3 text-center">{item.quantity || 1}</td>
+                              <td className="px-4 py-3 text-right">
+                                PKR {typeof item.unitPrice === 'number'
+                                  ? item.unitPrice.toFixed(2)
+                                  : parseFloat(item.unitPrice || '0').toFixed(2)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-medium">
+                                PKR {typeof item.totalPrice === 'number'
+                                  ? item.totalPrice.toFixed(2)
+                                  : parseFloat(item.totalPrice || '0').toFixed(2)}
+                              </td>
+                            </tr>
+                          ));
+                        } else {
+                          // If no invoice items found, show order services instead
+                          let fallbackItems = [];
 
-          if (items && items.length > 0) {
-            return items.map((item: any, index: number) => (
-              <tr key={item.invoiceItemId || index} className="hover:bg-muted/10">
-                <td className="px-4 py-3">{item.description || 'Service Item'}</td>
-                <td className="px-4 py-3 text-center">{item.quantity || 1}</td>
-                <td className="px-4 py-3 text-right">
-                  PKR {typeof item.unitPrice === 'number'
-                    ? item.unitPrice.toFixed(2)
-                    : parseFloat(item.unitPrice || '0').toFixed(2)}
-                </td>
-                <td className="px-4 py-3 text-right font-medium">
-                  PKR {typeof item.totalPrice === 'number'
-                    ? item.totalPrice.toFixed(2)
-                    : parseFloat(item.totalPrice || '0').toFixed(2)}
-                </td>
-              </tr>
-            ));
-          } else {
-            // If no invoice items found, show order services instead
-            let fallbackItems = [];
-            
-            // Try to get services from order data
-            if (invoice?.order?.service) {
-              fallbackItems.push({
-                description: invoice.order.service.serviceName || 'Main Service',
-                quantity: 1,
-                unitPrice: invoice.order.service.price || 0,
-                totalPrice: invoice.order.service.price || 0
-              });
-            }
+                          // Try to get services from order data
+                          if (order.service) {
+                            fallbackItems.push({
+                              description: order.service.serviceName || 'Main Service',
+                              quantity: 1,
+                              unitPrice: order.service.price || 0,
+                              totalPrice: order.service.price || 0
+                            });
+                          }
 
-            // Add inspection if available
-            if (invoice?.order?.inspection?.price) {
-              fallbackItems.push({
-                description: `Inspection - ${invoice.order.inspection.serviceName || 'Vehicle Inspection'}`,
-                quantity: 1,
-                unitPrice: invoice.order.inspection.price,
-                totalPrice: invoice.order.inspection.price
-              });
-            }
+                          // Add inspection if available
+                          if (order.inspection?.price) {
+                            fallbackItems.push({
+                              description: `Inspection - ${order.inspection.serviceName || 'Vehicle Inspection'}`,
+                              quantity: 1,
+                              unitPrice: order.inspection.price,
+                              totalPrice: order.inspection.price
+                            });
+                          }
 
-            // Add additional services if available
-            if (invoice?.order?.additionalServices && Array.isArray(invoice.order.additionalServices)) {
-              invoice.order.additionalServices.forEach((service: any) => {
-                fallbackItems.push({
-                  description: service.serviceName || 'Additional Service',
-                  quantity: 1,
-                  unitPrice: service.price || 0,
-                  totalPrice: service.price || 0
-                });
-              });
-            }
+                          // Add additional services if available
+                          if (order.additionalServices && Array.isArray(order.additionalServices)) {
+                            order.additionalServices.forEach((service: any) => {
+                              fallbackItems.push({
+                                description: service.serviceName || 'Additional Service',
+                                quantity: 1,
+                                unitPrice: service.price || 0,
+                                totalPrice: service.price || 0
+                              });
+                            });
+                          }
 
-            if (fallbackItems.length > 0) {
-              return fallbackItems.map((item: any, index: number) => (
-                <tr key={index} className="hover:bg-muted/10">
-                  <td className="px-4 py-3">{item.description}</td>
-                  <td className="px-4 py-3 text-center">{item.quantity}</td>
-                  <td className="px-4 py-3 text-right">
-                    PKR {typeof item.unitPrice === 'number'
-                      ? item.unitPrice.toFixed(2)
-                      : parseFloat(item.unitPrice || '0').toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium">
-                    PKR {typeof item.totalPrice === 'number'
-                      ? item.totalPrice.toFixed(2)
-                      : parseFloat(item.totalPrice || '0').toFixed(2)}
-                  </td>
-                </tr>
-              ));
-            } else {
-              return (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center">
-                    <div className="flex flex-col items-center gap-2">
-                      <FileText className="h-8 w-8 text-muted-foreground/50" />
-                      <p className="text-muted-foreground">No service details available</p>
-                      <p className="text-xs text-muted-foreground">
-                        Invoice items may not have been generated properly
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              );
-            }
-          }
-        })()}
-      </tbody>
-      <tfoot className="bg-muted/20">
-        <tr>
-          <td colSpan={3} className="px-4 py-3 text-right font-medium">Subtotal</td>
-          <td className="px-4 py-3 text-right font-medium">
-            PKR {(() => {
-              const subtotal = invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount;
-              if (typeof subtotal === 'number') {
-                return subtotal.toFixed(2);
-              }
-              // Calculate subtotal from total if not available
-              const total = parseFloat(invoice?.invoice?.totalAmount || '0');
-              const calculatedSubtotal = total / 1.18; // Assuming 18% tax
-              return calculatedSubtotal.toFixed(2);
-            })()}
-          </td>
-        </tr>
-        <tr>
-          <td colSpan={3} className="px-4 py-3 text-right font-medium">
-            Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
-          </td>
-          <td className="px-4 py-3 text-right font-medium">
-            PKR {(() => {
-              const taxAmount = invoice?.invoice?.taxAmount;
-              if (typeof taxAmount === 'number') {
-                return taxAmount.toFixed(2);
-              }
-              // Calculate tax from total if not available
-              const total = parseFloat(invoice?.invoice?.totalAmount || '0');
-              const calculatedTax = total - (total / 1.18);
-              return calculatedTax.toFixed(2);
-            })()}
-          </td>
-        </tr>
-        <tr className="border-t-2">
-          <td colSpan={3} className="px-4 py-3 text-right font-semibold">Total Amount</td>
-          <td className="px-4 py-3 text-right font-semibold text-primary">
-            PKR {typeof invoice?.invoice?.totalAmount === 'number'
-              ? invoice.invoice.totalAmount.toFixed(2)
-              : parseFloat(invoice?.invoice?.totalAmount || '0').toFixed(2)}
-          </td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
-</div>
-
-            {/* Notes & Payment Info */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <h3 className="text-sm font-medium mb-3">Notes</h3>
-                <div className="bg-muted/30 p-4 rounded-lg min-h-[100px]">
-                  <p className="text-sm text-muted-foreground whitespace-pre-line">
-                    {invoice.invoice.notes || 'No notes provided.'}
-                  </p>
+                          if (fallbackItems.length > 0) {
+                            return fallbackItems.map((item: any, index: number) => (
+                              <tr key={index} className="hover:bg-muted/10">
+                                <td className="px-4 py-3">{item.description}</td>
+                                <td className="px-4 py-3 text-center">{item.quantity}</td>
+                                <td className="px-4 py-3 text-right">
+                                  PKR {typeof item.unitPrice === 'number'
+                                    ? item.unitPrice.toFixed(2)
+                                    : parseFloat(item.unitPrice || '0').toFixed(2)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-medium">
+                                  PKR {typeof item.totalPrice === 'number'
+                                    ? item.totalPrice.toFixed(2)
+                                    : parseFloat(item.totalPrice || '0').toFixed(2)}
+                                </td>
+                              </tr>
+                            ));
+                          } else {
+                            return (
+                              <tr>
+                                <td colSpan={4} className="px-4 py-8 text-center">
+                                  <div className="flex flex-col items-center gap-2">
+                                    <FileText className="h-8 w-8 text-muted-foreground/50" />
+                                    <p className="text-muted-foreground">No service details available</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Invoice items may not have been generated properly
+                                    </p>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+                        }
+                      })()}
+                    </tbody>
+                    <tfoot className="bg-muted/20">
+                      <tr>
+                        <td colSpan={3} className="px-4 py-3 text-right font-medium">Subtotal</td>
+                        <td className="px-4 py-3 text-right font-medium">
+                          PKR {(() => {
+                            const subtotal = invoice?.invoice?.subTotal || invoice?.invoice?.totalAmount;
+                            if (typeof subtotal === 'number') {
+                              return subtotal.toFixed(2);
+                            }
+                            // Calculate subtotal from total if not available
+                            const total = parseFloat(invoice?.invoice?.totalAmount || order.totalAmount?.toString() || '0');
+                            const calculatedSubtotal = total / 1.18; // Assuming 18% tax
+                            return calculatedSubtotal.toFixed(2);
+                          })()}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan={3} className="px-4 py-3 text-right font-medium">
+                          Tax ({invoice?.invoice?.taxRate ? `${invoice.invoice.taxRate}%` : '18%'})
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium">
+                          PKR {(() => {
+                            const taxAmount = invoice?.invoice?.taxAmount;
+                            if (typeof taxAmount === 'number') {
+                              return taxAmount.toFixed(2);
+                            }
+                            // Calculate tax from total if not available
+                            const total = parseFloat(invoice?.invoice?.totalAmount || order.totalAmount?.toString() || '0');
+                            const calculatedTax = total - (total / 1.18);
+                            return calculatedTax.toFixed(2);
+                          })()}
+                        </td>
+                      </tr>
+                      <tr className="border-t-2">
+                        <td colSpan={3} className="px-4 py-3 text-right font-semibold">Total Amount</td>
+                        <td className="px-4 py-3 text-right font-semibold text-primary">
+                          PKR {(() => {
+                            const total = invoice?.invoice?.totalAmount || order.totalAmount;
+                            if (typeof total === 'number') {
+                              return total.toFixed(2);
+                            }
+                            return parseFloat(total?.toString() || '0').toFixed(2);
+                          })()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
-              <div>
-                <h3 className="text-sm font-medium mb-3">Payment Information</h3>
-                <div className="bg-muted/30 p-4 rounded-lg space-y-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Payment Status</span>
-                    <Badge 
-                      className={
-                        invoice.invoice.status === 'paid' 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                          : invoice.invoice.status === 'overdue'
-                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                      }
-                    >
-                      {invoice.invoice.status}
-                    </Badge>
+
+              {/* Notes & Payment Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <h3 className="text-sm font-medium mb-3">Notes</h3>
+                  <div className="bg-muted/30 p-4 rounded-lg min-h-[100px]">
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">
+                      {invoice?.invoice?.notes || order.notes || 'No notes provided.'}
+                    </p>
                   </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Due Date</span>
-                    <span className={
-                      invoice.invoice.status === 'overdue' 
-                        ? 'font-medium text-red-600 dark:text-red-400' 
-                        : 'font-medium'
-                    }>
-                      {formatDate(invoice.invoice.dueDate)}
-                    </span>
-                  </div>
-                  {invoice.mechanic && (
-                    <div className="pt-3 mt-3 border-t">
-                      <p className="text-xs text-muted-foreground mb-1">Service Performed By</p>
-                      <div className="flex items-center gap-2">
-                        <User className="h-3.5 w-3.5 text-primary" />
-                        <span className="text-sm font-medium">{invoice.mechanic.name}</span>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium mb-3">Payment Information</h3>
+                  <div className="bg-muted/30 p-4 rounded-lg space-y-3">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Payment Status</span>
+                      <Badge
+                        className={
+                          (invoice?.invoice?.status === 'paid' || order.invoiceStatus === 'paid')
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            : (invoice?.invoice?.status === 'overdue' || order.invoiceStatus === 'overdue')
+                              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                        }
+                      >
+                        {invoice?.invoice?.status || order.invoiceStatus || 'issued'}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Due Date</span>
+                      <span className={
+                        (invoice?.invoice?.status === 'overdue' || order.invoiceStatus === 'overdue')
+                          ? 'font-medium text-red-600 dark:text-red-400'
+                          : 'font-medium'
+                      }>
+                        {invoice?.invoice?.dueDate ? formatDate(invoice.invoice.dueDate) : 'N/A'}
+                      </span>
+                    </div>
+                    {order.paymentMethod && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Payment Method</span>
+                        <span className="font-medium capitalize">{order.paymentMethod}</span>
                       </div>
-                      {invoice.mechanic.phone && (
-                        <div className="flex items-center gap-2 mt-1">
-                          <Phone className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-sm">{invoice.mechanic.phone}</span>
+                    )}
+                    {invoice?.mechanic && (
+                      <div className="pt-3 mt-3 border-t">
+                        <p className="text-xs text-muted-foreground mb-1">Service Performed By</p>
+                        <div className="flex items-center gap-2">
+                          <User className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-sm font-medium">{invoice.mechanic.name}</span>
                         </div>
-                      )}
-                    </div>
-                  )}
+                        {invoice.mechanic.phone && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <Phone className="h-3.5 w-3.5 text-primary" />
+                            <span className="text-sm">{invoice.mechanic.phone}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Footer */}
-            <div className="text-center border-t pt-4 mt-6">
-              <div className="flex items-center justify-center mb-2">
-                <BadgeCheck className="h-5 w-5 text-primary mr-2" />
-                <h4 className="font-medium">Thank you for choosing MotoMate Auto Services</h4>
+              {/* Footer */}
+              <div className="text-center border-t pt-4 mt-6">
+                <div className="flex items-center justify-center mb-2">
+                  <BadgeCheck className="h-5 w-5 text-primary mr-2" />
+                  <h4 className="font-medium">Thank you for choosing MotoMate Auto Services</h4>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  For any queries regarding this invoice, please contact our customer service.
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                For any queries regarding this invoice, please contact our customer service.
-              </p>
             </div>
-          </div>
 
-          <DialogFooter className="flex flex-wrap sm:flex-nowrap gap-3 mt-4 pt-4 border-t">
-            <Button
-              variant="outline"
-              className="flex-1 border-muted-foreground/20 hover:border-primary/30"
-              onClick={handlePrintInvoice}
-            >
-              <Printer className="mr-2 h-4 w-4" />
-              Print Invoice
-            </Button>
-
-            <Button
-              variant="outline"
-              className="flex-1 border-muted-foreground/20 hover:border-primary/30"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Download PDF
-            </Button>
-
-            {invoice.invoice.status !== 'paid' && (
+            <DialogFooter className="flex flex-wrap sm:flex-nowrap gap-3 mt-4 pt-4 border-t">
               <Button
-                variant="default"
-                className="flex-1 bg-green-600 hover:bg-green-700"
-                onClick={() => router.push(`/invoice/pay/${invoice.invoice.invoiceId}`)}
+                variant="outline"
+                className="flex-1 border-muted-foreground/20 hover:border-primary/30"
+                onClick={handlePrintInvoice}
               >
-                <DollarSign className="mr-2 h-4 w-4" />
-                Pay Now
+                <Printer className="mr-2 h-4 w-4" />
+                Print Invoice
               </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    )}
-  </div>
-  
-);
+
+              <Button
+                variant="outline"
+                className="flex-1 border-muted-foreground/20 hover:border-primary/30"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF
+              </Button>
+
+              {(invoice?.invoice?.status !== 'paid' && order.invoiceStatus !== 'paid') && order.invoiceId && (
+                <Button
+                  variant="default"
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  onClick={() => router.push(`/invoice/pay/${order.invoiceId}`)}
+                >
+                  <DollarSign className="mr-2 h-4 w-4" />
+                  Pay Now
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
 }
