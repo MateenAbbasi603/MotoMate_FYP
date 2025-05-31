@@ -29,8 +29,173 @@ namespace fyp_motomate.Controllers
         }
 
 
-// Controllers/DashboardController.cs - Add this method to your existing DashboardController
+[HttpGet("mechanic")]
+[Authorize(Roles = "mechanic")]
+public async Task<JsonResult> GetMechanicDashboard()
+{
+    try
+    {
+        // Get mechanic ID from token
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int mechanicId))
+        {
+            return new JsonResult(new { success = false, message = "Invalid user credentials" });
+        }
 
+        _logger.LogInformation("Fetching mechanic dashboard data for mechanic ID: {MechanicId}", mechanicId);
+
+        // Get mechanic information
+        var mechanic = await _context.Users
+            .Where(u => u.UserId == mechanicId)
+            .FirstOrDefaultAsync();
+
+        if (mechanic == null)
+        {
+            return new JsonResult(new { success = false, message = "Mechanic not found" });
+        }
+
+        // Calculate week start and end dates
+        var today = DateTime.Today;
+        var dayOfWeek = (int)today.DayOfWeek;
+        var weekStart = today.AddDays(-dayOfWeek);
+        var weekEnd = weekStart.AddDays(7);
+
+        // Get today's appointments
+        var todayAppointments = await _context.Appointments
+            .Include(a => a.User)
+            .Include(a => a.Vehicle)
+            .Include(a => a.Service)
+            .Where(a => a.MechanicId == mechanicId && 
+                       a.AppointmentDate.Date == today &&
+                       a.Status != "cancelled")
+            .OrderBy(a => a.TimeSlot)
+            .ToListAsync();
+
+        // Get upcoming appointments (next 7 days)
+        var upcomingAppointments = await _context.Appointments
+            .Include(a => a.User)
+            .Include(a => a.Vehicle)
+            .Include(a => a.Service)
+            .Where(a => a.MechanicId == mechanicId && 
+                       a.AppointmentDate.Date > today &&
+                       a.AppointmentDate.Date <= today.AddDays(7) &&
+                       a.Status != "cancelled")
+            .OrderBy(a => a.AppointmentDate)
+            .ThenBy(a => a.TimeSlot)
+            .Take(5)
+            .ToListAsync();
+
+        // Get current transfer services
+        var currentServices = await _context.TransferToServices
+            .Include(t => t.User)
+            .Include(t => t.Vehicle)
+            .Include(t => t.Service)
+            .Include(t => t.Order)
+            .Where(t => t.MechanicId == mechanicId && 
+                       (t.Order.Status == "in progress" || t.Order.Status == "awaiting parts"))
+            .OrderBy(t => t.CreatedAt)
+            .ToListAsync();
+
+        // Calculate basic stats with separate queries
+        var totalAppointmentsThisWeek = await _context.Appointments
+            .CountAsync(a => a.MechanicId == mechanicId &&
+                           a.AppointmentDate >= weekStart &&
+                           a.AppointmentDate < weekEnd &&
+                           a.Status != "cancelled");
+
+        var completedThisWeek = await _context.Appointments
+            .CountAsync(a => a.MechanicId == mechanicId &&
+                           a.AppointmentDate >= weekStart &&
+                           a.AppointmentDate < weekEnd &&
+                           a.Status == "completed");
+
+        var totalCompletedJobs = await _context.Appointments
+            .CountAsync(a => a.MechanicId == mechanicId && a.Status == "completed");
+
+        // Get mechanic rating
+        var mechanicPerformance = await _context.MechanicsPerformances
+            .FirstOrDefaultAsync(mp => mp.MechanicId == mechanicId);
+
+        var rating = mechanicPerformance?.Rating ?? 0;
+
+        // Format today's appointments
+        var todaySchedule = todayAppointments.Select(a => new {
+            appointmentId = a.AppointmentId,
+            timeSlot = a.TimeSlot,
+            customerName = a.User?.Name ?? "Unknown",
+            vehicleInfo = a.Vehicle != null ? $"{a.Vehicle.Make} {a.Vehicle.Model}" : "Unknown Vehicle",
+            licensePlate = a.Vehicle?.LicensePlate ?? "",
+            serviceName = a.Service?.ServiceName ?? "Inspection",
+            status = a.Status,
+            notes = a.Notes ?? ""
+        }).ToArray();
+
+        // Format upcoming appointments
+        var upcomingSchedule = upcomingAppointments.Select(a => new {
+            appointmentId = a.AppointmentId,
+            date = a.AppointmentDate.ToString("MMM dd"),
+            timeSlot = a.TimeSlot,
+            customerName = a.User?.Name ?? "Unknown",
+            vehicleInfo = a.Vehicle != null ? $"{a.Vehicle.Make} {a.Vehicle.Model}" : "Unknown Vehicle",
+            licensePlate = a.Vehicle?.LicensePlate ?? "",
+            serviceName = a.Service?.ServiceName ?? "Inspection",
+            status = a.Status
+        }).ToArray();
+
+        // Format current services
+        var activeServices = currentServices.Select(t => new {
+            transferId = t.TransferId,
+            orderId = t.OrderId,
+            customerName = t.User?.Name ?? "Unknown",
+            vehicleInfo = t.Vehicle != null ? $"{t.Vehicle.Make} {t.Vehicle.Model}" : "Unknown Vehicle",
+            licensePlate = t.Vehicle?.LicensePlate ?? "",
+            serviceName = t.Service?.ServiceName ?? "Service",
+            status = t.Order?.Status ?? "unknown",
+            eta = t.ETA ?? "Not set",
+            notes = t.Notes ?? ""
+        }).ToArray();
+
+        var response = new {
+            success = true,
+            mechanic = new {
+                mechanicId = mechanic.UserId,
+                name = mechanic.Name,
+                email = mechanic.Email,
+                phone = mechanic.Phone ?? "",
+                imgUrl = mechanic.imgUrl ?? ""
+            },
+            stats = new {
+                todayAppointments = todayAppointments.Count,
+                weeklyAppointments = totalAppointmentsThisWeek,
+                completedThisWeek = completedThisWeek,
+                totalCompleted = totalCompletedJobs,
+                rating = Math.Round((double)rating, 1),
+                activeServices = currentServices.Count
+            },
+            todaySchedule = todaySchedule,
+            upcomingAppointments = upcomingSchedule,
+            activeServices = activeServices
+        };
+
+        _logger.LogInformation("Mechanic dashboard data fetched successfully for mechanic ID: {MechanicId}", mechanicId);
+        
+        return new JsonResult(response, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+            ReferenceHandler = null
+        });
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error fetching mechanic dashboard data");
+        return new JsonResult(new { 
+            success = false, 
+            message = "An error occurred while fetching mechanic dashboard data", 
+            error = ex.Message 
+        });
+    }
+}
 // Controllers/DashboardController.cs - Update the admin endpoint
 [HttpGet("admin")]
 [Authorize(Roles = "super_admin,admin")]

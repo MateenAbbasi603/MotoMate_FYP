@@ -452,7 +452,7 @@ export default function MechanicDashboard() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
             <Wrench className="h-8 w-8 text-primary" />
-            Mechanic Dashboard
+            Mechanic Appointment
           </h1>
           <p className="text-muted-foreground">
             Manage your appointments and scheduled services
