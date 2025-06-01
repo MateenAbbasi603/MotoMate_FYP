@@ -36,8 +36,14 @@ const mechanicNavItems = [
         url: "/admin/mechanic/services",
         icon: Wrench,
     },
-   
-  
+    {
+        title: "View Tool",
+        url: "/admin/mechanic/view-tools",
+        icon: Wrench,
+    },
+
+
+
 ]
 
 export function MechanicSidebar({ user, ...props }: React.ComponentProps<typeof Sidebar> & { user: any }) {

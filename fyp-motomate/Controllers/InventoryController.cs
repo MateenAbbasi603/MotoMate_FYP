@@ -13,7 +13,7 @@ namespace fyp_motomate.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "super_admin,admin")]
+    [Authorize(Roles = "super_admin,admin,mechanic")]
     public class InventoryController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -21,6 +21,123 @@ namespace fyp_motomate.Controllers
         public InventoryController(ApplicationDbContext context)
         {
             _context = context;
+        }
+
+
+  // GET: api/MechanicTools/active
+        [HttpGet("active")]
+        public async Task<ActionResult<IEnumerable<object>>> GetActiveTools([FromQuery] string search = "")
+        {
+            try
+            {
+                var query = _context.Inventory
+                    .Include(i => i.Instances)
+                    .Where(i => i.IsActive);
+
+                // Apply search filter if provided
+                if (!string.IsNullOrEmpty(search))
+                {
+                    query = query.Where(i => 
+                        i.ToolName.Contains(search) || 
+                        i.ToolType.Contains(search) ||
+                        (i.VendorName != null && i.VendorName.Contains(search)));
+                }
+
+                var activeTools = await query
+                    .Select(i => new
+                    {
+                        i.ToolId,
+                        i.ToolName,
+                        i.ToolType,
+                        i.Condition,
+                        i.Price,
+                        i.VendorName,
+                        i.PurchaseDate,
+                        TotalQuantity = i.Instances.Count,
+                        ActiveQuantity = i.Instances.Count(inst => inst.IsActive),
+                        InactiveQuantity = i.Instances.Count(inst => !inst.IsActive),
+                        DaysSincePurchase = i.PurchaseDate.HasValue 
+                            ? (int)(DateTime.Now - i.PurchaseDate.Value).TotalDays 
+                            : 0,
+                        Instances = i.Instances.Where(inst => inst.IsActive).Select(inst => new
+                        {
+                            inst.InstanceId,
+                            inst.SerialNumber,
+                            inst.CreatedAt
+                        }).ToList()
+                    })
+                    .OrderBy(i => i.ToolName)
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    totalTools = activeTools.Count,
+                    searchTerm = search,
+                    tools = activeTools
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new 
+                { 
+                    success = false, 
+                    message = "An error occurred while retrieving tools", 
+                    error = ex.Message 
+                });
+            }
+        }
+
+ // GET: api/MechanicTools/stats
+        [HttpGet("stats")]
+        public async Task<ActionResult<object>> GetToolStats()
+        {
+            try
+            {
+                var totalTools = await _context.Inventory.CountAsync(i => i.IsActive);
+                var totalInstances = await _context.ToolInstances.CountAsync(i => i.IsActive);
+                var toolTypes = await _context.Inventory
+                    .Where(i => i.IsActive)
+                    .GroupBy(i => i.ToolType)
+                    .Select(g => new
+                    {
+                        ToolType = g.Key,
+                        Count = g.Count()
+                    })
+                    .OrderByDescending(x => x.Count)
+                    .ToListAsync();
+
+                var conditionStats = await _context.Inventory
+                    .Where(i => i.IsActive)
+                    .GroupBy(i => i.Condition)
+                    .Select(g => new
+                    {
+                        Condition = g.Key,
+                        Count = g.Count()
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    stats = new
+                    {
+                        totalTools,
+                        totalInstances,
+                        toolTypes,
+                        conditionStats
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new 
+                { 
+                    success = false, 
+                    message = "An error occurred while retrieving stats", 
+                    error = ex.Message 
+                });
+            }
         }
 
         // GET: api/Inventory
