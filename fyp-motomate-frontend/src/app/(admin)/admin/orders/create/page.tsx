@@ -673,7 +673,7 @@ export default function CreateWalkInOrderPage() {
     if (billData) {
       if (!orderForm.watch('includesInspection') && orderForm.watch('serviceId')) {
         // Service only - go to mechanic services
-        router.push('/admin/mechanic-services');
+        // router.push('/admin/mechanic-services');
       } else {
         // Inspection or both - go to orders
         router.push('/admin/orders');
