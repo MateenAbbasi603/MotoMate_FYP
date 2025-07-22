@@ -514,7 +514,7 @@ public async Task<JsonResult> GetAdminDashboard()
                     })
                     .ToListAsync();
 
-                // Get user's orders with all related data
+                // Get user's orders all related data
                 var orders = await _context.Orders
                     .Where(o => o.UserId == userId)
                     .Include(o => o.Vehicle)

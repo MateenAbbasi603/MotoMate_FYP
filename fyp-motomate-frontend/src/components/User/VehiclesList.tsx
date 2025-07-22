@@ -231,15 +231,7 @@ export default function VehiclesList() {
             </CardContent>
             <Separator />
             <CardFooter className="flex justify-between py-4 mt-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => router.push(`/vehicles/edit/${vehicle.vehicleId}`)}
-                className="transition-all hover:bg-secondary/90"
-              >
-                <Pencil className="h-4 w-4 mr-1.5" />
-                Edit
-              </Button>
+          
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button

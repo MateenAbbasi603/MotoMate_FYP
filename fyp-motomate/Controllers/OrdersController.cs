@@ -328,6 +328,29 @@ namespace fyp_motomate.Controllers
                     return BadRequest(new { message = "Vehicle does not belong to the user" });
                 }
 
+                // Check if the vehicle is available for the inspection date (if provided) or today
+                DateTime checkDate = request.InspectionDate ?? DateTime.Today;
+                bool isVehicleAvailable = await _timeSlotService.IsVehicleAvailableForDateAsync(request.VehicleId, checkDate);
+                if (!isVehicleAvailable)
+                {
+                    _logger.LogWarning("Vehicle not available for date: {VehicleId} {Date}", request.VehicleId, checkDate);
+                    
+                    // Get next available date for the vehicle
+                    var nextAvailableDate = await _timeSlotService.GetNextAvailableDateForVehicleAsync(request.VehicleId, checkDate);
+                    
+                    string errorMessage = "This vehicle is already booked for the selected date. ";
+                    if (nextAvailableDate.HasValue)
+                    {
+                        errorMessage += $"Next available date is {nextAvailableDate.Value.ToString("yyyy-MM-dd")}.";
+                    }
+                    else
+                    {
+                        errorMessage += "No available dates found in the next 30 days.";
+                    }
+                    
+                    return BadRequest(new { message = errorMessage });
+                }
+
                 // Validate service if provided
                 if (request.ServiceId.HasValue)
                 {
@@ -630,6 +653,28 @@ namespace fyp_motomate.Controllers
                 if (currentAppointments >= 3) // Threshold of 3 concurrent appointments
                 {
                     return BadRequest(new { message = "Selected mechanic is currently busy with too many appointments" });
+                }
+
+                // Check if the vehicle is available for today
+                bool isVehicleAvailable = await _timeSlotService.IsVehicleAvailableForDateAsync(request.VehicleId, DateTime.Today);
+                if (!isVehicleAvailable)
+                {
+                    _logger.LogWarning("Vehicle not available for today: {VehicleId}", request.VehicleId);
+                    
+                    // Get next available date for the vehicle
+                    var nextAvailableDate = await _timeSlotService.GetNextAvailableDateForVehicleAsync(request.VehicleId, DateTime.Today);
+                    
+                    string errorMessage = "This vehicle is already booked for today. ";
+                    if (nextAvailableDate.HasValue)
+                    {
+                        errorMessage += $"Next available date is {nextAvailableDate.Value.ToString("yyyy-MM-dd")}.";
+                    }
+                    else
+                    {
+                        errorMessage += "No available dates found in the next 30 days.";
+                    }
+                    
+                    return BadRequest(new { message = errorMessage });
                 }
 
                 // Create order with Cash payment method for all walk-in orders
@@ -1312,6 +1357,32 @@ namespace fyp_motomate.Controllers
                     }
                 }
 
+                // Check if the vehicle is available for the selected date
+                bool isVehicleAvailable = await _timeSlotService.IsVehicleAvailableForDateAsync(request.VehicleId, request.InspectionDate);
+                if (!isVehicleAvailable)
+                {
+                    _logger.LogWarning("Vehicle not available for date: {VehicleId} {Date}", request.VehicleId, request.InspectionDate);
+                    
+                    // Get next available date for the vehicle
+                    var nextAvailableDate = await _timeSlotService.GetNextAvailableDateForVehicleAsync(request.VehicleId, request.InspectionDate);
+                    
+                    string errorMessage = "This vehicle is already booked for the selected date. ";
+                    if (nextAvailableDate.HasValue)
+                    {
+                        errorMessage += $"Next available date is {nextAvailableDate.Value.ToString("yyyy-MM-dd")}.";
+                    }
+                    else
+                    {
+                        errorMessage += "No available dates found in the next 30 days.";
+                    }
+                    
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = errorMessage
+                    });
+                }
+
                 // Check if the time slot is available
                 bool isSlotAvailable = await _timeSlotService.IsTimeSlotAvailableAsync(request.InspectionDate, request.TimeSlot);
                 if (!isSlotAvailable)
@@ -1324,7 +1395,7 @@ namespace fyp_motomate.Controllers
                     });
                 }
 
-                _logger.LogInformation("Time slot is available: {Date} {TimeSlot}", request.InspectionDate, request.TimeSlot);
+                _logger.LogInformation("Vehicle and time slot are available: {VehicleId} {Date} {TimeSlot}", request.VehicleId, request.InspectionDate, request.TimeSlot);
 
                 // Create order and inspection without using transactions
                 try

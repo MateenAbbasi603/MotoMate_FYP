@@ -139,6 +139,7 @@ export default function EnhancedSignupForm() {
       phone: "",
       address: "",
       imgUrl: "",
+      
     },
   });
 

@@ -275,16 +275,517 @@ export default function OrderDetailPage({
 
   // Print invoice
   const handlePrintInvoice = () => {
-    // Create a printable version
-    const printContent = document.getElementById('invoice-printable');
-    const originalContent = document.body.innerHTML;
-
-    if (printContent) {
-      document.body.innerHTML = printContent.innerHTML;
-      window.print();
-      document.body.innerHTML = originalContent;
-      window.location.reload(); // Reload to restore event handlers
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to print the invoice');
+      return;
     }
+
+    // Get invoice data
+    const invoiceData = {
+      invoiceId: invoice?.invoice?.invoiceId || order?.invoiceId || order?.orderId || 'N/A',
+      customerName: invoice?.customer?.name || order?.user?.name || 'N/A',
+      customerEmail: invoice?.customer?.email || order?.user?.email || 'N/A',
+      customerPhone: invoice?.customer?.phone || order?.user?.phone || 'N/A',
+      customerAddress: invoice?.customer?.address || order?.user?.address || 'N/A',
+      vehicleMake: (invoice?.vehicle || order?.vehicle)?.make || 'N/A',
+      vehicleModel: (invoice?.vehicle || order?.vehicle)?.model || 'N/A',
+      vehicleYear: (invoice?.vehicle || order?.vehicle)?.year || 'N/A',
+      vehicleLicense: (invoice?.vehicle || order?.vehicle)?.licensePlate || 'N/A',
+      orderDate: order?.orderDate ? formatDate(order.orderDate) : 'N/A',
+      status: invoice?.invoice?.status || order?.invoiceStatus || 'issued',
+      subtotal: invoice?.invoice?.subTotal || (order?.totalAmount ? order.totalAmount / 1.18 : 0),
+      taxRate: invoice?.invoice?.taxRate || 18,
+      taxAmount: invoice?.invoice?.taxAmount || (order?.totalAmount ? order.totalAmount - (order.totalAmount / 1.18) : 0),
+      totalAmount: invoice?.invoice?.totalAmount || order?.totalAmount || 0,
+      notes: invoice?.invoice?.notes || order?.notes || 'No notes provided.',
+      paymentMethod: order?.paymentMethod || 'N/A',
+      dueDate: invoice?.invoice?.dueDate ? formatDate(invoice.invoice.dueDate) : 'N/A',
+      mechanicName: invoice?.mechanic?.name || 'N/A',
+      mechanicPhone: invoice?.mechanic?.phone || 'N/A'
+    };
+
+    // Get invoice items
+    let items = [];
+    if (invoice?.invoiceItems && Array.isArray(invoice.invoiceItems)) {
+      items = invoice.invoiceItems;
+    } else if (invoice?.invoice?.invoiceItems && Array.isArray(invoice.invoice.invoiceItems)) {
+      items = invoice.invoice.invoiceItems;
+    } else if (invoice?.invoiceItems?.$values) {
+      items = invoice.invoiceItems.$values;
+    } else if (invoice?.invoice?.invoiceItems?.$values) {
+      items = invoice.invoice.invoiceItems.$values;
+    }
+
+    // If no invoice items, create from order data
+    if (items.length === 0 && order) {
+      if (order.service) {
+        items.push({
+          description: order.service.serviceName || 'Main Service',
+          quantity: 1,
+          unitPrice: order.service.price || 0,
+          totalPrice: order.service.price || 0
+        });
+      }
+      if (order.inspection?.price) {
+        items.push({
+          description: `Inspection - ${order.inspection.serviceName || 'Vehicle Inspection'}`,
+          quantity: 1,
+          unitPrice: order.inspection.price,
+          totalPrice: order.inspection.price
+        });
+      }
+      if (order.additionalServices && Array.isArray(order.additionalServices)) {
+        order.additionalServices.forEach((service: any) => {
+          items.push({
+            description: service.serviceName || 'Additional Service',
+            quantity: 1,
+            unitPrice: service.price || 0,
+            totalPrice: service.price || 0
+          });
+        });
+      }
+    }
+
+    // Create the HTML content for the print window
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Invoice #${invoiceData.invoiceId}</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            @page {
+              margin: 1cm;
+              size: A4;
+            }
+            
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              background: white;
+              padding: 20px;
+            }
+            
+            .invoice-header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #e5e7eb;
+              padding-bottom: 20px;
+            }
+            
+            .invoice-title {
+              font-size: 28px;
+              font-weight: bold;
+              color: #1f2937;
+              margin-bottom: 5px;
+            }
+            
+            .invoice-subtitle {
+              font-size: 16px;
+              color: #6b7280;
+              margin-bottom: 10px;
+            }
+            
+            .invoice-number {
+              font-size: 18px;
+              font-weight: 600;
+              color: #3b82f6;
+              background: #eff6ff;
+              padding: 8px 16px;
+              border-radius: 6px;
+              display: inline-block;
+            }
+            
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 30px;
+              margin-bottom: 30px;
+            }
+            
+            .info-section {
+              background: #f9fafb;
+              padding: 20px;
+              border-radius: 8px;
+              border: 1px solid #e5e7eb;
+            }
+            
+            .info-title {
+              font-size: 14px;
+              font-weight: 600;
+              color: #374151;
+              margin-bottom: 15px;
+            }
+            
+            .info-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 8px;
+              font-size: 14px;
+            }
+            
+            .info-label {
+              color: #6b7280;
+              font-weight: 500;
+            }
+            
+            .info-value {
+              color: #1f2937;
+              font-weight: 600;
+              text-align: right;
+              max-width: 200px;
+            }
+            
+            .table-container {
+              margin-bottom: 30px;
+            }
+            
+            .table-title {
+              font-size: 16px;
+              font-weight: 600;
+              color: #374151;
+              margin-bottom: 15px;
+            }
+            
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              border: 1px solid #e5e7eb;
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            
+            th {
+              background: #f3f4f6;
+              padding: 12px;
+              text-align: left;
+              font-weight: 600;
+              color: #374151;
+              font-size: 14px;
+              border-bottom: 1px solid #e5e7eb;
+            }
+            
+            th.text-center {
+              text-align: center;
+            }
+            
+            th.text-right {
+              text-align: right;
+            }
+            
+            td {
+              padding: 12px;
+              border-bottom: 1px solid #f3f4f6;
+              font-size: 14px;
+              color: #1f2937;
+            }
+            
+            td.text-center {
+              text-align: center;
+            }
+            
+            td.text-right {
+              text-align: right;
+            }
+            
+            tfoot th {
+              background: #f9fafb;
+              font-weight: 600;
+              border-top: 2px solid #e5e7eb;
+            }
+            
+            tfoot td {
+              font-weight: 600;
+              border-top: 2px solid #e5e7eb;
+            }
+            
+            .total-row {
+              background: #eff6ff;
+              font-weight: 700;
+              color: #1e40af;
+            }
+            
+            .notes-section {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 30px;
+              margin-bottom: 30px;
+            }
+            
+            .notes-box {
+              background: #f9fafb;
+              padding: 20px;
+              border-radius: 8px;
+              border: 1px solid #e5e7eb;
+              min-height: 120px;
+            }
+            
+            .notes-title {
+              font-size: 14px;
+              font-weight: 600;
+              color: #374151;
+              margin-bottom: 10px;
+            }
+            
+            .notes-content {
+              font-size: 14px;
+              color: #6b7280;
+              line-height: 1.5;
+            }
+            
+            .payment-info {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 8px;
+              font-size: 14px;
+            }
+            
+            .payment-label {
+              color: #6b7280;
+              font-weight: 500;
+            }
+            
+            .payment-value {
+              color: #1f2937;
+              font-weight: 600;
+            }
+            
+            .status-badge {
+              padding: 4px 12px;
+              border-radius: 20px;
+              font-size: 12px;
+              font-weight: 600;
+              text-transform: capitalize;
+            }
+            
+            .status-paid {
+              background: #dcfce7;
+              color: #166534;
+            }
+            
+            .status-issued {
+              background: #dbeafe;
+              color: #1e40af;
+            }
+            
+            .status-overdue {
+              background: #fee2e2;
+              color: #dc2626;
+            }
+            
+            .footer {
+              text-align: center;
+              margin-top: 40px;
+              padding-top: 20px;
+              border-top: 2px solid #e5e7eb;
+            }
+            
+            .footer-title {
+              font-size: 16px;
+              font-weight: 600;
+              color: #1f2937;
+              margin-bottom: 8px;
+            }
+            
+            .footer-text {
+              font-size: 14px;
+              color: #6b7280;
+              line-height: 1.5;
+            }
+            
+            .mechanic-info {
+              padding-top: 15px;
+              margin-top: 15px;
+              border-top: 1px solid #e5e7eb;
+            }
+            
+            .mechanic-title {
+              font-size: 12px;
+              color: #6b7280;
+              margin-bottom: 5px;
+            }
+            
+            .mechanic-detail {
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              font-size: 13px;
+              margin-bottom: 3px;
+            }
+            
+            .mechanic-name {
+              font-weight: 600;
+              color: #1f2937;
+            }
+            
+            .mechanic-phone {
+              color: #6b7280;
+            }
+            
+            @media print {
+              body {
+                padding: 0;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <!-- Invoice Header -->
+          <div class="invoice-header">
+            <div class="invoice-title">MotoMate Auto Services</div>
+            <div class="invoice-subtitle">Professional Automotive Services</div>
+            <div class="invoice-number">Invoice #${invoiceData.invoiceId}</div>
+          </div>
+
+          <!-- Customer & Vehicle Info -->
+          <div class="info-grid">
+            <div class="info-section">
+              <div class="info-title">👤 Customer Information</div>
+              <div class="info-row">
+                <span class="info-label">Name</span>
+                <span class="info-value">${invoiceData.customerName}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Email</span>
+                <span class="info-value">${invoiceData.customerEmail}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Phone</span>
+                <span class="info-value">${invoiceData.customerPhone}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Address</span>
+                <span class="info-value">${invoiceData.customerAddress}</span>
+              </div>
+            </div>
+
+            <div class="info-section">
+              <div class="info-title">🚗 Vehicle Information</div>
+              <div class="info-row">
+                <span class="info-label">Make & Model</span>
+                <span class="info-value">${invoiceData.vehicleMake} ${invoiceData.vehicleModel}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Year</span>
+                <span class="info-value">${invoiceData.vehicleYear}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">License Plate</span>
+                <span class="info-value">${invoiceData.vehicleLicense}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Order Date</span>
+                <span class="info-value">${invoiceData.orderDate}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Service Details Table -->
+          <div class="table-container">
+            <div class="table-title">Service Details</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th class="text-center">Qty</th>
+                  <th class="text-right">Unit Price</th>
+                  <th class="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map((item: any) => `
+                  <tr>
+                    <td>${item.description || 'Service Item'}</td>
+                    <td class="text-center">${item.quantity || 1}</td>
+                    <td class="text-right">PKR ${(item.unitPrice || 0).toFixed(2)}</td>
+                    <td class="text-right">PKR ${(item.totalPrice || 0).toFixed(2)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th colspan="3" class="text-right">Subtotal</th>
+                  <td class="text-right">PKR ${invoiceData.subtotal.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <th colspan="3" class="text-right">Tax (${invoiceData.taxRate}%)</th>
+                  <td class="text-right">PKR ${invoiceData.taxAmount.toFixed(2)}</td>
+                </tr>
+                <tr class="total-row">
+                  <th colspan="3" class="text-right">Total Amount</th>
+                  <td class="text-right">PKR ${invoiceData.totalAmount.toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- Notes & Payment Info -->
+          <div class="notes-section">
+            <div class="notes-box">
+              <div class="notes-title">Notes</div>
+              <div class="notes-content">${invoiceData.notes}</div>
+            </div>
+            <div class="notes-box">
+              <div class="notes-title">Payment Information</div>
+              <div class="payment-info">
+                <span class="payment-label">Payment Status</span>
+                <span class="status-badge status-${invoiceData.status}">${invoiceData.status}</span>
+              </div>
+              <div class="payment-info">
+                <span class="payment-label">Due Date</span>
+                <span class="payment-value">${invoiceData.dueDate}</span>
+              </div>
+              <div class="payment-info">
+                <span class="payment-label">Payment Method</span>
+                <span class="payment-value">${invoiceData.paymentMethod}</span>
+              </div>
+              ${invoiceData.mechanicName !== 'N/A' ? `
+                <div class="mechanic-info">
+                  <div class="mechanic-title">Service Performed By</div>
+                  <div class="mechanic-detail">
+                    <span class="mechanic-name">${invoiceData.mechanicName}</span>
+                  </div>
+                  ${invoiceData.mechanicPhone !== 'N/A' ? `
+                    <div class="mechanic-detail">
+                      <span class="mechanic-phone">${invoiceData.mechanicPhone}</span>
+                    </div>
+                  ` : ''}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="footer">
+            <div class="footer-title">✅ Thank you for choosing MotoMate Auto Services</div>
+            <div class="footer-text">
+              For any queries regarding this invoice, please contact our customer service.
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    // Write the content to the new window
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+
+    // Wait for content to load, then print
+    printWindow.onload = () => {
+      printWindow.print();
+      printWindow.close();
+    };
   };
 
   // View Invoice button handler
@@ -1049,13 +1550,7 @@ export default function OrderDetailPage({
                             Print
                           </Button>
 
-                          <Button
-                            variant="outline"
-                            className="flex-1 border-muted-foreground/20"
-                          >
-                            <Download className="mr-2 h-4 w-4" />
-                            Download
-                          </Button>
+                          
                         </div>
 
                         {/* Pay Now Button (if not paid) */}

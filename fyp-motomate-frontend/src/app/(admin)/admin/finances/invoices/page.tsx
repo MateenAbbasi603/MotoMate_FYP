@@ -359,18 +359,12 @@ export default function InvoicesPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" className="gap-2 shadow-sm">
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
+            
             <Button variant="outline" className="gap-2 shadow-sm">
               <Printer className="h-4 w-4" />
               Print
             </Button>
-            <Button className="gap-2 shadow-sm">
-              <Plus className="h-4 w-4" />
-              New Invoice
-            </Button>
+            
           </div>
         </div>
 
@@ -702,19 +696,7 @@ function InvoiceTable({
                           <Eye className="h-4 w-4" />
                           <span>View Details</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="flex items-center gap-2">
-                          <Mail className="h-4 w-4" />
-                          <span>Send to Customer</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="flex items-center gap-2">
-                          <FileCog className="h-4 w-4" />
-                          <span>Edit Invoice</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="flex items-center gap-2 text-destructive">
-                          <FileX className="h-4 w-4" />
-                          <span>Void Invoice</span>
-                        </DropdownMenuItem>
+                        
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

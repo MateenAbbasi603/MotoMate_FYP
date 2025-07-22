@@ -306,10 +306,7 @@ export default function InvoiceDetailPage({
                                 <Printer className="mr-2 h-4 w-4" />
                                 Print Invoice
                             </Button>
-                            <Button variant="default">
-                                <Download className="mr-2 h-4 w-4" />
-                                Download PDF
-                            </Button>
+                            
                         </div>
                     </div>
                 </div>

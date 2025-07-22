@@ -87,16 +87,27 @@ namespace fyp_motomate.Controllers
                     return NotFound(new { success = false, message = "User not found" });
                 }
 
-                // Get all vehicles for the specified user
+                // Get all vehicles for the specified user (without navigation properties to avoid circular references)
                 var vehicles = await _context.Vehicles
                     .Where(v => v.UserId == userId)
+                    .Select(v => new
+                    {
+                        v.VehicleId,
+                        v.UserId,
+                        v.Make,
+                        v.Model,
+                        v.Year,
+                        v.LicensePlate,
+                        v.CreatedAt,
+                        v.UpdatedAt
+                    })
                     .ToListAsync();
 
                 return Ok(vehicles);
             }
             catch (Exception ex)
             {
-
+                Console.WriteLine($"Error in GetVehiclesByUserId: {ex.Message}");
                 return StatusCode(500, new { success = false, message = "An error occurred while fetching vehicles", error = ex.Message });
             }
         }

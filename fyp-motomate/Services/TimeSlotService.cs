@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using fyp_motomate.Models.DTOs;
 
 namespace fyp_motomate.Services
 {
@@ -16,6 +17,8 @@ namespace fyp_motomate.Services
         Task<bool> IsTimeSlotAvailableAsync(DateTime date, string timeSlot);
         Task<int> GetTimeSlotAvailableCountAsync(DateTime date, string timeSlot);
         Task<List<TimeSlotInfo>> GetAvailableTimeSlotsForMechanicAsync(DateTime date, int mechanicId);
+        Task<bool> IsVehicleAvailableForDateAsync(int vehicleId, DateTime date);
+        Task<DateTime?> GetNextAvailableDateForVehicleAsync(int vehicleId, DateTime fromDate);
     }
 
     public class TimeSlotInfo
@@ -130,12 +133,28 @@ namespace fyp_motomate.Services
                            i.Status != "cancelled")
                 .CountAsync();
 
-            // Count appointments in this time slot
-            var appointmentCount = await _context.Appointments
+            // Get all appointment slots for the specified date and time slot
+            var existingAppointmentSlots = await _context.Appointments
                 .Where(a => a.AppointmentDate.Date == date.Date &&
                            a.TimeSlot == timeSlot &&
                            a.Status != "cancelled")
-                .CountAsync();
+                .Select(a => new { a.OrderId })
+                .ToListAsync();
+
+            // Count appointments that don't have a corresponding inspection in the same time slot
+            int appointmentCount = 0;
+            foreach (var app in existingAppointmentSlots)
+            {
+                // Check if this appointment's order has an inspection
+                var hasInspection = await _context.Inspections
+                    .AnyAsync(i => i.OrderId == app.OrderId && i.TimeSlot == timeSlot);
+
+                // Only count appointments without a corresponding inspection
+                if (!hasInspection)
+                {
+                    appointmentCount++;
+                }
+            }
 
             // Calculate available slots
             int totalUsed = inspectionCount + appointmentCount;
@@ -165,6 +184,89 @@ namespace fyp_motomate.Services
             }
 
             return generalAvailability;
+        }
+
+        public async Task<bool> IsVehicleAvailableForDateAsync(int vehicleId, DateTime date)
+        {
+            try
+            {
+                // Check if vehicle has any active orders/inspections/appointments for the given date
+                var hasActiveOrders = await _context.Orders
+                    .AnyAsync(o => o.VehicleId == vehicleId && 
+                                  o.OrderDate.Date == date.Date && 
+                                  o.Status != "cancelled" && 
+                                  o.Status != "completed");
+
+                if (hasActiveOrders)
+                {
+                    return false;
+                }
+
+                // Check if vehicle has any inspections for the given date
+                var hasInspections = await _context.Inspections
+                    .AnyAsync(i => i.VehicleId == vehicleId && 
+                                  i.ScheduledDate.Date == date.Date && 
+                                  i.Status != "cancelled");
+
+                if (hasInspections)
+                {
+                    return false;
+                }
+
+                // Check if vehicle has any appointments for the given date
+                var hasAppointments = await _context.Appointments
+                    .AnyAsync(a => a.VehicleId == vehicleId && 
+                                  a.AppointmentDate.Date == date.Date && 
+                                  a.Status != "cancelled");
+
+                if (hasAppointments)
+                {
+                    return false;
+                }
+
+                // Check if vehicle has any service transfers for the given date
+                var hasServiceTransfers = await _context.TransferToServices
+                    .AnyAsync(t => t.VehicleId == vehicleId && 
+                                  t.OrderDate.Date == date.Date && 
+                                  t.Status != "cancelled");
+
+                if (hasServiceTransfers)
+                {
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Log error and return false for safety
+                return false;
+            }
+        }
+
+        public async Task<DateTime?> GetNextAvailableDateForVehicleAsync(int vehicleId, DateTime fromDate)
+        {
+            try
+            {
+                // Start checking from the next day after the fromDate
+                var checkDate = fromDate.AddDays(1);
+                
+                // Check up to 30 days in the future
+                for (int i = 0; i < 30; i++)
+                {
+                    if (await IsVehicleAvailableForDateAsync(vehicleId, checkDate))
+                    {
+                        return checkDate;
+                    }
+                    checkDate = checkDate.AddDays(1);
+                }
+
+                return null; // No available date found within 30 days
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
         }
     }
 }

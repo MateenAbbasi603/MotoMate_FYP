@@ -49,8 +49,9 @@ interface OrderDetails {
     status: string;
     totalAmount: number;
     notes?: string;
+    paymentMethod?: string;
     invoiceStatus?: string;
-    invoiceId?: number;
+    invoiceId?: number | null;
     user?: {
         userId: number;
         name: string;
@@ -71,12 +72,16 @@ interface OrderDetails {
         category: string;
         price: number;
         description: string;
+        subCategory?: string;
     };
     inspection?: {
         inspectionId: number;
+        serviceId: number;
         scheduledDate: string;
-        timeSlot: string;
         status: string;
+        serviceName: string;
+        subCategory: string;
+        timeSlot: string;
         bodyCondition?: string;
         engineCondition?: string;
         electricalCondition?: string;
@@ -85,16 +90,6 @@ interface OrderDetails {
         transmissionCondition?: string;
         notes?: string;
         price?: number;
-        serviceName?: string;
-        subCategory?: string;
-        Service?: {
-            ServiceId: number;
-            ServiceName: string;
-            Category: string;
-            Price: number;
-            Description: string;
-            SubCategory?: string;
-        };
     };
     additionalServices?: Array<{
         serviceId: number;
@@ -189,18 +184,25 @@ const OrderDetailsScreen: React.FC = () => {
                 return;
             }
 
-            if (!response.data) {
-                console.error('[OrderDetailsScreen] No data in API response');
+            if (!response.data || !response.data.order) {
+                console.error('[OrderDetailsScreen] No order data in API response');
                 setError('No order data received');
                 return;
             }
 
-            console.log('[OrderDetailsScreen] Setting order data:', JSON.stringify(response.data, null, 2));
-            setOrder(response.data);
+            // Set the order data from the nested structure
+            const orderData = response.data.order;
+            console.log('[OrderDetailsScreen] Setting order data:', JSON.stringify(orderData, null, 2));
+            setOrder(orderData);
 
-            // Always check for invoice if order data is successfully fetched
-            console.log('[OrderDetailsScreen] Checking for invoice after fetching order details');
-            await checkForInvoice(response.data.orderId);
+            // Check for invoice if order data is successfully fetched and orderId exists
+            if (orderData.orderId) {
+                console.log('[OrderDetailsScreen] Checking for invoice after fetching order details');
+                await checkForInvoice(orderData.orderId);
+            } else {
+                console.log('[OrderDetailsScreen] No orderId found in response data');
+                setInvoice(null);
+            }
         } catch (error: any) {
             console.error('[OrderDetailsScreen] Error fetching order details:', error);
             console.error('[OrderDetailsScreen] Error stack:', error?.stack);
@@ -211,6 +213,12 @@ const OrderDetailsScreen: React.FC = () => {
     };
 
     const checkForInvoice = async (orderId: number) => {
+        if (!orderId) {
+            console.log('[OrderDetailsScreen] No orderId provided for invoice check');
+            setInvoice(null);
+            return;
+        }
+
         try {
             setLoadingInvoice(true);
             console.log('[OrderDetailsScreen] Checking for invoice for order:', orderId);

@@ -93,6 +93,8 @@ interface Vehicle {
   year: number;
   licensePlate: string;
   userId: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface Mechanic {
@@ -431,30 +433,32 @@ export default function CreateWalkInOrderPage() {
       );
 
       let vehiclesData: Vehicle[] = [];
-      if (response.data && response.data.$values) {
-        vehiclesData = response.data.$values;
-      } else if (Array.isArray(response.data)) {
+      
+      // Handle different response formats
+      if (Array.isArray(response.data)) {
         vehiclesData = response.data;
-      } else if (response.data && typeof response.data === 'object') {
-        if (response.data.vehicleId) {
-          vehiclesData = [response.data];
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          vehiclesData = response.data.data;
-        } else {
-          console.error("Unexpected vehicle data format:", response.data);
-          toast.error("Received unexpected vehicle data format from server");
-          return;
-        }
+      } else if (response.data && response.data.$values && Array.isArray(response.data.$values)) {
+        vehiclesData = response.data.$values;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        vehiclesData = response.data.data;
+      } else if (response.data && typeof response.data === 'object' && response.data.vehicleId) {
+        vehiclesData = [response.data];
       } else {
-        console.error("Invalid vehicle data format:", response.data);
-        toast.error("Invalid vehicle data format received from server");
+        console.error("Unexpected vehicle data format:", response.data);
+        toast.error("Received unexpected vehicle data format from server");
         return;
       }
 
+      // Filter out invalid vehicles
       vehiclesData = vehiclesData.filter(vehicle => {
-        return vehicle && typeof vehicle === 'object' &&
+        const isValid = vehicle && 
+          typeof vehicle === 'object' &&
           vehicle.vehicleId !== undefined &&
-          vehicle.make !== undefined;
+          vehicle.vehicleId !== null &&
+          vehicle.make !== undefined &&
+          vehicle.make !== null;
+        
+        return isValid;
       });
 
       setUserVehicles(vehiclesData);
@@ -1055,6 +1059,9 @@ export default function CreateWalkInOrderPage() {
                             </div>
                           ) : userVehicles.length > 0 ? (
                             <div className="space-y-2">
+                              <div className="text-xs text-muted-foreground mb-2">
+                                Found {userVehicles.length} vehicle(s)
+                              </div>
                               {userVehicles.map((vehicle) => (
                                 <div
                                   key={vehicle.vehicleId || Math.random()}
@@ -1079,7 +1086,10 @@ export default function CreateWalkInOrderPage() {
                               ))}
                             </div>
                           ) : (
-                            <p className="text-sm text-muted-foreground">No vehicles found</p>
+                            <div className="text-center p-4">
+                              <p className="text-sm text-muted-foreground">No vehicles found for this customer</p>
+                              <p className="text-xs text-muted-foreground mt-1">Click "Add Vehicle" to add a new vehicle</p>
+                            </div>
                           )}
                           <Button
                             variant="outline"
