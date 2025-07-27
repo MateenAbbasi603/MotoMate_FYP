@@ -283,6 +283,12 @@ const orderApi = {
     console.log(response.data);
     
     return response.data;
+  },
+
+  // Cancel order
+  cancelOrder: async (id: number) => {
+    const response = await apiClient.put(`/api/Orders/${id}/cancel`);
+    return response.data;
   }
 };
 

@@ -29,7 +29,10 @@ const profileFormSchema = z.object({
   name: z.string().min(1, {
     message: "Name is required.",
   }),
-  phone: z.string().optional(),
+  phone: z.string().optional().refine(
+    val => !val || /^3\d{9}$/.test(val),
+    { message: 'Enter valid Pakistani mobile (3XXXXXXXXX)' }
+  ),
   address: z.string().optional(),
   imgUrl: z.string().optional(),
 });
@@ -187,6 +190,16 @@ export default function ProfileForm({ user, setUser }: ProfileFormProps) {
     }
   }
 
+  // Helper for Pakistan phone formatting
+  const formatPakPhone = (value: string) => {
+    let clean = value.replace(/\D/g, '').slice(0, 10);
+    if (clean.length > 0 && clean[0] !== '3') clean = '';
+    if (clean.length > 3) {
+      return clean.slice(0, 3) + '-' + clean.slice(3);
+    }
+    return clean;
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -285,14 +298,25 @@ export default function ProfileForm({ user, setUser }: ProfileFormProps) {
             <FormItem>
               <FormLabel>Phone Number</FormLabel>
               <FormControl>
-                <Input 
-                  {...field} 
-                  value={field.value || ""} 
-                  onChange={(e) => {
-                    field.onChange(e);
-                    trackFieldChange("phone", e.target.value);
-                  }}
-                />
+                <div className="relative flex items-center">
+                  <span className="flex items-center gap-1 pr-2 border-r border-muted-foreground/20 bg-muted/30 rounded-l-md h-10 px-2">
+                    <img src="https://flagcdn.com/w20/pk.png" alt="PK" className="w-4 h-4 rounded-sm" />
+                    <span className="text-sm text-muted-foreground font-medium">+92</span>
+                  </span>
+                  <input
+                    type="text"
+                    className="pl-2 h-10 flex-1 rounded-r-md border border-muted-foreground/20 focus:outline-none"
+                    placeholder="3XX-XXXXXXX"
+                    value={formatPakPhone(field.value || '')}
+                    onChange={e => {
+                      let clean = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      if (clean.length > 0 && clean[0] !== '3') clean = '';
+                      field.onChange(clean);
+                      trackFieldChange("phone", clean);
+                    }}
+                    maxLength={11}
+                  />
+                </div>
               </FormControl>
               <FormMessage />
               {updatedFields.phone && (

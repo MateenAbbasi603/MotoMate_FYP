@@ -341,7 +341,7 @@ export default function CustomerNavbar() {
                     <div className="p-6 border-t bg-gray-50">
                       <div className="space-y-3">
                         <Link
-                          href="/dashboard/profile"
+                          href="/profile"
                           onClick={() => setMobileOpen(false)}
                           className="flex items-center px-4 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-white rounded-lg transition-colors"
                         >

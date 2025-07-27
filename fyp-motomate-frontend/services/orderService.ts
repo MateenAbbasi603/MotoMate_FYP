@@ -101,6 +101,17 @@ export const orderService = {
       console.error('Error creating order with inspection:', error);
       throw error;
     }
+  },
+
+  // Cancel order
+  cancelOrder: async (id: number) => {
+    try {
+      const response = await apiClient.put(`/api/Orders/${id}/cancel`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error cancelling order ${id}:`, error);
+      throw error;
+    }
   }
 };
 

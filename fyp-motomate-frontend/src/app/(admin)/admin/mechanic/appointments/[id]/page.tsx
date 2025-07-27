@@ -37,7 +37,8 @@ import {
   HeartPulse,
   BadgeCheck,
   ArrowRight,
-  RefreshCw
+  RefreshCw,
+  Printer
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -103,21 +104,19 @@ export default function MechanicAppointmentDetail({
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [inspectionReports, setInspectionReports] = useState<any[]>([]);
 
-  const [reportFormData, setReportFormData] = useState({
-    bodyCondition: '',
-    engineCondition: '',
-    electricalCondition: '',
-    tireCondition: '',
-    brakeCondition: '',
-    transmissionCondition: '',
-    notes: '',
-    mechanicId: 0
-  });
+  const [reportFormData, setReportFormData] = useState<Record<string, { condition: string; notes: string }>>({});
 
   useEffect(() => {
     fetchData();
   }, [id]);
+
+  useEffect(() => {
+    if (order?.orderId) {
+      fetchInspectionReports();
+    }
+  }, [order?.orderId]);
 
   const fetchData = async () => {
     try {
@@ -182,14 +181,10 @@ export default function MechanicAppointmentDetail({
           // Initialize report form data if inspection exists
           if (orderData.inspection) {
             setReportFormData({
-              bodyCondition: orderData.inspection.bodyCondition || '',
-              engineCondition: orderData.inspection.engineCondition || '',
-              electricalCondition: orderData.inspection.electricalCondition || '',
-              tireCondition: orderData.inspection.tireCondition || '',
-              brakeCondition: orderData.inspection.brakeCondition || '',
-              transmissionCondition: orderData.inspection.transmissionCondition || '',
-              notes: orderData.inspection.notes || '',
-              mechanicId: user.userId // Set mechanic ID from the logged-in user
+              [orderData.inspection.serviceId]: {
+                condition: orderData.inspection.bodyCondition || '',
+                notes: orderData.inspection.notes || ''
+              }
             });
           }
         }
@@ -200,6 +195,25 @@ export default function MechanicAppointmentDetail({
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const fetchInspectionReports = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+      if (!order?.orderId) return;
+      const response = await axios.get(
+        `${API_URL}/api/Inspections/report/order/${order.orderId}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      // Fix: handle $values property from .NET serialization
+      let reports = response.data;
+      if (reports && reports.$values) reports = reports.$values;
+      setInspectionReports(Array.isArray(reports) ? reports : []);
+    } catch (err) {
+      setInspectionReports([]);
     }
   };
 
@@ -305,10 +319,13 @@ export default function MechanicAppointmentDetail({
   };
 
   // Handle input change for report form
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (serviceId: string, field: 'condition' | 'notes', value: string) => {
     setReportFormData(prev => ({
       ...prev,
-      [field]: value
+      [serviceId]: {
+        ...prev[serviceId],
+        [field]: value
+      }
     }));
   };
 
@@ -316,85 +333,219 @@ export default function MechanicAppointmentDetail({
   const handleSubmitReport = async () => {
     try {
       setIsSubmittingReport(true);
-
       const token = localStorage.getItem('token');
       if (!token) {
         toast.error('Authentication token not found. Please log in again.');
         return;
       }
-
       const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
-
-      // Find the inspection ID from the order data
-      const inspectionId = order?.inspection?.inspectionId;
-
-      if (!inspectionId) {
-        toast.error('Inspection ID not found. Cannot submit report.');
-        return;
-      }
-
-      console.log("Submitting report data:", reportFormData);
-
-      // Step 1: Submit the inspection report update
-      await axios.post(
-        `${API_URL}/api/Inspections/${inspectionId}/report`,
-        reportFormData,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+      // For each selected inspection, submit the report and update the inspection table
+      for (const inspection of getSelectedInspections()) {
+        const form = reportFormData[String(inspection.serviceId)];
+        if (!form) continue;
+        
+        console.log('Processing inspection:', inspection);
+        console.log('Inspection ID:', inspection.inspectionId);
+        console.log('Service ID:', inspection.serviceId);
+        // 1. Save to InspectionReport table (if needed)
+        await axios.post(
+          `${API_URL}/api/Inspections/report`,
+          {
+            orderId: order.orderId,
+            serviceId: inspection.serviceId,
+            mechanicId: appointment?.mechanicId,
+            ReportData: JSON.stringify({ result: form.condition, notes: form.notes })
+          },
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        // 2. Update Inspections table (complete the inspection)
+        // Build payload with all required fields
+        const payload: any = {
+          Status: 'completed',
+          BodyCondition: 'Not Inspected',
+          BrakeCondition: 'Not Inspected',
+          EngineCondition: 'Not Inspected',
+          ElectricalCondition: 'Not Inspected',
+          TransmissionCondition: 'Not Inspected',
+          TireCondition: 'Not Inspected',
+          Notes: form.notes || ''
+        };
+        // Map subcategory to field
+        const fieldMap: { [key: string]: string } = {
+          'TireInspection': 'TireCondition',
+          'Disc Inspection': 'BrakeCondition',
+          'SuspensionInspection': 'SuspensionCondition',
+          'EngineInspection': 'EngineCondition',
+          'ElectricalInspection': 'ElectricalCondition',
+          'BodyInspection': 'BodyCondition',
+        };
+        const field = fieldMap[inspection.subCategory || inspection.serviceName] || null;
+        if (field) {
+          payload[field] = form.condition;
         }
-      );
-
-      // Step 2: Update appointment status to completed
-      // Make sure to include ALL required fields for the appointment update
+        // Only update inspection if we have a valid inspectionId
+        if (inspection.inspectionId) {
+          try {
+            await axios.put(
+              `${API_URL}/api/Inspections/${inspection.inspectionId}`,
+              payload,
+              { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+          } catch (error: any) {
+            console.error(`Failed to update inspection ${inspection.inspectionId}:`, error);
+            // Continue with other inspections even if one fails
+          }
+        } else {
+          console.warn(`No inspectionId found for service ${inspection.serviceId}`);
+        }
+      }
+      // Mark appointment as completed
       await axios.put(
         `${API_URL}/api/Appointments/${id}`,
         {
           status: 'completed',
-          notes: "Inspection completed successfully",
-          // Make sure to include the timeSlot to avoid the 400 error
-          timeSlot: appointment?.timeSlot || ""
+          notes: 'Inspection completed successfully',
+          timeSlot: appointment?.timeSlot || ''
         },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
+        { headers: { 'Authorization': `Bearer ${token}` } }
       );
-
-      // Update local state
-      if (appointment) {
-        setAppointment({
-          ...appointment,
-          status: 'completed'
-        });
-      }
-
-      if (order && order.inspection) {
-        setOrder({
-          ...order,
-          inspection: {
-            ...order.inspection,
-            ...reportFormData,
-            status: 'completed'
-          }
-        });
-      }
-
-      toast.success('Inspection report submitted successfully');
+      toast.success('Inspection reports submitted and inspection completed!');
       setIsReportDialogOpen(false);
-
-      // Refresh data after submission
-      setTimeout(() => {
-        fetchData();
-      }, 1000);
-
+      fetchData();
+      fetchInspectionReports();
     } catch (err: any) {
-      console.error('Failed to submit inspection report:', err);
-      toast.error(err.response?.data?.message || 'Failed to submit report. Please try again.');
+      toast.error(err.response?.data?.message || 'Failed to submit inspection reports.');
     } finally {
       setIsSubmittingReport(false);
+    }
+  };
+
+  // Replace the print logic in handlePrintInspectionReport with a table-based layout similar to the customer print page
+  const handlePrintInspectionReport = () => {
+    // Only use reports for this order
+    const reports = inspectionReports.filter((r: any) => r.orderId === order?.orderId);
+    if (!reports || reports.length === 0) {
+      toast.error('No inspection data to print.');
+      return;
+    }
+    const logoUrl = typeof window !== 'undefined' ? window.location.origin + '/motomate-logo.png' : '/motomate-logo.png';
+    let inspectionRows = '';
+    getSelectedInspections().forEach((inspection: any) => {
+      const report = reports.find((r: any) => r.serviceId === inspection.serviceId);
+      let reportData: any = {};
+      try {
+        reportData = report?.reportData ? JSON.parse(report.reportData) : {};
+      } catch {}
+      let resultClass = '', icon = '';
+      switch ((reportData.result || '').toLowerCase()) {
+        case 'excellent':
+          resultClass = 'color:#166534;background:#dcfce7;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '✔️';
+          break;
+        case 'good':
+          resultClass = 'color:#15803d;background:#bbf7d0;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '👍';
+          break;
+        case 'fair':
+          resultClass = 'color:#92400e;background:#fef08a;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '🟡';
+          break;
+        case 'poor':
+          resultClass = 'color:#b91c1c;background:#fee2e2;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '⚠️';
+          break;
+        case 'critical':
+          resultClass = 'color:#fff;background:#b91c1c;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '❌';
+          break;
+        default:
+          resultClass = 'color:#374151;background:#f3f4f6;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '';
+      }
+      inspectionRows += `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${inspection.serviceName}${inspection.subCategory ? ` <span style='font-size:12px;color:#2563eb;'>(${inspection.subCategory})</span>` : ''}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;"><span style='${resultClass}'>${icon} ${reportData.result || 'Not Inspected Yet'}</span></td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;">${reportData.notes || 'No notes provided'}</td>
+        </tr>
+      `;
+    });
+    const mechanicName = appointment?.mechanic?.name || appointment?.mechanicName || '-';
+    const mechanicPhone = appointment?.mechanic?.phone || '-';
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>MOTOMATE INSPECTION REPORT</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            @page { margin: 1cm; size: A4; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; color: #222; background: #fff; margin: 0; padding: 0; }
+            .header-row { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; }
+            .logo { height: 48px; width: 48px; object-fit: contain; }
+            .report-title { font-size: 2rem; font-weight: bold; color: #1e293b; letter-spacing: 1px; }
+            .info-grid { display: flex; justify-content: space-between; margin-bottom: 18px; }
+            .info-section { width: 48%; background: #f9fafb; border-radius: 8px; padding: 16px 18px; border: 1px solid #e5e7eb; }
+            .info-title { font-size: 15px; font-weight: 600; color: #2563eb; margin-bottom: 10px; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 7px; font-size: 14px; }
+            .info-label { color: #6b7280; font-weight: 500; }
+            .info-value { color: #1e293b; font-weight: 600; text-align: right; max-width: 200px; }
+            .section-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin: 24px 0 10px 0; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+            th { background: #f3f4f6; padding: 10px; text-align: left; font-weight: 600; color: #374151; font-size: 14px; border-bottom: 2px solid #e5e7eb; }
+            td { font-size: 14px; }
+            .footer { margin-top: 30px; text-align: right; color: #64748b; font-size: 13px; }
+          </style>
+        </head>
+        <body>
+          <div class="header-row">
+            <img src="${logoUrl}" class="logo" alt="MotoMate Logo" />
+            <span class="report-title">MOTOMATE INSPECTION REPORT</span>
+          </div>
+          <div class="info-grid">
+            <div class="info-section">
+              <div class="info-title">Vehicle Information</div>
+              <div class="info-row"><span class="info-label">Make & Model</span><span class="info-value">${order?.vehicle?.make || ''} ${order?.vehicle?.model || ''}</span></div>
+              <div class="info-row"><span class="info-label">Year</span><span class="info-value">${order?.vehicle?.year || ''}</span></div>
+              <div class="info-row"><span class="info-label">License Plate</span><span class="info-value">${order?.vehicle?.licensePlate || ''}</span></div>
+            </div>
+            <div class="info-section">
+              <div class="info-title">Customer Information</div>
+              <div class="info-row"><span class="info-label">Name</span><span class="info-value">${order?.user?.name || ''}</span></div>
+              <div class="info-row"><span class="info-label">Email</span><span class="info-value">${order?.user?.email || ''}</span></div>
+              <div class="info-row"><span class="info-label">Phone</span><span class="info-value">${order?.user?.phone || ''}</span></div>
+            </div>
+          </div>
+          <div class="section-title">Inspection Results</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Inspection</th>
+                <th>Result</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${inspectionRows}
+            </tbody>
+          </table>
+          <div class="section-title">Mechanic Information</div>
+          <div class="info-section" style="width: 350px;">
+            <div class="info-row"><span class="info-label">Name</span><span class="info-value">${mechanicName}</span></div>
+            <div class="info-row"><span class="info-label">Contact</span><span class="info-value">${mechanicPhone}</span></div>
+          </div>
+          <div class="footer">Generated by MotoMate | ${new Date().toLocaleString()}</div>
+        </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
     }
   };
 
@@ -407,6 +558,33 @@ export default function MechanicAppointmentDetail({
       return order.additionalServices;
     }
     return [];
+  };
+
+  // Get selected inspections for display before report generation
+  const getSelectedInspections = () => {
+    const additionalServices = getAdditionalServices();
+    const inspectionServices = additionalServices.filter(
+      (service: any) => service.category?.toLowerCase() === "inspection"
+    );
+
+    // Combine main inspection and additional inspection services
+    const allInspections = [
+      {
+        serviceId: order?.inspection?.serviceId,
+        serviceName: order?.inspection?.serviceName,
+        subCategory: order?.inspection?.subCategory,
+        notes: order?.inspection?.notes,
+        status: order?.inspection?.status,
+        inspectionId: order?.inspection?.inspectionId,
+        reportData: order?.inspection?.reportData
+      },
+      ...inspectionServices
+    ];
+
+    // Filter out services that have already been reported on
+    return allInspections.filter(
+      (service: any) => !service.inspectionId || !inspectionReports.some(report => report.inspectionId === service.inspectionId)
+    );
   };
 
   return (
@@ -729,72 +907,93 @@ export default function MechanicAppointmentDetail({
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                          <div className="bg-muted/20 p-4 rounded-lg border hover:shadow-sm transition-shadow">
-                            <div className="flex items-center mb-2">
-                              <HeartPulse className="h-4 w-4 mr-2 text-red-600" />
-                              <h4 className="font-medium">Engine Condition</h4>
+                        {/* Inspection Results Section */}
+                        <div className="space-y-4">
+                          {getSelectedInspections().length > 0 ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                              {getSelectedInspections().map((inspection: any, idx: number) => {
+                                // Find the most recent matching report for this inspection, order, and mechanic
+                                const mechanicId = appointment?.mechanicId;
+                                // Debug logging
+                                console.log('inspectionReports:', inspectionReports, 'orderId:', order.orderId, 'mechanicId:', mechanicId);
+                                const reportsForService = inspectionReports
+                                  .filter((r: any) =>
+                                    r.serviceId === inspection.serviceId &&
+                                    r.orderId === order.orderId &&
+                                    (mechanicId ? r.mechanicId === mechanicId : true)
+                                  )
+                                  .sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+                                const report = reportsForService[0];
+                                let reportData: any = {};
+                                try {
+                                  reportData = report?.reportData ? JSON.parse(report.reportData) : {};
+                                } catch {}
+                                // Determine result style and icon for on-page display
+                                let resultClass = '', icon = '';
+                                switch ((reportData.result || '').toLowerCase()) {
+                                  case 'excellent':
+                                    resultClass = 'bg-green-100 text-green-800 border-green-200';
+                                    icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
+                                    break;
+                                  case 'good':
+                                    resultClass = 'bg-green-50 text-green-600 border-green-100';
+                                    icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 9l-3 3-2-2"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 19V6"/></svg>';
+                                    break;
+                                  case 'fair':
+                                    resultClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                                    icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>';
+                                    break;
+                                  case 'poor':
+                                    resultClass = 'bg-red-100 text-red-700 border-red-200';
+                                    icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>';
+                                    break;
+                                  case 'critical':
+                                    resultClass = 'bg-red-700 text-white border-red-700';
+                                    icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+                                    break;
+                                  default:
+                                    resultClass = 'bg-gray-100 text-gray-700 border-gray-200';
+                                    icon = '';
+                                }
+                                return (
+                                  <div key={inspection.serviceId || inspection.inspectionId || idx} className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors bg-muted/20">
+                                    <div className="flex items-center mb-2">
+                                      <ShieldCheck className="h-4 w-4 mr-2 text-blue-600" />
+                                      <h4 className="font-medium">{inspection.serviceName}</h4>
+                                    </div>
+                                    {inspection.subCategory && (
+                                      <div className="mt-1">
+                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                          {inspection.subCategory}
+                                        </Badge>
+                                      </div>
+                                    )}
+                                    <div className="mt-1">
+                                      <span className={`inline-flex items-center border px-2 py-1 rounded-md font-semibold text-sm ${resultClass}`} dangerouslySetInnerHTML={{__html: icon + (reportData.result || 'Not Inspected Yet')}} />
+                                    </div>
+                                    <div className="mt-1">
+                                      <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+                                        Notes: {reportData.notes || 'No notes provided'}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                            <div className="mt-1">
-                              {getConditionBadge(order.inspection.engineCondition) ||
-                                <span className="text-muted-foreground text-sm">Not inspected</span>}
+                          ) : (
+                            <div className="p-4 border rounded-lg shadow-sm bg-muted/20 text-muted-foreground">
+                              No inspections selected by customer.
                             </div>
-                          </div>
-
-                          <div className="bg-muted/20 p-4 rounded-lg border hover:shadow-sm transition-shadow">
-                            <div className="flex items-center mb-2">
-                              <Activity className="h-4 w-4 mr-2 text-yellow-600" />
-                              <h4 className="font-medium">Transmission Condition</h4>
+                          )}
+                          {/* Print Inspection Report Button (after report generation) */}
+                          {order.inspection.status === 'completed' && (
+                            <div className="flex justify-end mt-4">
+                              <Button variant="outline" className="gap-2" onClick={handlePrintInspectionReport}>
+                                <Printer className="h-4 w-4" />
+                                Print Inspection Report
+                              </Button>
                             </div>
-                            <div className="mt-1">
-                              {getConditionBadge(order.inspection.transmissionCondition) ||
-                                <span className="text-muted-foreground text-sm">Not inspected</span>}
-                            </div>
-                          </div>
-
-                          <div className="bg-muted/20 p-4 rounded-lg border hover:shadow-sm transition-shadow">
-                            <div className="flex items-center mb-2">
-                              <BadgeCheck className="h-4 w-4 mr-2 text-green-600" />
-                              <h4 className="font-medium">Body Condition</h4>
-                            </div>
-                            <div className="mt-1">
-                              {getConditionBadge(order.inspection.bodyCondition) ||
-                                <span className="text-muted-foreground text-sm">Not inspected</span>}
-                            </div>
-                          </div>
-
-                          <div className="bg-muted/20 p-4 rounded-lg border hover:shadow-sm transition-shadow">
-                            <div className="flex items-center mb-2">
-                              <PencilRuler className="h-4 w-4 mr-2 text-blue-600" />
-                              <h4 className="font-medium">Electrical Condition</h4>
-                            </div>
-                            <div className="mt-1">
-                              {getConditionBadge(order.inspection.electricalCondition) ||
-                                <span className="text-muted-foreground text-sm">Not inspected</span>}
-                            </div>
-                          </div>
-
-                          <div className="bg-muted/20 p-4 rounded-lg border hover:shadow-sm transition-shadow">
-                            <div className="flex items-center mb-2">
-                              <MoreHorizontal className="h-4 w-4 mr-2 text-purple-600" />
-                              <h4 className="font-medium">Brake Condition</h4>
-                            </div>
-                            <div className="mt-1">
-                              {getConditionBadge(order.inspection.brakeCondition) ||
-                                <span className="text-muted-foreground text-sm">Not inspected</span>}
-                            </div>
-                          </div>
-
-                          <div className="bg-muted/20 p-4 rounded-lg border hover:shadow-sm transition-shadow">
-                            <div className="flex items-center mb-2">
-                              <ThumbsUp className="h-4 w-4 mr-2 text-orange-600" />
-                              <h4 className="font-medium">Tire Condition</h4>
-                            </div>
-                            <div className="mt-1">
-                              {getConditionBadge(order.inspection.tireCondition) ||
-                                <span className="text-muted-foreground text-sm">Not inspected</span>}
-                            </div>
-                          </div>
+                          )}
                         </div>
 
                         {order.inspection.notes && (
@@ -1073,138 +1272,42 @@ export default function MechanicAppointmentDetail({
           </DialogHeader>
 
           <div className="grid gap-5 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="bodyCondition" className="text-sm font-medium">Body Condition</Label>
-                <Select
-                  value={reportFormData.bodyCondition}
-                  onValueChange={(value) => handleInputChange('bodyCondition', value)}
-                >
-                  <SelectTrigger id="bodyCondition" className="w-full">
-                    <SelectValue placeholder="Select condition" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {conditionOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value} className={cn("flex items-center gap-2", option.color)}>
-                        <span className={cn("h-2 w-2 rounded-full", option.bg)}></span>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {getSelectedInspections().length === 0 ? (
+              <div className="text-muted-foreground">No inspections to report.</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6">
+                {getSelectedInspections().map((inspection: any) => (
+                  <div key={inspection.serviceId || inspection.inspectionId} className="space-y-2 border-b pb-4 last:border-b-0 last:pb-0">
+                    <Label className="text-base font-semibold">
+                      {inspection.serviceName}
+                      {inspection.subCategory ? ` (${inspection.subCategory})` : ''}
+                    </Label>
+                    <Select
+                      value={reportFormData[String(inspection.serviceId)]?.condition || ''}
+                      onValueChange={(value) => handleInputChange(String(inspection.serviceId), 'condition', value)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select condition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {conditionOptions.map(option => (
+                          <SelectItem key={option.value} value={option.value} className={cn("flex items-center gap-2", option.color)}>
+                            <span className={cn("h-2 w-2 rounded-full", option.bg)}></span>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Textarea
+                      value={reportFormData[String(inspection.serviceId)]?.notes || ''}
+                      onChange={e => handleInputChange(String(inspection.serviceId), 'notes', e.target.value)}
+                      placeholder="Notes for this inspection (optional)"
+                      className="min-h-[80px]"
+                    />
+                  </div>
+                ))}
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="engineCondition" className="text-sm font-medium">Engine Condition</Label>
-                <Select
-                  value={reportFormData.engineCondition}
-                  onValueChange={(value) => handleInputChange('engineCondition', value)}
-                >
-                  <SelectTrigger id="engineCondition" className="w-full">
-                    <SelectValue placeholder="Select condition" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {conditionOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value} className={cn("flex items-center gap-2", option.color)}>
-                        <span className={cn("h-2 w-2 rounded-full", option.bg)}></span>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="electricalCondition" className="text-sm font-medium">Electrical Condition</Label>
-                <Select
-                  value={reportFormData.electricalCondition}
-                  onValueChange={(value) => handleInputChange('electricalCondition', value)}
-                >
-                  <SelectTrigger id="electricalCondition" className="w-full">
-                    <SelectValue placeholder="Select condition" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {conditionOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value} className={cn("flex items-center gap-2", option.color)}>
-                        <span className={cn("h-2 w-2 rounded-full", option.bg)}></span>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="tireCondition" className="text-sm font-medium">Tire Condition</Label>
-                <Select
-                  value={reportFormData.tireCondition}
-                  onValueChange={(value) => handleInputChange('tireCondition', value)}
-                >
-                  <SelectTrigger id="tireCondition" className="w-full">
-                    <SelectValue placeholder="Select condition" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {conditionOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value} className={cn("flex items-center gap-2", option.color)}>
-                        <span className={cn("h-2 w-2 rounded-full", option.bg)}></span>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="brakeCondition" className="text-sm font-medium">Brake Condition</Label>
-                <Select
-                  value={reportFormData.brakeCondition}
-                  onValueChange={(value) => handleInputChange('brakeCondition', value)}
-                >
-                  <SelectTrigger id="brakeCondition" className="w-full">
-                    <SelectValue placeholder="Select condition" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {conditionOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value} className={cn("flex items-center gap-2", option.color)}>
-                        <span className={cn("h-2 w-2 rounded-full", option.bg)}></span>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="transmissionCondition" className="text-sm font-medium">Transmission Condition</Label>
-                <Select
-                  value={reportFormData.transmissionCondition}
-                  onValueChange={(value) => handleInputChange('transmissionCondition', value)}
-                >
-                  <SelectTrigger id="transmissionCondition" className="w-full">
-                    <SelectValue placeholder="Select condition" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {conditionOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value} className={cn("flex items-center gap-2", option.color)}>
-                        <span className={cn("h-2 w-2 rounded-full", option.bg)}></span>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes" className="text-sm font-medium">Inspection Notes</Label>
-              <Textarea
-                id="notes"
-                value={reportFormData.notes}
-                onChange={(e) => handleInputChange('notes', e.target.value)}
-                placeholder="Provide detailed notes about the inspection findings"
-                className="min-h-[120px]"
-              />
-            </div>
+            )}
           </div>
 
           <DialogFooter className="gap-2">

@@ -92,6 +92,16 @@ const SignupScreen = () => {
     }
   };
 
+  const formatPakPhone = (value: string) => {
+    // Only allow digits, max 10, must start with 3
+    let clean = value.replace(/\D/g, '').slice(0, 10);
+    if (clean.length > 0 && clean[0] !== '3') clean = '';
+    if (clean.length > 3) {
+      return clean.slice(0, 3) + '-' + clean.slice(3);
+    }
+    return clean;
+  };
+
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
 
@@ -118,9 +128,11 @@ const SignupScreen = () => {
       newErrors.name = 'Name must be at least 2 characters';
     }
 
-    // Phone validation
-    if (formData.phone && !/^\d{11}$/.test(formData.phone)) {
-      newErrors.phone = 'Phone number must be exactly 11 digits';
+    // Pakistan phone validation
+    if (formData.phone && formData.phone.length > 0) {
+      if (!/^3\d{9}$/.test(formData.phone)) {
+        newErrors.phone = 'Enter valid Pakistani mobile (3XXXXXXXXX)';
+      }
     }
 
     // Password validation
@@ -321,23 +333,20 @@ const SignupScreen = () => {
                 </View>
                 <TextInput
                   style={[styles.textInput, styles.phoneInput]}
-                  placeholder="3XXXXXXXXX"
-                  value={formData.phone}
+                  placeholder="3XX-XXXXXXX"
+                  value={formatPakPhone(formData.phone)}
                   onChangeText={(value) => {
-                    // Only allow digits and ensure it starts with 3
-                    const cleanValue = value.replace(/\D/g, '');
-                    if (cleanValue.length === 0 || 
-                        (cleanValue.length === 1 && cleanValue === '3') || 
-                        (cleanValue.length > 1 && cleanValue.startsWith('3'))) {
-                      updateFormData('phone', cleanValue);
-                    }
+                    // Only store digits, max 10, must start with 3
+                    let clean = value.replace(/\D/g, '').slice(0, 10);
+                    if (clean.length > 0 && clean[0] !== '3') clean = '';
+                    updateFormData('phone', clean);
                   }}
                   keyboardType="phone-pad"
-                  maxLength={11}
+                  maxLength={11} // 10 digits + 1 dash for display
                 />
               </View>
               <Text style={styles.phoneHelperText}>
-                Enter 11-digit Pakistani mobile number starting with 3
+                Enter 10 digits after +92, starting with 3
               </Text>
               {errors.phone && (
                 <Text style={styles.errorText}>{errors.phone}</Text>

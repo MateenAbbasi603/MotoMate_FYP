@@ -113,6 +113,16 @@ const ProfileScreen = () => {
     }
   };
 
+  const formatPakPhone = (value: string) => {
+    // Only allow digits, max 10, must start with 3
+    let clean = value.replace(/\D/g, '').slice(0, 10);
+    if (clean.length > 0 && clean[0] !== '3') clean = '';
+    if (clean.length > 3) {
+      return clean.slice(0, 3) + '-' + clean.slice(3);
+    }
+    return clean;
+  };
+
   const validateProfileForm = () => {
     const newErrors: { [key: string]: string } = {};
 
@@ -126,8 +136,11 @@ const ProfileScreen = () => {
       newErrors.email = 'Please enter a valid email';
     }
 
-    if (profileData.phone && !/^\+?[\d\s\-\(\)]+$/.test(profileData.phone)) {
-      newErrors.phone = 'Please enter a valid phone number';
+    // Pakistan phone validation
+    if (profileData.phone && profileData.phone.length > 0) {
+      if (!/^3\d{9}$/.test(profileData.phone)) {
+        newErrors.phone = 'Enter valid Pakistani mobile (3XXXXXXXXX)';
+      }
     }
 
     setErrors(newErrors);
@@ -162,7 +175,8 @@ const ProfileScreen = () => {
 
     setIsSaving(true);
     try {
-      const result = await apiService.updateProfile(profileData);
+      const payload = { ...profileData, phone: profileData.phone };
+      const result = await apiService.updateProfile(payload);
       
       if (result.success) {
         setUser(result.data);
@@ -389,16 +403,26 @@ const ProfileScreen = () => {
           {/* Phone Input */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Phone Number</Text>
-            <View style={[styles.inputWrapper, errors.phone ? styles.inputError : null]}>
-              <Ionicons name="call-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+            <View style={[styles.inputWrapper, errors.phone ? styles.inputError : null]}>  
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingRight: 8, borderRightWidth: 1, borderRightColor: '#D1D5DB' }}>
+                <Image source={{ uri: 'https://flagcdn.com/w20/pk.png' }} style={{ width: 16, height: 16, borderRadius: 2 }} />
+                <Text style={{ fontSize: 14, color: '#6B7280', fontWeight: '500' }}>+92</Text>
+              </View>
               <TextInput
-                style={styles.textInput}
-                placeholder="Enter your phone number"
-                value={profileData.phone}
-                onChangeText={(value) => updateProfileData('phone', value)}
+                style={[styles.textInput]}
+                placeholder="3XX-XXXXXXX"
+                value={formatPakPhone(profileData.phone)}
+                onChangeText={(value) => {
+                  // Only store digits, max 10, must start with 3
+                  let clean = value.replace(/\D/g, '').slice(0, 10);
+                  if (clean.length > 0 && clean[0] !== '3') clean = '';
+                  updateProfileData('phone', clean);
+                }}
                 keyboardType="phone-pad"
+                maxLength={11} // 10 digits + 1 dash for display
               />
             </View>
+            <Text style={styles.phoneHelperText}>Enter 10 digits after +92, starting with 3</Text>
             {errors.phone && (
               <Text style={styles.errorText}>{errors.phone}</Text>
             )}
@@ -978,5 +1002,11 @@ const styles = StyleSheet.create({
       fontSize: 16,
       fontWeight: '600',
       color: '#374151',
+    },
+    phoneHelperText: {
+      fontSize: 12,
+      color: '#6B7280',
+      marginTop: 4,
+      marginBottom: 8,
     },
   });

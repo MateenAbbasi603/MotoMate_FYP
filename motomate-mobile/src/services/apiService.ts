@@ -4,9 +4,9 @@ import * as SecureStore from 'expo-secure-store';
 
 // Update API URL based on platform
 const API_URL = Platform.select({
-  android: 'https://4ec7cd56e138.ngrok-free.app',
-  ios: ' https://4ec7cd56e138.ngrok-free.app',
-  default: ' https://4ec7cd56e138.ngrok-free.app'
+  android: 'https://87356bfb7d0c.ngrok-free.app',
+  ios: 'https://87356bfb7d0c.ngrok-free.app',
+  default: 'https://87356bfb7d0c.ngrok-free.app'
 });
 
 // Create axios instance with custom config
@@ -526,6 +526,20 @@ class ApiService {
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch time slots'
+      };
+    }
+  }
+
+  async getInspectionReportsByOrder(orderId: number) {
+    try {
+      const response = await axiosInstance.get(`/api/Inspections/report/order/${orderId}`);
+      // The response is already processed by the interceptor
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      console.error('Get inspection reports error:', error.message);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch inspection reports'
       };
     }
   }

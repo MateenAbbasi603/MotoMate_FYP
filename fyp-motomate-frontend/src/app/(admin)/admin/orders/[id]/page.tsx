@@ -64,6 +64,7 @@ import {
   ListChecks,
   CircleDashed,
   ReceiptText,
+  Printer,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
@@ -88,7 +89,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import invoiceService from '../../../../../../services/invoiceService';
-
+import apiClient from '../../../../services/apiClient';
+import WalkInBillModal from '@/components/Admin/WalkInBillModal';
 interface InspectionData {
   inspectionId: number;
   scheduledDate: string;
@@ -133,6 +135,7 @@ interface UserData {
   email: string;
   phone: string;
   address?: string;
+  [key: string]: any; // Allow extra fields like isNewUser, username, temporaryPassword
 }
 
 interface OrderData {
@@ -153,6 +156,8 @@ interface OrderData {
   inspection?: InspectionData;
   paymentMethod: string;
   additionalServices?: ServiceData[] | { $values?: ServiceData[] };
+  orderType?: string;
+  isWalkIn?: boolean;
 }
 
 // Enhanced status badge component
@@ -273,7 +278,10 @@ export default function OrderDetailPage({
   const [invoiceId, setInvoiceId] = useState<number | null>(null);
   const [isDialogMounted, setIsDialogMounted] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
-
+  const [inspectionReports, setInspectionReports] = useState<any[]>([]);
+  const [mechanicInfo, setMechanicInfo] = useState<{ name: string; phone: string } | null>(null);
+  const [loadingMechanic, setLoadingMechanic] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   // Helper function to check if this is an inspection-only order
   const isInspectionOnlyOrder = (): boolean => {
@@ -572,7 +580,26 @@ useEffect(() => {
   fetchData();
 }, [id]);
 
+useEffect(() => {
+  if (order?.orderId) {
+    fetchInspectionReports();
+  }
+}, [order?.orderId]);
 
+const fetchInspectionReports = async () => {
+  try {
+    const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+    if (!order?.orderId) return;
+    const response = await axios.get(
+      `${API_URL}/api/Inspections/report/order/${order.orderId}`
+    );
+    let reports = response.data;
+    if (reports && reports.$values) reports = reports.$values;
+    setInspectionReports(Array.isArray(reports) ? reports : []);
+  } catch (err) {
+    setInspectionReports([]);
+  }
+};
 
   // Format dates
   const formatDate = (dateString: string | undefined): string => {
@@ -1047,6 +1074,346 @@ useEffect(() => {
     );
   };
 
+  // Helper to get all customer-selected inspections (main + additional)
+  const getSelectedInspections = () => {
+    if (!order) return [];
+    const additionalServices = Array.isArray(order.additionalServices)
+      ? order.additionalServices
+      : (order.additionalServices?.$values || []);
+    const inspectionServices = additionalServices.filter(
+      (service: any) => service.category?.toLowerCase() === 'inspection'
+    );
+    return [
+      ...(order.inspection ? [order.inspection] : []),
+      ...inspectionServices
+    ];
+  };
+
+  const handlePrintInspectionReport = () => {
+    if (!order) return;
+    const logoUrl = `${window.location.origin}/motomate-logo.png`;
+    const selectedInspections = getSelectedInspections();
+    const inspectionRows = selectedInspections.map((inspection: any) => {
+      const reportsForService = inspectionReports
+        .filter((r: any) => r.serviceId === inspection.serviceId && r.orderId === order.orderId)
+        .sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+      const report = reportsForService[0];
+      let reportData: any = {};
+      try {
+        reportData = report?.reportData ? JSON.parse(report.reportData) : {};
+      } catch {}
+      let resultClass = '', icon = '';
+      switch ((reportData.result || '').toLowerCase()) {
+        case 'excellent':
+          resultClass = 'color:#166534;background:#dcfce7;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '✔️';
+          break;
+        case 'good':
+          resultClass = 'color:#15803d;background:#bbf7d0;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '👍';
+          break;
+        case 'fair':
+          resultClass = 'color:#92400e;background:#fef08a;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '🟡';
+          break;
+        case 'poor':
+          resultClass = 'color:#b91c1c;background:#fee2e2;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '⚠️';
+          break;
+        case 'critical':
+          resultClass = 'color:#fff;background:#b91c1c;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '❌';
+          break;
+        default:
+          resultClass = 'color:#374151;background:#f3f4f6;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '';
+      }
+      return `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${inspection.serviceName}${inspection.subCategory ? ` <span style='font-size:12px;color:#2563eb;'>(${inspection.subCategory})</span>` : ''}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;"><span style='${resultClass}'>${icon} ${reportData.result || 'Not Inspected Yet'}</span></td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;">${reportData.notes || 'No notes provided'}</td>
+        </tr>
+      `;
+    }).join('');
+    // Mechanic info: prefer appointment.mechanic, fallback to mechanicInfo state
+    const mechanicName = appointment?.mechanic?.name || mechanicInfo?.name || '-';
+    const mechanicPhone = appointment?.mechanic?.phone || mechanicInfo?.phone || '-';
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>MOTOMATE INSPECTION REPORT</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            @page { margin: 1cm; size: A4; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; color: #222; background: #fff; margin: 0; padding: 0; }
+            .header-row { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; }
+            .logo { height: 48px; width: 48px; object-fit: contain; }
+            .report-title { font-size: 2rem; font-weight: bold; color: #1e293b; letter-spacing: 1px; }
+            .info-grid { display: flex; justify-content: space-between; margin-bottom: 18px; }
+            .info-section { width: 48%; background: #f9fafb; border-radius: 8px; padding: 16px 18px; border: 1px solid #e5e7eb; }
+            .info-title { font-size: 15px; font-weight: 600; color: #2563eb; margin-bottom: 10px; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 7px; font-size: 14px; }
+            .info-label { color: #6b7280; font-weight: 500; }
+            .info-value { color: #1e293b; font-weight: 600; text-align: right; max-width: 200px; }
+            .section-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin: 24px 0 10px 0; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+            th { background: #f3f4f6; padding: 10px; text-align: left; font-weight: 600; color: #374151; font-size: 14px; border-bottom: 2px solid #e5e7eb; }
+            td { font-size: 14px; }
+            .footer { margin-top: 30px; text-align: right; color: #64748b; font-size: 13px; }
+          </style>
+        </head>
+        <body>
+          <div class="header-row">
+            <img src="${logoUrl}" class="logo" alt="MotoMate Logo" />
+            <span class="report-title">MOTOMATE INSPECTION REPORT</span>
+          </div>
+          <div class="info-grid">
+            <div class="info-section">
+              <div class="info-title">Vehicle Information</div>
+              <div class="info-row"><span class="info-label">Make & Model</span><span class="info-value">${order?.vehicle?.make || ''} ${order?.vehicle?.model || ''}</span></div>
+              <div class="info-row"><span class="info-label">Year</span><span class="info-value">${order?.vehicle?.year || ''}</span></div>
+              <div class="info-row"><span class="info-label">License Plate</span><span class="info-value">${order?.vehicle?.licensePlate || ''}</span></div>
+            </div>
+            <div class="info-section">
+              <div class="info-title">Customer Information</div>
+              <div class="info-row"><span class="info-label">Name</span><span class="info-value">${order?.user?.name || ''}</span></div>
+              <div class="info-row"><span class="info-label">Email</span><span class="info-value">${order?.user?.email || ''}</span></div>
+              <div class="info-row"><span class="info-label">Phone</span><span class="info-value">${order?.user?.phone || ''}</span></div>
+            </div>
+          </div>
+          <div class="section-title">Inspection Results</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Inspection</th>
+                <th>Result</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${inspectionRows}
+            </tbody>
+          </table>
+          <div class="section-title">Mechanic Information</div>
+          <div class="info-section" style="width: 350px;">
+            <div class="info-row"><span class="info-label">Name</span><span class="info-value">${mechanicName}</span></div>
+            <div class="info-row"><span class="info-label">Contact</span><span class="info-value">${mechanicPhone}</span></div>
+          </div>
+          <div class="footer">Generated by MotoMate | ${new Date().toLocaleString()}</div>
+        </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    }
+  };
+
+  // Fetch mechanic info when inspectionReports are loaded
+  useEffect(() => {
+    const fetchMechanic = async () => {
+      if (inspectionReports.length > 0 && inspectionReports[0].mechanicId) {
+        setLoadingMechanic(true);
+        try {
+          const response = await apiClient.get(`/api/Users/${inspectionReports[0].mechanicId}`);
+          if (response.data && response.data.name) {
+            setMechanicInfo({ name: response.data.name, phone: response.data.phone || '-' });
+          } else if (response.data && response.data.user && response.data.user.name) {
+            setMechanicInfo({ name: response.data.user.name, phone: response.data.user.phone || '-' });
+          } else {
+            setMechanicInfo({ name: '-', phone: '-' });
+          }
+        } catch {
+          setMechanicInfo({ name: '-', phone: '-' });
+        } finally {
+          setLoadingMechanic(false);
+        }
+      }
+    };
+    fetchMechanic();
+  }, [inspectionReports]);
+
+  const handlePrintReceipt = () => {
+    if (!order) return;
+    const logoUrl = `${window.location.origin}/motomate-logo.png`;
+    // Prepare receipt rows for services/inspections
+    const serviceRows = [];
+    if (order.service) {
+      serviceRows.push(`<tr><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;'>${order.service.serviceName}</td><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;'>Service</td><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;'>PKR ${order.service.price?.toFixed(2) || '0.00'}</td></tr>`);
+    }
+    if (order.includesInspection && order.inspection) {
+      serviceRows.push(`<tr><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;'>${order.inspection.serviceName}${order.inspection.subCategory ? ` <span style='font-size:12px;color:#2563eb;'>(${order.inspection.subCategory})</span>` : ''}</td><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;'>Inspection</td><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;'>PKR ${order.inspection.price?.toFixed(2) || '0.00'}</td></tr>`);
+    }
+    if (Array.isArray(order.additionalServices)) {
+      order.additionalServices.forEach((service) => {
+        serviceRows.push(`<tr><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;'>${service.serviceName}${service.subCategory ? ` <span style='font-size:12px;color:#2563eb;'>(${service.subCategory})</span>` : ''}</td><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;'>${service.category}</td><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;'>PKR ${service.price?.toFixed(2) || '0.00'}</td></tr>`);
+      });
+    }
+    // Calculate totals
+    const servicePrice = order?.service?.price || 0;
+    const inspectionPrice = order?.includesInspection ? order.inspection?.price || 0 : 0;
+    const additionalServicesPrice = Array.isArray(order.additionalServices) ? order.additionalServices.reduce((sum, s) => sum + (s.price || 0), 0) : 0;
+    const subtotal = servicePrice + inspectionPrice + additionalServicesPrice;
+    const taxAmount = subtotal * 0.18;
+    const totalWithTax = subtotal + taxAmount;
+    // Mechanic info: prefer appointment.mechanic, fallback to mechanicInfo state
+    const mechanicName = appointment?.mechanic?.name || mechanicInfo?.name || '-';
+    const mechanicPhone = appointment?.mechanic?.phone || mechanicInfo?.phone || '-';
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>MOTOMATE WALK-IN RECEIPT</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            @page { margin: 1cm; size: A4; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; color: #222; background: #fff; margin: 0; padding: 0; }
+            .header-row { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; }
+            .logo { height: 48px; width: 48px; object-fit: contain; }
+            .report-title { font-size: 2rem; font-weight: bold; color: #1e293b; letter-spacing: 1px; }
+            .info-grid { display: flex; justify-content: space-between; margin-bottom: 18px; }
+            .info-section { width: 48%; background: #f9fafb; border-radius: 8px; padding: 16px 18px; border: 1px solid #e5e7eb; }
+            .info-title { font-size: 15px; font-weight: 600; color: #2563eb; margin-bottom: 10px; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 7px; font-size: 14px; }
+            .info-label { color: #6b7280; font-weight: 500; }
+            .info-value { color: #1e293b; font-weight: 600; text-align: right; max-width: 200px; }
+            .section-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin: 24px 0 10px 0; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+            th { background: #f3f4f6; padding: 10px; text-align: left; font-weight: 600; color: #374151; font-size: 14px; border-bottom: 2px solid #e5e7eb; }
+            td { font-size: 14px; }
+            .footer { margin-top: 30px; text-align: right; color: #64748b; font-size: 13px; }
+          </style>
+        </head>
+        <body>
+          <div class="header-row">
+            <img src="${logoUrl}" class="logo" alt="MotoMate Logo" />
+            <span class="report-title">MOTOMATE WALK-IN RECEIPT</span>
+          </div>
+          <div class="info-grid">
+            <div class="info-section">
+              <div class="info-title">Customer Information</div>
+              <div class="info-row"><span class="info-label">Name</span><span class="info-value">${order?.user?.name || ''}</span></div>
+              <div class="info-row"><span class="info-label">Email</span><span class="info-value">${order?.user?.email || ''}</span></div>
+              <div class="info-row"><span class="info-label">Phone</span><span class="info-value">${order?.user?.phone || ''}</span></div>
+            </div>
+            <div class="info-section">
+              <div class="info-title">Vehicle Information</div>
+              <div class="info-row"><span class="info-label">Make & Model</span><span class="info-value">${order?.vehicle?.make || ''} ${order?.vehicle?.model || ''}</span></div>
+              <div class="info-row"><span class="info-label">Year</span><span class="info-value">${order?.vehicle?.year || ''}</span></div>
+              <div class="info-row"><span class="info-label">License Plate</span><span class="info-value">${order?.vehicle?.licensePlate || ''}</span></div>
+            </div>
+          </div>
+          <div class="section-title">Order Details</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Type</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${serviceRows.join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2" style="text-align:right;padding:8px 12px;font-weight:600;">Subtotal</td>
+                <td style="padding:8px 12px;font-weight:600;">PKR ${subtotal.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td colspan="2" style="text-align:right;padding:8px 12px;font-weight:600;">SST (18%)</td>
+                <td style="padding:8px 12px;font-weight:600;">PKR ${taxAmount.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td colspan="2" style="text-align:right;padding:8px 12px;font-weight:700;font-size:16px;">Total</td>
+                <td style="padding:8px 12px;font-weight:700;font-size:16px;">PKR ${totalWithTax.toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+          <div class="section-title">Mechanic Information</div>
+          <div class="info-section" style="width: 350px;">
+            <div class="info-row"><span class="info-label">Name</span><span class="info-value">${mechanicName}</span></div>
+            <div class="info-row"><span class="info-label">Contact</span><span class="info-value">${mechanicPhone}</span></div>
+          </div>
+          <div class="footer">Generated by MotoMate | ${new Date().toLocaleString()}</div>
+        </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    }
+  };
+
+  // Helper to build WalkInBillModal data from order object
+  const getWalkInBillData = () => {
+    if (!order) return { order: {}, userInfo: {}, billDetails: {} };
+    // Safely access possible extra fields on user
+    const user: any = order.user || {};
+    return {
+      order: {
+        orderId: order.orderId,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        status: order.status,
+        OrderType: order.orderType,
+      },
+      userInfo: {
+        isNewUser: user.isNewUser || false,
+        userId: user.userId,
+        username: user.username || '',
+        temporaryPassword: user.temporaryPassword || '',
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+      },
+      billDetails: {
+        orderDate: order.orderDate,
+        vehicle: {
+          make: order.vehicle?.make,
+          model: order.vehicle?.model,
+          year: order.vehicle?.year,
+          licensePlate: order.vehicle?.licensePlate,
+        },
+        services: {
+          mainService: order.service ? {
+            name: order.service.serviceName,
+            price: order.service.price
+          } : null,
+          inspection: order.inspection ? {
+            name: order.inspection.serviceName,
+            subCategory: order.inspection.subCategory,
+            price: order.inspection.price
+          } : null
+        },
+        mechanic: appointment?.mechanic ? {
+          name: appointment.mechanic.name,
+          phone: appointment.mechanic.phone
+        } : mechanicInfo ? {
+          name: mechanicInfo.name,
+          phone: mechanicInfo.phone
+        } : { name: '-', phone: '-' }
+      }
+    };
+  };
+
+  const isWalkInOrder = order && (
+    (typeof order.orderType === 'string' && order.orderType.trim() === 'Walk-In') ||
+    (!order.orderType && order.paymentMethod === 'Cash' && order.status === 'in progress')
+  );
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header section with back button and title */}
@@ -1078,6 +1445,20 @@ useEffect(() => {
             </p>
           )}
         </div>
+        {/* Print/View Receipt button for walk-in orders */}
+        {isWalkInOrder && (
+          <div className="flex-1 flex justify-end">
+            <Button variant="outline" className="gap-2" onClick={() => setShowReceiptModal(true)}>
+              <Printer className="h-4 w-4" />
+              View Receipt
+            </Button>
+            <WalkInBillModal
+              isOpen={showReceiptModal}
+              onClose={() => setShowReceiptModal(false)}
+              orderData={getWalkInBillData()}
+            />
+          </div>
+        )}
       </div>
 
       {/* Error alert */}
@@ -1158,7 +1539,7 @@ useEffect(() => {
                           </>
                         )}
                       </TabsTrigger>
-                      {!isInspectionOnlyOrder() && order.includesInspection && order.inspection && (
+                      {order.includesInspection && (
                         <TabsTrigger value="inspection" className="flex items-center gap-2">
                           <ShieldCheck className="h-4 w-4" />
                           Inspection
@@ -1310,91 +1691,84 @@ useEffect(() => {
                                 Inspection Results
                               </p>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-                                {(() => {
-                                  const subCategory = order.inspection?.subCategory?.toLowerCase();
-
-                                  switch (subCategory) {
-                                    case 'bodyinspection':
+                              <div className="space-y-4">
+                                {getSelectedInspections().length > 0 ? (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                    {getSelectedInspections().map((inspection: any, idx: number) => {
+                                      // Find the most recent matching report for this inspection and order
+                                      const reportsForService = inspectionReports
+                                        .filter((r: any) => r.serviceId === inspection.serviceId && r.orderId === order.orderId)
+                                        .sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+                                      const report = reportsForService[0];
+                                      let reportData: any = {};
+                                      try {
+                                        reportData = report?.reportData ? JSON.parse(report.reportData) : {};
+                                      } catch {}
+                                      // Determine result style and icon for on-page display
+                                      let resultClass = '', icon = '';
+                                      switch ((reportData.result || '').toLowerCase()) {
+                                        case 'excellent':
+                                          resultClass = 'bg-green-100 text-green-800 border-green-200';
+                                          icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
+                                          break;
+                                        case 'good':
+                                          resultClass = 'bg-green-50 text-green-600 border-green-100';
+                                          icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 9l-3 3-2-2"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 19V6"/></svg>';
+                                          break;
+                                        case 'fair':
+                                          resultClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                                          icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>';
+                                          break;
+                                        case 'poor':
+                                          resultClass = 'bg-red-100 text-red-700 border-red-200';
+                                          icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>';
+                                          break;
+                                        case 'critical':
+                                          resultClass = 'bg-red-700 text-white border-red-700';
+                                          icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+                                          break;
+                                        default:
+                                          resultClass = 'bg-gray-100 text-gray-700 border-gray-200';
+                                          icon = '';
+                                      }
                                       return (
-                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                          <p className="text-sm text-muted-foreground font-medium mb-1">Body Condition</p>
-                                          <p className="font-medium">{order.inspection?.bodyCondition || 'Not inspected'}</p>
-                                        </div>
-                                      );
-                                    case 'brakeinspection':
-                                      return (
-                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                          <p className="text-sm text-muted-foreground font-medium mb-1">Brake Condition</p>
-                                          <p className="font-medium">{order.inspection?.brakeCondition || 'Not inspected'}</p>
-                                        </div>
-                                      );
-                                    case 'engineinspection':
-                                      return (
-                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                          <p className="text-sm text-muted-foreground font-medium mb-1">Engine Condition</p>
-                                          <p className="font-medium">{order.inspection?.engineCondition || 'Not inspected'}</p>
-                                        </div>
-                                      );
-                                    case 'transmissioninspection':
-                                      return (
-                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                          <p className="text-sm text-muted-foreground font-medium mb-1">Transmission Condition</p>
-                                          <p className="font-medium">{order.inspection?.transmissionCondition || 'Not inspected'}</p>
-                                        </div>
-                                      );
-                                    case 'electricalinspection':
-                                      return (
-                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                          <p className="text-sm text-muted-foreground font-medium mb-1">Electrical Condition</p>
-                                          <p className="font-medium">{order.inspection?.electricalCondition || 'Not inspected'}</p>
-                                        </div>
-                                      );
-                                    case 'tireinspection':
-                                      return (
-                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                          <p className="text-sm text-muted-foreground font-medium mb-1">Tire Condition</p>
-                                          <p className="font-medium">{order.inspection?.tireCondition || 'Not inspected'}</p>
-                                        </div>
-                                      );
-                                    case 'interiorinspection':
-                                      return (
-                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                          <p className="text-sm text-muted-foreground font-medium mb-1">Interior Condition</p>
-                                          <p className="font-medium">{order.inspection?.interiorCondition || 'Not inspected'}</p>
-                                        </div>
-                                      );
-                                    case 'suspensioninspection':
-                                      return (
-                                        <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                          <p className="text-sm text-muted-foreground font-medium mb-1">Suspension Condition</p>
-                                          <p className="font-medium">{order.inspection?.suspensionCondition || 'Not inspected'}</p>
-                                        </div>
-                                      );
-                                    default:
-                                      return (
-                                        <>
-                                          <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                            <p className="text-sm text-muted-foreground font-medium mb-1">Overall Condition</p>
-                                            <p className="font-medium">Inspection pending</p>
+                                        <div key={inspection.serviceId || inspection.inspectionId || idx} className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors bg-muted/20">
+                                          <div className="flex items-center mb-2">
+                                            <ShieldCheck className="h-4 w-4 mr-2 text-blue-600" />
+                                            <h4 className="font-medium">{inspection.serviceName}</h4>
                                           </div>
-                                        </>
+                                          {inspection.subCategory && (
+                                            <div className="mt-1">
+                                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                                {inspection.subCategory}
+                                              </Badge>
+                                            </div>
+                                          )}
+                                          <div className="mt-1">
+                                            <span className={`inline-flex items-center border px-2 py-1 rounded-md font-semibold text-sm ${resultClass}`} dangerouslySetInnerHTML={{__html: icon + (reportData.result || 'Not Inspected Yet')}} />
+                                          </div>
+                                          <div className="mt-1">
+                                            <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+                                              Notes: {reportData.notes || 'No notes provided'}
+                                            </Badge>
+                                          </div>
+                                        </div>
                                       );
-                                  }
-                                })()}
-                              </div>
-
-                              {order.inspection?.notes && (
-                                <div className="mt-6 pt-4 border-t">
-                                  <h4 className="font-medium mb-2 flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-muted-foreground" />
-                                    Inspection Notes
-                                  </h4>
-                                  <div className="bg-white p-4 rounded-lg border border-muted">
-                                    <p className="text-sm italic">{order.inspection.notes}</p>
+                                    })}
                                   </div>
+                                ) : (
+                                  <div className="p-4 border rounded-lg shadow-sm bg-muted/20 text-muted-foreground">
+                                    No inspections selected by customer.
+                                  </div>
+                                )}
+                                {/* Print Inspection Report Button */}
+                                <div className="flex justify-end mt-4">
+                                  <Button variant="outline" className="gap-2" onClick={handlePrintInspectionReport}>
+                                    <Printer className="h-4 w-4" />
+                                    Print Inspection Report
+                                  </Button>
                                 </div>
-                              )}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1685,192 +2059,93 @@ useEffect(() => {
                       </div>
                     </TabsContent>
 
-                    {!isInspectionOnlyOrder() && order.includesInspection && order.inspection && (
+                    {order.includesInspection && (
                       <TabsContent value="inspection" className="mt-0 space-y-6">
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 bg-muted/30 rounded-lg border border-muted shadow-sm">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-5 w-5 text-primary" />
-                            <div>
-                              <p className="text-sm text-muted-foreground">Scheduled Date</p>
-                              <p className="font-medium">{formatDate(order.inspection.scheduledDate)}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-5 w-5 text-primary" />
-                            <div>
-                              <p className="text-sm text-muted-foreground">Time Slot</p>
-                              <p className="font-medium">{order.inspection.timeSlot || 'Not specified'}</p>
-                            </div>
-                          </div>
-                          <StatusBadge status={order.inspection.status} />
-                        </div>
-
-                        {/* Inspection type and subcategory */}
-                        <div className="bg-muted/20 p-4 rounded-lg border border-muted shadow-sm">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-blue-50 rounded-full">
-                              {getInspectionCategoryIcon(order.inspection.subCategory)}
-                            </div>
-                            <div>
-                              <h3 className="font-medium">{order.inspection.subCategory}</h3>
-                              <p className="text-sm text-muted-foreground">{order.inspection.serviceName}</p>
-                            </div>
-                          </div>
-                          <Separator className="my-3" />
-                          <p className="text-sm font-medium mb-4 flex items-center gap-2">
-                            <ListChecks className="h-4 w-4 text-primary" />
+                        {/* Inspection Results */}
+                        <div className="bg-muted/20 p-6 rounded-lg border border-muted shadow-sm">
+                          <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
+                            <ListChecks className="h-5 w-5 text-primary" />
                             Inspection Results
-                          </p>
-
-                          {/* Dynamic rendering of condition fields based on subCategory */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-                            {(() => {
-                              const subCategory = order.inspection.subCategory?.toLowerCase();
-
-                              // Specific conditions based on subCategory
-                              switch (subCategory) {
-                                case 'bodyinspection':
-                                  return (
-                                    <>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Body Condition</p>
-                                        <p className="font-medium">{order.inspection.bodyCondition || 'Not inspected'}</p>
+                          </h3>
+                          
+                          <div className="grid gap-4">
+                            {getSelectedInspections().map((inspection: any, index: number) => {
+                              // Get inspection report data for this service
+                              const reportsForService = inspectionReports
+                                .filter((r: any) => r.serviceId === inspection.serviceId && r.orderId === order.orderId)
+                                .sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+                              const report = reportsForService[0];
+                              let reportData: any = {};
+                              try {
+                                reportData = report?.reportData ? JSON.parse(report.reportData) : {};
+                              } catch {}
+                              
+                              return (
+                                <div
+                                  key={inspection.serviceId || index}
+                                  className="bg-white p-4 rounded-lg border border-muted shadow-sm"
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className="bg-blue-50 p-2 rounded-full shrink-0 mt-1">
+                                      {getInspectionCategoryIcon(inspection.subCategory)}
+                                    </div>
+                                    <div className="flex-1">
+                                      <h4 className="font-medium text-primary mb-2">
+                                        {inspection.serviceName}
+                                      </h4>
+                                      <div className="flex flex-wrap gap-2 mb-2">
+                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                          {inspection.subCategory || 'Inspection'}
+                                        </Badge>
+                                        {reportData.result && (
+                                          <Badge 
+                                            variant="outline" 
+                                            className={
+                                              reportData.result.toLowerCase() === 'excellent' ? 'bg-green-50 text-green-700 border-green-200' :
+                                              reportData.result.toLowerCase() === 'good' ? 'bg-green-50 text-green-600 border-green-200' :
+                                              reportData.result.toLowerCase() === 'fair' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                              reportData.result.toLowerCase() === 'poor' ? 'bg-red-50 text-red-700 border-red-200' :
+                                              reportData.result.toLowerCase() === 'critical' ? 'bg-red-50 text-red-800 border-red-200' :
+                                              'bg-gray-50 text-gray-700 border-gray-200'
+                                            }
+                                          >
+                                            {reportData.result}
+                                          </Badge>
+                                        )}
                                       </div>
-                                    </>
-                                  );
-                                case 'transmissioninspection':
-                                  return (
-                                    <>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Transmission Condition</p>
-                                        <p className="font-medium">{order.inspection.transmissionCondition || 'Not inspected'}</p>
-                                      </div>
-                                    </>
-                                  );
-                                case 'suspensioninspection':
-                                  return (
-                                    <>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Suspension Condition</p>
-                                        <p className="font-medium">{order.inspection.suspensionCondition || 'Not inspected'}</p>
-                                      </div>
-                                    </>
-                                  )
-                                case 'brakeinspection':
-                                  return (
-                                    <>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Brake Condition</p>
-                                        <p className="font-medium">{order.inspection.brakeCondition || 'Not inspected'}</p>
-                                      </div>
-                                    </>
-                                  );
-                                case 'tireinspection':
-                                  return (
-                                    <>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Tire Condition</p>
-                                        <p className="font-medium">{order.inspection.tireCondition || 'Not inspected'}</p>
-                                      </div>
-                                    </>
-                                  );
-                                case 'electricalinspection':
-                                  return (
-                                    <>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Electrical Condition</p>
-                                        <p className="font-medium">{order.inspection.electricalCondition || 'Not inspected'}</p>
-                                      </div>
-                                    </>
-                                  );
-                                case 'interiorinspection':
-                                  return (
-                                    <>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Interior Condition</p>
-                                        <p className="font-medium">{order.inspection.interiorCondition || 'Not inspected'}</p>
-                                      </div>
-                                    </>
-                                  );
-                                case 'fullvehicleinspection':
-                                  return (
-                                    <>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Body Condition</p>
-                                        <p className="font-medium">{order.inspection.bodyCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Engine Condition</p>
-                                        <p className="font-medium">{order.inspection.engineCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Electrical Condition</p>
-                                        <p className="font-medium">{order.inspection.electricalCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Tire Condition</p>
-                                        <p className="font-medium">{order.inspection.tireCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Brake Condition</p>
-                                        <p className="font-medium">{order.inspection.brakeCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Transmission Condition</p>
-                                        <p className="font-medium">{order.inspection.transmissionCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Interior Condition</p>
-                                        <p className="font-medium">{order.inspection.interiorCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Suspension Condition</p>
-                                        <p className="font-medium">{order.inspection.suspensionCondition || 'Not inspected'}</p>
-                                      </div>
-                                    </>
-                                  );
-                                default:
-                                  // Default case when subCategory doesn't match or is undefined
-                                  return (
-                                    <>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Body Condition</p>
-                                        <p className="font-medium">{order.inspection.bodyCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Engine Condition</p>
-                                        <p className="font-medium">{order.inspection.engineCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Electrical Condition</p>
-                                        <p className="font-medium">{order.inspection.electricalCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Tire Condition</p>
-                                        <p className="font-medium">{order.inspection.tireCondition || 'Not inspected'}</p>
-                                      </div>
-                                      <div className="p-4 border border-muted rounded-lg shadow-sm bg-white">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Brake Condition</p>
-                                        <p className="font-medium">{order.inspection.brakeCondition || 'Not inspected'}</p>
-                                      </div>
-                                    </>
-                                  );
-                              }
-                            })()}
+                                      {(reportData.notes || inspection.notes) && (
+                                        <div className="text-sm text-muted-foreground bg-gray-50 px-3 py-2 rounded-md">
+                                          Notes: {reportData.notes || inspection.notes}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-
-                          {order.inspection.notes && (
-                            <div className="mt-6 pt-4 border-t">
-                              <h4 className="font-medium mb-2 flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-muted-foreground" />
-                                Inspection Notes
-                              </h4>
-                              <div className="bg-white p-4 rounded-lg border border-muted">
-                                <p className="text-sm italic">{order.inspection.notes}</p>
-                              </div>
+                          
+                          {getSelectedInspections().length === 0 && (
+                            <div className="text-center py-8 text-muted-foreground">
+                              <ShieldCheck className="h-12 w-12 mx-auto mb-2 text-muted" />
+                              <p>No inspections selected for this order.</p>
                             </div>
                           )}
                         </div>
+
+                        {/* Print Inspection Report Button */}
+                        {getSelectedInspections().length > 0 && (
+                          <div className="flex justify-center">
+                            <Button
+                              size="lg"
+                              className="gap-2 shadow-sm"
+                              onClick={handlePrintInspectionReport}
+                            >
+                              <Printer className="h-4 w-4" />
+                              Print Inspection Report
+                            </Button>
+                          </div>
+                        )}
                       </TabsContent>
                     )}
 

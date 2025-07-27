@@ -34,6 +34,7 @@ namespace fyp_motomate.Data
         public DbSet<InvoiceItem> InvoiceItems { get; set; }
         public DbSet<ToolInstance> ToolInstances { get; set; }
         public DbSet<FinancialReport> FinancialReports { get; set; }
+        public DbSet<fyp_motomate.Models.InspectionReport> InspectionReports { get; set; }
 
 
 

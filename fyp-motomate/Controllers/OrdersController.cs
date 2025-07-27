@@ -1265,6 +1265,159 @@ namespace fyp_motomate.Controllers
             public string Status { get; set; }
         }
 
+        // PUT: api/Orders/5/cancel
+        [HttpPut("{id}/cancel")]
+        [Authorize(Roles = "customer")]
+        public async Task<IActionResult> CancelOrder(int id)
+        {
+            try
+            {
+                // Get user ID from token
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+                {
+                    return Unauthorized(new { message = "Invalid user credentials" });
+                }
+
+                // Get the order with related data
+                var order = await _context.Orders
+                    .Include(o => o.Inspection)
+                    .FirstOrDefaultAsync(o => o.OrderId == id);
+
+                if (order == null)
+                {
+                    return NotFound(new { success = false, message = "Order not found" });
+                }
+
+                // Check if the order belongs to the current user
+                if (order.UserId != userId)
+                {
+                    return BadRequest(new { success = false, message = "You can only cancel your own orders" });
+                }
+
+                // Check if order can be cancelled (only pending orders without mechanic assignment)
+                if (order.Status.ToLower() != "pending")
+                {
+                    return BadRequest(new { 
+                        success = false, 
+                        message = "Order cannot be cancelled. Only pending orders can be cancelled." 
+                    });
+                }
+
+                // Check if there's an appointment with a mechanic assigned
+                var appointment = await _context.Appointments
+                    .FirstOrDefaultAsync(a => a.OrderId == id);
+
+                if (appointment != null)
+                {
+                    return BadRequest(new { 
+                        success = false, 
+                        message = "Order cannot be cancelled. A mechanic has already been assigned to this order." 
+                    });
+                }
+
+                // Remove any existing appointments for this order (in case they exist but weren't found above)
+                var existingAppointments = await _context.Appointments
+                    .Where(a => a.OrderId == id)
+                    .ToListAsync();
+
+                if (existingAppointments.Any())
+                {
+                    _context.Appointments.RemoveRange(existingAppointments);
+                    _logger.LogInformation("Removed {Count} appointments for cancelled order {OrderId}", 
+                        existingAppointments.Count, order.OrderId);
+                }
+
+                // Check if there's an inspection that's already scheduled
+                if (order.Inspection != null && order.Inspection.Status.ToLower() != "pending")
+                {
+                    return BadRequest(new { 
+                        success = false, 
+                        message = "Order cannot be cancelled. The inspection has already been scheduled." 
+                    });
+                }
+
+                // Cancel the order
+                order.Status = "cancelled";
+
+                // Cancel the inspection if it exists and free up the timeslot
+                if (order.Inspection != null)
+                {
+                    order.Inspection.Status = "cancelled";
+                    
+                    // Free up the timeslot if it was scheduled
+                    if (!string.IsNullOrEmpty(order.Inspection.TimeSlot))
+                    {
+                        try
+                        {
+                            // Use the scheduled date directly since it's already a DateTime
+                            await _timeSlotService.FreeTimeSlotAsync(order.Inspection.ScheduledDate, order.Inspection.TimeSlot);
+                            _logger.LogInformation("Freed timeslot {TimeSlot} on {Date} for cancelled order {OrderId}", 
+                                order.Inspection.TimeSlot, order.Inspection.ScheduledDate.ToString("yyyy-MM-dd"), order.OrderId);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to free timeslot for cancelled order {OrderId}", order.OrderId);
+                            // Don't fail the cancellation if timeslot freeing fails
+                        }
+                    }
+                }
+
+                // Get user details for notification
+                var user = await _context.Users.FindAsync(userId);
+                var vehicle = await _context.Vehicles.FindAsync(order.VehicleId);
+                var service = order.ServiceId.HasValue ? await _context.Services.FindAsync(order.ServiceId.Value) : null;
+
+                // Create notification for the customer
+                var customerNotification = new Notification
+                {
+                    UserId = userId,
+                    Message = $"Your order #{order.OrderId} has been cancelled successfully. Order details: {vehicle?.Make} {vehicle?.Model} ({vehicle?.LicensePlate}) - {service?.ServiceName ?? "Inspection"}",
+                    Status = "unread",
+                    CreatedAt = DateTime.Now
+                };
+                _context.Notifications.Add(customerNotification);
+
+                // Create notification for all admin users
+                var adminUsers = await _context.Users
+                    .Where(u => u.Role.ToLower() == "admin" || u.Role.ToLower() == "super_admin")
+                    .ToListAsync();
+
+                foreach (var adminUser in adminUsers)
+                {
+                    var adminNotification = new Notification
+                    {
+                        UserId = adminUser.UserId,
+                        Message = $"Order #{order.OrderId} has been cancelled by customer {user?.Name} ({user?.Email}). Vehicle: {vehicle?.Make} {vehicle?.Model} ({vehicle?.LicensePlate}) - {service?.ServiceName ?? "Inspection"}",
+                        Status = "unread",
+                        CreatedAt = DateTime.Now
+                    };
+                    _context.Notifications.Add(adminNotification);
+                }
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Order {OrderId} cancelled by user {UserId}", id, userId);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Order cancelled successfully",
+                    orderId = order.OrderId,
+                    status = order.Status
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cancelling order {OrderId}", id);
+                return StatusCode(500, new { 
+                    success = false, 
+                    message = "An error occurred while cancelling the order", 
+                    error = ex.Message 
+                });
+            }
+        }
+
         [HttpPost("CreateWithInspection")]
         public async Task<ActionResult<object>> CreateOrderWithInspection([FromBody] InspectionOrderRequest request)
         {

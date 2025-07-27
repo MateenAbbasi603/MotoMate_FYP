@@ -94,14 +94,8 @@ export function NavUser({
                 </div>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <Sparkles className="mr-2 h-4 w-4" />
-                <span>Upgrade to Pro</span>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
+            
+            
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
                 <Link href="/admin/profile" className="flex items-center">
@@ -109,10 +103,7 @@ export function NavUser({
                   <span>Account</span>
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard className="mr-2 h-4 w-4" />
-                <span>Billing</span>
-              </DropdownMenuItem>
+              
                <DropdownMenuItem asChild>
                 <Link href="/admin/notifications" className="flex items-center">
                    <Bell className="mr-2 h-4 w-4" />

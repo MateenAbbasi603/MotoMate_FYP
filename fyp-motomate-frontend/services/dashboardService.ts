@@ -30,14 +30,7 @@ export interface Service {
   subCategory: string;
 }
 
-export interface Inspection {
-  inspectionId: number;
-  scheduledDate: string;
-  status: string;
-  timeSlot: string;
-  serviceName: string;
-  subCategory: string;
-}
+
 
 export interface Order {
   orderId: number;
@@ -53,7 +46,6 @@ export interface Order {
   invoiceStatus?: string;
   vehicle?: Vehicle;
   service?: Service;
-  inspection?: Inspection;
   additionalServices: Service[];
 }
 
@@ -64,7 +56,6 @@ export interface DashboardStats {
   inProgressOrders: number;
   totalSpent: number;
   totalVehicles: number;
-  activeInspections: number;
 }
 
 export interface CustomerDashboardResponse {
@@ -90,7 +81,7 @@ class DashboardService {
   async getCustomerDashboard(): Promise<CustomerDashboardResponse> {
     try {
       const response = await axios.get(
-        `${API_BASE_URL}/Dashboard/customer`,
+        `${API_BASE_URL}/CustomerDashboard`,
         this.getAuthHeaders()
       );
       return response.data;

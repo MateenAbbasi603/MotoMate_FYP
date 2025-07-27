@@ -59,7 +59,120 @@ export default function ReportDetailPage() {
     };
 
     const handlePrint = () => {
-        window.print();
+        if (!report) return;
+        const logoUrl = typeof window !== 'undefined' ? window.location.origin + '/motomate-logo.png' : '/motomate-logo.png';
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+        // Extract the main report sections from the DOM for printing
+        const reportContent = document.getElementById('report-content');
+        let notesCard = '';
+        let taxCard = '';
+        let breakdownCards = '';
+        if (reportContent) {
+            // Try to extract Notes, Tax Analysis, and Breakdown sections by their headings
+            const nodes = Array.from(reportContent.querySelectorAll('h4, h3, h2, .card, .bg-blue-50, .bg-gradient-to-br, table'));
+            let currentCard = '';
+            let currentTitle = '';
+            nodes.forEach((node, idx) => {
+                if (node.tagName === 'H4' || node.tagName === 'H3' || node.tagName === 'H2') {
+                    if (currentCard) {
+                        // Prevent duplicate notes: skip if currentTitle is 'Notes'
+                        if (currentTitle.toLowerCase() !== 'notes') {
+                            breakdownCards += `<div class='card'><div class='card-title'>${currentTitle}</div>${currentCard}</div>`;
+                        }
+                        currentCard = '';
+                    }
+                    currentTitle = node.textContent || '';
+                } else {
+                    currentCard += node.outerHTML;
+                }
+                // If last node, flush
+                if (idx === nodes.length - 1 && currentCard) {
+                    if (currentTitle.toLowerCase() !== 'notes') {
+                        breakdownCards += `<div class='card'><div class='card-title'>${currentTitle}</div>${currentCard}</div>`;
+                    }
+                }
+            });
+            // Try to find notes
+            const notesDiv = reportContent.querySelector('.bg-blue-50');
+            if (notesDiv) {
+                notesCard = `<div class='card'><div class='card-title'>Notes</div>${notesDiv.innerHTML}</div>`;
+                // Remove the notesDiv from the DOM before extracting breakdownCards
+                notesDiv.parentNode?.removeChild(notesDiv);
+            }
+            // Remove all cards with 'Notes' as the title from breakdownCards (case-insensitive)
+            breakdownCards = breakdownCards.replace(/<div class='card'><div class='card-title'>\s*Notes\s*<\/div>[\s\S]*?<\/div>/gi, '');
+            // Do NOT add any Notes card to breakdownCards at all
+            // Try to find tax analysis
+            const taxDiv = Array.from(reportContent.querySelectorAll('.card-title')).find(el => el.textContent?.toLowerCase().includes('tax analysis'));
+            if (taxDiv && taxDiv.parentElement) {
+                taxCard = `<div class='card'>${taxDiv.parentElement.innerHTML}</div>`;
+            }
+        }
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>${report.reportName}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 0; background: #f6f7fb; color: #222; }
+                        .header { text-align: center; margin-bottom: 30px; padding: 24px 0 12px 0; background: #fff; border-bottom: 1px solid #e5e7eb; }
+                        .logo { height: 48px; width: 48px; object-fit: contain; margin-bottom: 8px; }
+                        .title { font-size: 2rem; font-weight: bold; margin-bottom: 4px; }
+                        .subtitle { color: #2563eb; font-size: 1rem; margin-bottom: 2px; }
+                        .section { margin: 24px auto; max-width: 900px; }
+                        .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px #0001; margin-bottom: 24px; padding: 24px; border: 1px solid #e5e7eb; }
+                        .card-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #1e293b; }
+                        .card-desc { color: #64748b; font-size: 0.95rem; margin-bottom: 16px; }
+                        .summary-grid { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 12px; }
+                        .summary-item { flex: 1 1 180px; background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center; }
+                        .summary-label { color: #64748b; font-size: 0.95rem; }
+                        .summary-value { font-size: 1.3rem; font-weight: bold; color: #1e293b; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+                        th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+                        th { background: #f3f4f6; font-weight: 600; }
+                        .total { font-weight: bold; background: #f1f5f9; }
+                        .footer { margin-top: 40px; text-align: center; color: #888; font-size: 13px; }
+                        @media print { .no-print { display: none; } }
+                    </style>
+                </head>
+                <body>
+                    <div class='header'>
+                        <img src='${logoUrl}' class='logo' alt='MotoMate Logo' />
+                        <div class='title'>${report.reportName}</div>
+                        <div class='subtitle'>${report.reportType} - ${report.reportCategory}</div>
+                        <div style='font-size:13px;'>Generated on ${new Date(report.generatedAt).toLocaleDateString()} by ${report.generatedByName}</div>
+                    </div>
+                    <div class='section'>
+                        <div class='card'>
+                            <div class='card-title'>Report Overview</div>
+                            <div class='summary-grid'>
+                                <div class='summary-item'><div class='summary-label'>Report Type</div><div class='summary-value'>${report.reportType}</div></div>
+                                <div class='summary-item'><div class='summary-label'>Category</div><div class='summary-value'>${report.reportCategory}</div></div>
+                                <div class='summary-item'><div class='summary-label'>Period</div><div class='summary-value'>${new Date(report.startDate).toLocaleDateString()} - ${new Date(report.endDate).toLocaleDateString()}</div></div>
+                                <div class='summary-item'><div class='summary-label'>Generated</div><div class='summary-value'>${new Date(report.generatedAt).toLocaleDateString()}</div></div>
+                            </div>
+                            ${report.notes ? `<div class='card-desc'>${report.notes}</div>` : ''}
+                        </div>
+                        <div class='card'>
+                            <div class='card-title'>Financial Summary</div>
+                            <div class='summary-grid'>
+                                <div class='summary-item'><div class='summary-label'>Total Revenue</div><div class='summary-value'>${formatCurrency(report.totalRevenue)}</div></div>
+                                ${report.totalTax > 0 ? `<div class='summary-item'><div class='summary-label'>Total Tax</div><div class='summary-value'>${formatCurrency(report.totalTax)}</div></div>` : ''}
+                                <div class='summary-item'><div class='summary-label'>Net Revenue</div><div class='summary-value'>${formatCurrency(report.netRevenue)}</div></div>
+                                <div class='summary-item'><div class='summary-label'>${report.reportCategory.toLowerCase() === 'inventory' ? 'Inventory Value' : 'Total Invoices'}</div><div class='summary-value'>${report.reportCategory.toLowerCase() === 'inventory' ? formatCurrency(report.inventoryValue) : report.totalInvoices}</div></div>
+                            </div>
+                        </div>
+                        ${notesCard}
+                        ${taxCard}
+                        ${breakdownCards}
+                    </div>
+                    <div class='footer'>Powered by MotoMate | Printed on ${new Date().toLocaleString()}</div>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
     };
 
     const handleDownload = () => {
@@ -492,10 +605,7 @@ export default function ReportDetailPage() {
                             <Printer className="h-4 w-4 mr-2" />
                             Print
                         </Button>
-                        <Button variant="outline" onClick={handleDownload}>
-                            <Download className="h-4 w-4 mr-2" />
-                            Export
-                        </Button>
+                        
                     </div>
                 </div>
 

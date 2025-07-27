@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 
 // Update this with your actual backend URL
-const BASE_URL = '  https://40a3-2401-ba80-a3a3-2e15-c8a4-2106-677b-d7b0.ngrok-free.app '; // Android emulator localhost
+const BASE_URL = ' https://4ff2e22dc279.ngrok-free.app'; // Android emulator localhost
 // const BASE_URL = 'http://localhost:5177'; // iOS simulator localhost
 
 interface ApiResponse<T = any> {

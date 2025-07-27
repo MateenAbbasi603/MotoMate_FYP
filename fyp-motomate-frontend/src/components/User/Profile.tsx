@@ -103,6 +103,16 @@
       toast.success("Logged out successfully");
     };
 
+    // Add helper for Pakistan phone formatting
+    const formatPakPhone = (value: string) => {
+      let clean = value.replace(/\D/g, '').slice(0, 10);
+      if (clean.length > 0 && clean[0] !== '3') clean = '';
+      if (clean.length > 3) {
+        return clean.slice(0, 3) + '-' + clean.slice(3);
+      }
+      return clean;
+    };
+
     return (
       <div className="container mx-auto py-10 px-4 md:px-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">

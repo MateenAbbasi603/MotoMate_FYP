@@ -207,7 +207,7 @@ const CustomerDashboard = () => {
           </p>
         </div>
         <Button
-          onClick={() => router.push('/dashboard/new-service')}
+          onClick={() => router.push('/service')}
           className="mt-4 md:mt-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200"
           size="lg"
         >
@@ -294,7 +294,7 @@ const CustomerDashboard = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push('/dashboard/orders')}
+                  onClick={() => router.push('/orders')}
                   className="shrink-0"
                 >
                   <Eye className="mr-2 h-4 w-4" />
@@ -368,7 +368,7 @@ const CustomerDashboard = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => router.push(`/dashboard/orders/${order.orderId}`)}
+                        onClick={() => router.push(`/orders/${order.orderId}`)}
                         className="text-xs"
                       >
                         View Details
@@ -384,7 +384,7 @@ const CustomerDashboard = () => {
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No orders yet</h3>
                   <p className="text-gray-500 mb-6">Start by booking your first service with us</p>
                   <Button
-                    onClick={() => router.push('/dashboard/new-service')}
+                    onClick={() => router.push('/service')}
                     className="bg-gradient-to-r from-blue-600 to-indigo-600"
                   >
                     <Plus className="mr-2 h-4 w-4" />
@@ -430,13 +430,7 @@ const CustomerDashboard = () => {
                  <span className="font-bold text-yellow-900">{stats.pendingOrders}</span>
                </div>
 
-               <div className="flex items-center justify-between p-3 rounded-lg bg-purple-50">
-                 <div className="flex items-center space-x-3">
-                   <Gauge className="h-5 w-5 text-purple-600" />
-                   <span className="font-medium text-purple-900">Inspections</span>
-                 </div>
-                 <span className="font-bold text-purple-900">{stats.activeInspections}</span>
-               </div>
+
              </div>
 
              <Separator className="my-4" />
@@ -448,53 +442,7 @@ const CustomerDashboard = () => {
            </CardContent>
          </Card>
 
-         {/* Quick Actions */}
-         <Card className="border-0 shadow-lg">
-           <CardHeader>
-             <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
-             <CardDescription>Common tasks and shortcuts</CardDescription>
-           </CardHeader>
-           <CardContent className="space-y-3">
-             <Button
-               onClick={() => router.push('/dashboard/new-service')}
-               className="w-full justify-start bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-               size="lg"
-             >
-               <Calendar className="mr-3 h-5 w-5" />
-               Book New Service
-             </Button>
 
-             <Button
-               onClick={() => router.push('/dashboard/vehicles')}
-               variant="outline"
-               className="w-full justify-start hover:bg-green-50 hover:border-green-200"
-               size="lg"
-             >
-               <Car className="mr-3 h-5 w-5 text-green-600" />
-               Manage Vehicles
-             </Button>
-
-             <Button
-               onClick={() => router.push('/dashboard/orders')}
-               variant="outline"
-               className="w-full justify-start hover:bg-purple-50 hover:border-purple-200"
-               size="lg"
-             >
-               <FileText className="mr-3 h-5 w-5 text-purple-600" />
-               Order History
-             </Button>
-
-             <Button
-               onClick={() => router.push('/dashboard/profile')}
-               variant="outline"
-               className="w-full justify-start hover:bg-amber-50 hover:border-amber-200"
-               size="lg"
-             >
-               <Settings className="mr-3 h-5 w-5 text-amber-600" />
-               Account Settings
-             </Button>
-           </CardContent>
-         </Card>
        </div>
      </div>
    </div>

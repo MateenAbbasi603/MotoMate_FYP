@@ -62,6 +62,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import apiClient from '../../../../../services/apiClient';
+import { toast } from 'sonner';
 
 // Updated interface to match the actual API response structure
 interface OrderData {
@@ -159,6 +160,11 @@ export default function OrderDetailPage({
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [currentTab, setCurrentTab] = useState('details');
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const [inspectionReports, setInspectionReports] = useState<any[]>([]);
+  const [mechanicInfo, setMechanicInfo] = useState<{ name: string; phone: string } | null>(null);
+  const [loadingMechanic, setLoadingMechanic] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancellingOrder, setCancellingOrder] = useState(false);
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
@@ -218,6 +224,27 @@ export default function OrderDetailPage({
       fetchOrderDetails();
     }
   }, [id]);
+
+  useEffect(() => {
+    if (order?.orderId) {
+      fetchInspectionReports();
+    }
+  }, [order?.orderId]);
+
+  const fetchInspectionReports = async () => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5177';
+      if (!order?.orderId) return;
+      const response = await apiClient.get(
+        `/api/Inspections/report/order/${order.orderId}`
+      );
+      let reports = response.data;
+      if (reports && reports.$values) reports = reports.$values;
+      setInspectionReports(Array.isArray(reports) ? reports : []);
+    } catch (err) {
+      setInspectionReports([]);
+    }
+  };
 
   // Check if an invoice exists for this order
   const checkForInvoice = async (orderId: number) => {
@@ -845,6 +872,220 @@ export default function OrderDetailPage({
     }
   };
 
+  // Helper to get all customer-selected inspections (main + additional)
+  const getSelectedInspections = () => {
+    if (!order) return [];
+    let additionalServices: any[] = [];
+    if (Array.isArray(order.additionalServices)) {
+      additionalServices = order.additionalServices;
+    } else if (order.additionalServices && typeof order.additionalServices === 'object' && '$values' in order.additionalServices) {
+      additionalServices = (order.additionalServices as any).$values;
+    }
+    const inspectionServices = additionalServices.filter(
+      (service: any) => service.category?.toLowerCase() === 'inspection'
+    );
+    return [
+      ...(order.inspection ? [order.inspection] : []),
+      ...inspectionServices
+    ];
+  };
+
+  // Cancel order function
+  const handleCancelOrder = async () => {
+    if (!order) return;
+    
+    setCancellingOrder(true);
+    try {
+      const response = await apiClient.put(`/api/Orders/${order.orderId}/cancel`);
+      
+      if (response.data.success) {
+        toast.success('Order cancelled successfully');
+        setCancelDialogOpen(false);
+        // Refresh the order data by refetching
+        window.location.reload();
+      } else {
+        toast.error(response.data.message || 'Failed to cancel order');
+      }
+    } catch (error: any) {
+      console.error('Error cancelling order:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to cancel order';
+      toast.error(errorMessage);
+    } finally {
+      setCancellingOrder(false);
+    }
+  };
+
+  // Add this before the return (
+  const handlePrintInspectionReport = () => {
+    if (!order) return;
+    // Use the new logo path
+    const logoUrl = `${window.location.origin}/motomate-logo.png`;
+    // Prepare inspection results
+    const selectedInspections = getSelectedInspections();
+    const inspectionRows = selectedInspections.map((inspection: any) => {
+      const reportsForService = inspectionReports
+        .filter((r: any) => r.serviceId === inspection.serviceId && r.orderId === order.orderId)
+        .sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+      const report = reportsForService[0];
+      let reportData: any = {};
+      try {
+        reportData = report?.reportData ? JSON.parse(report.reportData) : {};
+      } catch {}
+      let resultClass = '', icon = '';
+      switch ((reportData.result || '').toLowerCase()) {
+        case 'excellent':
+          resultClass = 'color:#166534;background:#dcfce7;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '✔️';
+          break;
+        case 'good':
+          resultClass = 'color:#15803d;background:#bbf7d0;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '👍';
+          break;
+        case 'fair':
+          resultClass = 'color:#92400e;background:#fef08a;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '��';
+          break;
+        case 'poor':
+          resultClass = 'color:#b91c1c;background:#fee2e2;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '⚠️';
+          break;
+        case 'critical':
+          resultClass = 'color:#fff;background:#b91c1c;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '❌';
+          break;
+        default:
+          resultClass = 'color:#374151;background:#f3f4f6;border-radius:6px;padding:2px 10px;font-weight:600;';
+          icon = '';
+      }
+      return `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${inspection.serviceName}${inspection.subCategory ? ` <span style='font-size:12px;color:#2563eb;'>(${inspection.subCategory})</span>` : ''}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;"><span style='${resultClass}'>${icon} ${reportData.result || 'Not Inspected Yet'}</span></td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;">${reportData.notes || 'No notes provided'}</td>
+        </tr>
+      `;
+    }).join('');
+    // Mechanic info (from mechanicInfo state)
+    const mechanicName = mechanicInfo?.name || 'N/A';
+    const mechanicPhone = mechanicInfo?.phone || 'N/A';
+    // Print HTML
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>MOTOMATE INSPECTION REPORT</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            @page { margin: 1cm; size: A4; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; color: #222; background: #fff; margin: 0; padding: 0; }
+            .header-row { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; }
+            .logo { height: 48px; width: 48px; object-fit: contain; }
+            .report-title { font-size: 2rem; font-weight: bold; color: #1e293b; letter-spacing: 1px; }
+            .info-grid { display: flex; justify-content: space-between; margin-bottom: 18px; }
+            .info-section { width: 48%; background: #f9fafb; border-radius: 8px; padding: 16px 18px; border: 1px solid #e5e7eb; }
+            .info-title { font-size: 15px; font-weight: 600; color: #2563eb; margin-bottom: 10px; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 7px; font-size: 14px; }
+            .info-label { color: #6b7280; font-weight: 500; }
+            .info-value { color: #1e293b; font-weight: 600; text-align: right; max-width: 200px; }
+            .section-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin: 24px 0 10px 0; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+            th { background: #f3f4f6; padding: 10px; text-align: left; font-weight: 600; color: #374151; font-size: 14px; border-bottom: 2px solid #e5e7eb; }
+            td { font-size: 14px; }
+            .footer { margin-top: 30px; text-align: right; color: #64748b; font-size: 13px; }
+          </style>
+        </head>
+        <body>
+          <div class="header-row">
+            <img src="${logoUrl}" class="logo" alt="MotoMate Logo" />
+            <span class="report-title">MOTOMATE INSPECTION REPORT</span>
+          </div>
+          <div class="info-grid">
+            <div class="info-section">
+              <div class="info-title">Vehicle Information</div>
+              <div class="info-row"><span class="info-label">Make & Model</span><span class="info-value">${order.vehicle?.make || ''} ${order.vehicle?.model || ''}</span></div>
+              <div class="info-row"><span class="info-label">Year</span><span class="info-value">${order.vehicle?.year || ''}</span></div>
+              <div class="info-row"><span class="info-label">License Plate</span><span class="info-value">${order.vehicle?.licensePlate || ''}</span></div>
+            </div>
+            <div class="info-section">
+              <div class="info-title">Customer Information</div>
+              <div class="info-row"><span class="info-label">Name</span><span class="info-value">${order.user?.name || ''}</span></div>
+              <div class="info-row"><span class="info-label">Email</span><span class="info-value">${order.user?.email || ''}</span></div>
+              <div class="info-row"><span class="info-label">Phone</span><span class="info-value">${order.user?.phone || ''}</span></div>
+            </div>
+          </div>
+          <div class="section-title">Inspection Results</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Inspection</th>
+                <th>Result</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${inspectionRows}
+            </tbody>
+          </table>
+          <div class="section-title">Mechanic Information</div>
+          <div class="info-section" style="width: 350px;">
+            <div class="info-row"><span class="info-label">Name</span><span class="info-value">${mechanicName}</span></div>
+            <div class="info-row"><span class="info-label">Contact</span><span class="info-value">${mechanicPhone}</span></div>
+          </div>
+          <div class="footer">Generated by MotoMate | ${new Date().toLocaleString()}</div>
+        </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to print the inspection report');
+      return;
+    }
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
+  };
+
+  // Fetch mechanic info when inspectionReports are loaded
+  useEffect(() => {
+    const fetchMechanic = async () => {
+      if (inspectionReports.length > 0 && inspectionReports[0].mechanicId) {
+        setLoadingMechanic(true);
+        try {
+          const response = await apiClient.get(`/api/Users/${inspectionReports[0].mechanicId}`);
+          if (response.data && response.data.name) {
+            setMechanicInfo({ name: response.data.name, phone: response.data.phone || 'N/A' });
+          } else if (response.data && response.data.user && response.data.user.name) {
+            setMechanicInfo({ name: response.data.user.name, phone: response.data.user.phone || 'N/A' });
+          } else {
+            setMechanicInfo({ name: 'N/A', phone: 'N/A' });
+          }
+        } catch {
+          setMechanicInfo({ name: 'N/A', phone: 'N/A' });
+        } finally {
+          setLoadingMechanic(false);
+        }
+      }
+    };
+    fetchMechanic();
+  }, [inspectionReports]);
+
+  // Helper to calculate subtotal, tax, and total
+  const getOrderTotals = () => {
+    let subtotal = 0;
+    if (order?.service?.price) subtotal += order.service.price;
+    if (order?.inspection?.price) subtotal += order.inspection.price;
+    if (order?.additionalServices && Array.isArray(order.additionalServices)) {
+      subtotal += order.additionalServices.reduce((sum: number, service: any) => sum + (parseFloat(service.price) || 0), 0);
+    }
+    const tax = subtotal * 0.18;
+    const total = subtotal + tax;
+    return { subtotal, tax, total };
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto py-10 px-4 md:px-6">
@@ -1168,8 +1409,16 @@ export default function OrderDetailPage({
                       )}
 
                       <div className="flex justify-between items-center pt-3 font-medium text-lg">
+                        <span>Subtotal</span>
+                        <span>PKR {getOrderTotals().subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 font-medium text-lg">
+                        <span>Tax (18%)</span>
+                        <span>PKR {getOrderTotals().tax.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 font-bold text-lg">
                         <span>Total Amount</span>
-                        <span className="text-primary">PKR {order.totalAmount?.toFixed(2) || '0.00'}</span>
+                        <span className="text-primary">PKR {getOrderTotals().total.toFixed(2)}</span>
                       </div>
 
                       {(invoice || order.invoiceStatus !== 'none') && (
@@ -1253,123 +1502,90 @@ export default function OrderDetailPage({
                         </span>
                       </Badge>
                     </div>
-
                     <div>
                       <h3 className="text-lg font-medium flex items-center mb-4">
                         <ClipboardCheck className="mr-2 h-5 w-5 text-primary" />
                         Inspection Results
                       </h3>
-
-                      {order.inspection.status === 'completed' ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
-                            <p className="text-sm text-muted-foreground mb-1">Body Condition</p>
-                            <p className="font-medium flex items-center gap-1.5">
-                              <CircleDot className="h-3.5 w-3.5 text-primary" />
-                              {order.inspection.bodyCondition || 'Not inspected'}
-                            </p>
+                      <div className="space-y-4">
+                        {getSelectedInspections().length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                            {getSelectedInspections().map((inspection: any, idx: number) => {
+                              // Find the most recent matching report for this inspection and order
+                              const reportsForService = inspectionReports
+                                .filter((r: any) => r.serviceId === inspection.serviceId && r.orderId === order.orderId)
+                                .sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+                              const report = reportsForService[0];
+                              let reportData: any = {};
+                              try {
+                                reportData = report?.reportData ? JSON.parse(report.reportData) : {};
+                              } catch {}
+                              // Determine result style and icon for on-page display
+                              let resultClass = '', icon = '';
+                              switch ((reportData.result || '').toLowerCase()) {
+                                case 'excellent':
+                                  resultClass = 'bg-green-100 text-green-800 border-green-200';
+                                  icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
+                                  break;
+                                case 'good':
+                                  resultClass = 'bg-green-50 text-green-600 border-green-100';
+                                  icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 9l-3 3-2-2"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 19V6"/></svg>';
+                                  break;
+                                case 'fair':
+                                  resultClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                                  icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>';
+                                  break;
+                                case 'poor':
+                                  resultClass = 'bg-red-100 text-red-700 border-red-200';
+                                  icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>';
+                                  break;
+                                case 'critical':
+                                  resultClass = 'bg-red-700 text-white border-red-700';
+                                  icon = '<svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:4px;display:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+                                  break;
+                                default:
+                                  resultClass = 'bg-gray-100 text-gray-700 border-gray-200';
+                                  icon = '';
+                              }
+                              return (
+                                <div key={inspection.serviceId || inspection.inspectionId || idx} className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors bg-muted/20">
+                                  <div className="flex items-center mb-2">
+                                    <ShieldCheck className="h-4 w-4 mr-2 text-blue-600" />
+                                    <h4 className="font-medium">{inspection.serviceName}</h4>
+                                  </div>
+                                  {inspection.subCategory && (
+                                    <div className="mt-1">
+                                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                        {inspection.subCategory}
+                                      </Badge>
+                                    </div>
+                                  )}
+                                  <div className="mt-1">
+                                    <span className={`inline-flex items-center border px-2 py-1 rounded-md font-semibold text-sm ${resultClass}`} dangerouslySetInnerHTML={{__html: icon + (reportData.result || 'Not Inspected Yet')}} />
+                                  </div>
+                                  <div className="mt-1">
+                                    <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+                                      Notes: {reportData.notes || 'No notes provided'}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
-                            <p className="text-sm text-muted-foreground mb-1">Engine Condition</p>
-                            <p className="font-medium flex items-center gap-1.5">
-                              <CircleDot className="h-3.5 w-3.5 text-primary" />
-                              {order.inspection.engineCondition || 'Not inspected'}
-                            </p>
+                        ) : (
+                          <div className="p-4 border rounded-lg shadow-sm bg-muted/20 text-muted-foreground">
+                            No inspections selected by customer.
                           </div>
-                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
-                            <p className="text-sm text-muted-foreground mb-1">Electrical Condition</p>
-                            <p className="font-medium flex items-center gap-1.5">
-                              <CircleDot className="h-3.5 w-3.5 text-primary" />
-                              {order.inspection.electricalCondition || 'Not inspected'}
-                            </p>
-                          </div>
-                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
-                            <p className="text-sm text-muted-foreground mb-1">Tire Condition</p>
-                            <p className="font-medium flex items-center gap-1.5">
-                              <CircleDot className="h-3.5 w-3.5 text-primary" />
-                              {order.inspection.tireCondition || 'Not inspected'}
-                            </p>
-                          </div>
-                          <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
-                            <p className="text-sm text-muted-foreground mb-1">Brake Condition</p>
-                            <p className="font-medium flex items-center gap-1.5">
-                              <CircleDot className="h-3.5 w-3.5 text-primary" />
-                              {order.inspection.brakeCondition || 'Not inspected'}
-                            </p>
-                          </div>
-                          {order.inspection.transmissionCondition && (
-                            <div className="p-4 border rounded-lg shadow-sm hover:border-primary/50 transition-colors">
-                              <p className="text-sm text-muted-foreground mb-1">Transmission Condition</p>
-                              <p className="font-medium flex items-center gap-1.5">
-                                <CircleDot className="h-3.5 w-3.5 text-primary" />
-                                {order.inspection.transmissionCondition}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center p-8 bg-muted/30 rounded-lg text-center">
-                          {order.inspection.status === 'pending' ? (
-                            <>
-                              <div className="mb-4 bg-yellow-100 dark:bg-yellow-900/30 p-3 rounded-full">
-                                <Clock className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />
-                              </div>
-                              <h4 className="text-lg font-medium mb-2">Inspection Scheduled</h4>
-                              <p className="text-muted-foreground max-w-md">
-                                Your vehicle inspection is scheduled but has not been completed yet.
-                                We'll notify you once the inspection is complete.
-                              </p>
-                            </>
-                          ) : order.inspection.status === 'in progress' ? (
-                            <>
-                              <div className="mb-4 bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full">
-                                <Timer className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-                              </div>
-                              <h4 className="text-lg font-medium mb-2">Inspection In Progress</h4>
-                              <p className="text-muted-foreground max-w-md">
-                                Your vehicle is currently being inspected by our technicians.
-                                Results will be available soon.
-                              </p>
-                            </>
-                          ) : order.inspection.status === 'cancelled' ? (
-                            <>
-                              <div className="mb-4 bg-red-100 dark:bg-red-900/30 p-3 rounded-full">
-                                <CalendarX className="h-8 w-8 text-red-600 dark:text-red-400" />
-                              </div>
-                              <h4 className="text-lg font-medium mb-2">Inspection Cancelled</h4>
-                              <p className="text-muted-foreground max-w-md">
-                                This inspection was cancelled. Please contact customer service
-                                if you need to reschedule.
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <div className="mb-4 bg-muted p-3 rounded-full">
-                                <CircleDashed className="h-8 w-8 text-muted-foreground" />
-                              </div>
-                              <h4 className="text-lg font-medium mb-2">Inspection Status: {order.inspection.status}</h4>
-                              <p className="text-muted-foreground max-w-md">
-                                The current status of your inspection is {order.inspection.status}.
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {order.inspection.notes && (
-                      <div className="mt-6">
-                        <h4 className="font-medium mb-3 flex items-center">
-                          <FileText className="h-4 w-4 mr-2 text-primary" />
-                          Inspection Notes
-                        </h4>
-                        <div className="bg-muted/30 p-4 rounded-lg">
-                          <p className="text-muted-foreground whitespace-pre-line">
-                            {order.inspection.notes}
-                          </p>
+                        )}
+                        {/* Print Inspection Report Button */}
+                        <div className="flex justify-end mt-4">
+                          <Button variant="outline" className="gap-2" onClick={handlePrintInspectionReport}>
+                            <Printer className="h-4 w-4" />
+                            Print Inspection Report
+                          </Button>
                         </div>
                       </div>
-                    )}
+                    </div>
                   </TabsContent>
                 )}
 
@@ -1582,7 +1798,11 @@ export default function OrderDetailPage({
               </Button>
 
               {order.status === 'pending' && (
-                <Button variant="destructive" size="sm">
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={() => setCancelDialogOpen(true)}
+                >
                   Cancel Order
                 </Button>
               )}
@@ -2147,6 +2367,44 @@ export default function OrderDetailPage({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Cancel Order Confirmation Dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Cancel Order
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel this order? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setCancelDialogOpen(false)}
+              disabled={cancellingOrder}
+            >
+              Keep Order
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelOrder}
+              disabled={cancellingOrder}
+            >
+              {cancellingOrder ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Cancelling...
+                </>
+              ) : (
+                'Cancel Order'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

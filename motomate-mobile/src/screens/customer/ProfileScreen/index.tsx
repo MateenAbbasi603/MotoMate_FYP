@@ -280,7 +280,7 @@ const ProfileScreen = () => {
                 }
               }}
               keyboardType="phone-pad"
-              maxLength={11}
+              maxLength={10}
             />
           </View>
           <Text style={styles.phoneHelperText}>

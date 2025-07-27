@@ -153,6 +153,9 @@ const OrderDetailsScreen: React.FC = () => {
     const [loadingInvoice, setLoadingInvoice] = useState(false);
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
     const [savingToGallery, setSavingToGallery] = useState(false);
+    const [inspectionReports, setInspectionReports] = useState<any[]>([]);
+    const [mechanicInfo, setMechanicInfo] = useState<{ name: string; phone: string } | null>(null);
+    const inspectionRef = useRef<ViewShot>(null);
 
     const invoiceRef = useRef<ViewShot>(null);
     const screenWidth = Dimensions.get('window').width;
@@ -416,6 +419,65 @@ const OrderDetailsScreen: React.FC = () => {
             console.error('Error sharing invoice:', error);
             Alert.alert('Error', 'Failed to share invoice');
         }
+    };
+
+    // Fetch inspection reports and mechanic info
+    useEffect(() => {
+      if (order?.orderId) {
+        (async () => {
+          const res = await apiService.getInspectionReportsByOrder(order.orderId);
+          if (res.success && Array.isArray(res.data)) {
+            setInspectionReports(res.data);
+            if (res.data.length > 0 && res.data[0].mechanicId) {
+              // Fetch mechanic info
+              const mechRes = await apiService.getCurrentUser(); // Replace with actual mechanic fetch if available
+              if (mechRes.success && mechRes.data?.name) {
+                setMechanicInfo({ name: mechRes.data.name, phone: mechRes.data.phone || 'N/A' });
+              }
+            }
+          }
+        })();
+      }
+    }, [order?.orderId]);
+
+    // Helper to get all customer-selected inspections (main + additional)
+    const getSelectedInspections = () => {
+      if (!order) return [];
+      let additionalServices: any[] = [];
+      if (Array.isArray(order.additionalServices)) {
+        additionalServices = order.additionalServices;
+      }
+      const inspectionServices = additionalServices.filter(
+        (service: any) => service.category?.toLowerCase() === 'inspection'
+      );
+      return [
+        ...(order.inspection ? [order.inspection] : []),
+        ...inspectionServices
+      ];
+    };
+
+    const handleDownloadInspectionReport = async () => {
+      if (!order) return;
+      if (!inspectionRef.current || typeof inspectionRef.current.capture !== 'function') return;
+      try {
+        const uri = await inspectionRef.current.capture();
+        if (uri) {
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission Required', 'We need permission to save the inspection report to your gallery');
+            return;
+          }
+          if (Platform.OS === 'ios') {
+            await MediaLibrary.saveToLibraryAsync(uri);
+          } else {
+            await MediaLibrary.createAssetAsync(uri);
+          }
+          Alert.alert('Success', 'Inspection report saved to gallery successfully');
+        }
+      } catch (error) {
+        console.log('Save inspection report error:', error);
+        Alert.alert('Error', 'Failed to save inspection report');
+      }
     };
 
     if (loading) {
@@ -1113,85 +1175,67 @@ const OrderDetailsScreen: React.FC = () => {
                     </View>
                 )}
 
-                {activeTab === 'inspection' && order.includesInspection && order.inspection && (
-                    <View style={styles.tabContent}>
-                        {/* Inspection Details */}
-                        <View style={styles.sectionCard}>
-                            <View style={styles.sectionHeader}>
-                                <Ionicons name="shield-checkmark" size={20} color="#3B82F6" />
-                                <Text style={styles.sectionTitle}>Inspection Details</Text>
+                {activeTab === 'inspection' && order.includesInspection && (
+                    <ScrollView>
+                        <ViewShot ref={inspectionRef} options={{ format: 'png', quality: 0.95 }} style={{ backgroundColor: '#fff', borderRadius: 12, margin: 12, padding: 16 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
+                                <Ionicons name="shield-checkmark" size={36} color="#3B82F6" style={{ marginRight: 12 }} />
+                                <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1e293b' }}>MOTOMATE INSPECTION REPORT</Text>
                             </View>
-                            <View style={styles.sectionContent}>
-                                <View style={styles.detailRows}>
-                                    <View style={styles.detailRow}>
-                                        <Text style={styles.detailLabel}>Scheduled Date</Text>
-                                        <Text style={styles.detailValue}>{formatDate(order.inspection.scheduledDate)}</Text>
-                                    </View>
-                                    <View style={styles.detailRow}>
-                                        <Text style={styles.detailLabel}>Time Slot</Text>
-                                        <Text style={styles.detailValue}>{order.inspection.timeSlot}</Text>
-                                    </View>
-                                    <View style={styles.detailRow}>
-                                        <Text style={styles.detailLabel}>Status</Text>
-                                        <View style={[
-                                            styles.statusBadge,
-                                            { backgroundColor: getStatusColor(order.inspection.status) + '20' }
-                                        ]}>
-                                            <Text style={[
-                                                styles.statusText,
-                                                { color: getStatusColor(order.inspection.status) }
-                                            ]}>
-                                                {order.inspection.status}
-                                            </Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 }}>
+                                <View style={{ width: '48%' }}>
+                                    <Text style={{ fontWeight: '600', color: '#2563eb', marginBottom: 6 }}>Vehicle Information</Text>
+                                    <Text>Make & Model: {order.vehicle?.make} {order.vehicle?.model}</Text>
+                                    <Text>Year: {order.vehicle?.year}</Text>
+                                    <Text>License Plate: {order.vehicle?.licensePlate}</Text>
+                                </View>
+                                <View style={{ width: '48%' }}>
+                                    <Text style={{ fontWeight: '600', color: '#2563eb', marginBottom: 6 }}>Customer Information</Text>
+                                    <Text>Name: {order.user?.name}</Text>
+                                    <Text>Email: {order.user?.email}</Text>
+                                    <Text>Phone: {order.user?.phone}</Text>
+                                </View>
+                            </View>
+                            <Text style={{ fontWeight: '600', color: '#1e293b', marginBottom: 8 }}>Inspection Results</Text>
+                            <View style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+                                <View style={{ flexDirection: 'row', backgroundColor: '#f3f4f6' }}>
+                                    <Text style={{ flex: 2, padding: 8, fontWeight: 'bold' }}>Inspection</Text>
+                                    <Text style={{ flex: 1, padding: 8, fontWeight: 'bold' }}>Result</Text>
+                                    <Text style={{ flex: 2, padding: 8, fontWeight: 'bold' }}>Notes</Text>
+                                </View>
+                                {getSelectedInspections().map((inspection: any, idx: number) => {
+                                    const reportsForService = inspectionReports.filter((r: any) => r.serviceId === inspection.serviceId && r.orderId === order.orderId);
+                                    const report = reportsForService[0];
+                                    let reportData: any = {};
+                                    try { reportData = report?.reportData ? JSON.parse(report.reportData) : {}; } catch {}
+                                    let resultColor = '#6B7280';
+                                    switch ((reportData.result || '').toLowerCase()) {
+                                        case 'excellent': resultColor = '#10B981'; break;
+                                        case 'good': resultColor = '#22D3EE'; break;
+                                        case 'fair': resultColor = '#F59E0B'; break;
+                                        case 'poor': resultColor = '#EF4444'; break;
+                                        case 'critical': resultColor = '#B91C1C'; break;
+                                    }
+                                    return (
+                                        <View key={inspection.serviceId || idx} style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+                                            <Text style={{ flex: 2, padding: 8 }}>{inspection.serviceName}{inspection.subCategory ? ` (${inspection.subCategory})` : ''}</Text>
+                                            <Text style={{ flex: 1, padding: 8, color: resultColor, fontWeight: 'bold' }}>{reportData.result || 'Not Inspected Yet'}</Text>
+                                            <Text style={{ flex: 2, padding: 8 }}>{reportData.notes || 'No notes provided'}</Text>
                                         </View>
-                                    </View>
-                                </View>
+                                    );
+                                })}
                             </View>
-                        </View>
-
-                        {/* Inspection Report */}
-                        {order.inspection.status === 'completed' && (
-                            <View style={styles.sectionCard}>
-                                <View style={styles.sectionHeader}>
-                                    <Ionicons name="clipboard" size={20} color="#3B82F6" />
-                                    <Text style={styles.sectionTitle}>Inspection Report</Text>
-                                </View>
-                                <View style={styles.sectionContent}>
-                                    <View style={styles.inspectionGrid}>
-                                        {[
-                                            { label: 'Engine', value: order.inspection?.engineCondition },
-                                            { label: 'Transmission', value: order.inspection?.transmissionCondition },
-                                            { label: 'Brakes', value: order.inspection?.brakeCondition },
-                                            { label: 'Electrical', value: order.inspection?.electricalCondition },
-                                            { label: 'Body', value: order.inspection?.bodyCondition },
-                                            { label: 'Tires', value: order.inspection?.tireCondition },
-                                        ].map((item, index) => (
-                                            <View key={index} style={styles.inspectionItem}>
-                                                <Text style={styles.inspectionLabel}>{item.label}</Text>
-                                                <View style={[
-                                                    styles.conditionBadge,
-                                                    { backgroundColor: getConditionColor(item.value as any) + '20' }
-                                                ]}>
-                                                    <Text style={[
-                                                        styles.conditionText,
-                                                        { color: getConditionColor(item.value as any) }
-                                                    ]}>
-                                                        {item.value || 'Not Inspected'}
-                                                    </Text>
-                                                </View>
-                                            </View>
-                                        ))}
-                                    </View>
-                                    {order.inspection.notes && (
-                                        <View style={styles.inspectionNotes}>
-                                            <Text style={styles.inspectionNotesTitle}>Inspector Notes:</Text>
-                                            <Text style={styles.inspectionNotesText}>{order.inspection.notes}</Text>
-                                        </View>
-                                    )}
-                                </View>
+                            <Text style={{ fontWeight: '600', color: '#1e293b', marginTop: 18 }}>Mechanic Information</Text>
+                            <View style={{ marginTop: 6, marginBottom: 12 }}>
+                                <Text>Name: {mechanicInfo?.name || 'N/A'}</Text>
+                                <Text>Contact: {mechanicInfo?.phone || 'N/A'}</Text>
                             </View>
-                        )}
-                    </View>
+                            <Text style={{ color: '#64748b', fontSize: 13, textAlign: 'right' }}>Generated by MotoMate | {new Date().toLocaleString()}</Text>
+                        </ViewShot>
+                        <TouchableOpacity style={{ margin: 16, backgroundColor: '#3B82F6', borderRadius: 8, padding: 14, alignItems: 'center' }} onPress={handleDownloadInspectionReport}>
+                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Download Inspection Report</Text>
+                        </TouchableOpacity>
+                    </ScrollView>
                 )}
 
                 {activeTab === 'invoice' && invoice && (

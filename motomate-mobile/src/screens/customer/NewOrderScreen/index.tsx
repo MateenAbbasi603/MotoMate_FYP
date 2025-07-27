@@ -215,21 +215,20 @@ const NewOrderScreen = () => {
     setAdditionalServices(additionalServices.filter(s => s.serviceId !== serviceId));
   };
 
-  const calculateTotal = () => {
-    let total = 0;
-    
+  // Update calculateTotal to return subtotal, tax, and total
+  const calculateTotals = () => {
+    let subtotal = 0;
     // Add inspection costs
-    total += selectedSubcategories.reduce((sum, sub) => sum + sub.price, 0);
-    
+    subtotal += selectedSubcategories.reduce((sum, sub) => sum + sub.price, 0);
     // Add main service cost
     if (includeService && selectedService) {
-      total += selectedService.price;
+      subtotal += selectedService.price;
     }
-    
     // Add additional services cost
-    total += additionalServices.reduce((sum, service) => sum + service.price, 0);
-    
-    return total;
+    subtotal += additionalServices.reduce((sum, service) => sum + service.price, 0);
+    const tax = subtotal * 0.18;
+    const total = subtotal + tax;
+    return { subtotal, tax, total };
   };
 
   const validateCurrentStep = () => {
@@ -278,6 +277,7 @@ const NewOrderScreen = () => {
     setShowPaymentModal(false);
   
     try {
+      const { total } = calculateTotals();
       // Create a single order with all selected subcategories
       const orderData = {
         vehicleId: selectedVehicle!.vehicleId,
@@ -288,7 +288,7 @@ const NewOrderScreen = () => {
         notes: notes || '',
         paymentMethod: paymentMethod,
         orderType: paymentMethod === 'online' ? 'Online' : 'Cash',
-        totalAmount: calculateTotal(),
+        totalAmount: total,
         includesInspection: true,
         subCategory: selectedSubcategories[0].serviceName, // Primary subcategory
         // Include all selected subcategories as additional services
@@ -717,11 +717,24 @@ const NewOrderScreen = () => {
               </View>
             )}
 
-            {/* Total */}
-            <View style={styles.totalCard}>
-              <Text style={styles.totalLabel}>Total Amount</Text>
-              <Text style={styles.totalAmount}>PKR {calculateTotal()}</Text>
-            </View>
+            {/* Subtotal, Tax, Total */}
+            {(() => {
+              const { subtotal, tax, total } = calculateTotals();
+              return (
+                <View style={styles.totalCard}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.totalLabel}>Subtotal</Text>
+                    <Text style={styles.totalLabel}>Tax (18%)</Text>
+                    <Text style={[styles.totalLabel, { fontWeight: 'bold', marginTop: 8 }]}>Total Amount</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.totalAmount}>PKR {subtotal.toFixed(2)}</Text>
+                    <Text style={styles.totalAmount}>PKR {tax.toFixed(2)}</Text>
+                    <Text style={[styles.totalAmount, { fontWeight: 'bold', marginTop: 8 }]}>PKR {total.toFixed(2)}</Text>
+                  </View>
+                </View>
+              );
+            })()}
           </View>
         )}
       </ScrollView>

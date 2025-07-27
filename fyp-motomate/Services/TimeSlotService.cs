@@ -19,6 +19,7 @@ namespace fyp_motomate.Services
         Task<List<TimeSlotInfo>> GetAvailableTimeSlotsForMechanicAsync(DateTime date, int mechanicId);
         Task<bool> IsVehicleAvailableForDateAsync(int vehicleId, DateTime date);
         Task<DateTime?> GetNextAvailableDateForVehicleAsync(int vehicleId, DateTime fromDate);
+        Task<bool> FreeTimeSlotAsync(DateTime date, string timeSlot);
     }
 
     public class TimeSlotInfo
@@ -266,6 +267,32 @@ namespace fyp_motomate.Services
             catch (Exception ex)
             {
                 return null;
+            }
+        }
+
+        public async Task<bool> FreeTimeSlotAsync(DateTime date, string timeSlot)
+        {
+            try
+            {
+                // This method is called when an order is cancelled to free up the timeslot
+                // Since the timeslot availability is calculated dynamically based on existing records,
+                // and we're already setting the inspection status to "cancelled" in the OrdersController,
+                // the timeslot will automatically become available again when the next availability check is performed.
+                
+                // The actual freeing happens by updating the inspection status to "cancelled"
+                // which is already handled in the OrdersController.CancelOrder method
+                
+                // We can add additional logic here if needed, such as:
+                // - Logging the timeslot freeing
+                // - Sending notifications
+                // - Updating any cached availability data
+                
+                return true; // Timeslot is considered freed
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the cancellation process
+                return false;
             }
         }
     }

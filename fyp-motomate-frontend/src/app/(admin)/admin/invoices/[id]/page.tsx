@@ -89,6 +89,144 @@ export default function InvoiceDetailPage({
         window.print();
     };
 
+    // Add printInvoice function for printable invoice
+    const handlePrintInvoice = () => {
+        if (!invoice) return;
+        const logoUrl = `${window.location.origin}/motomate-logo.png`;
+        // Prepare invoice data
+        const invoiceData = invoice.invoice;
+        const customer = invoice.customer || {};
+        const vehicle = invoice.vehicle || {};
+        const mechanic = invoice.mechanic || {};
+        // Get invoice items
+        let items = [];
+        if (invoiceData?.invoiceItems?.$values && Array.isArray(invoiceData.invoiceItems.$values)) {
+            items = invoiceData.invoiceItems.$values;
+        } else if (invoice?.invoiceItems?.$values && Array.isArray(invoice.invoiceItems.$values)) {
+            items = invoice.invoiceItems.$values;
+        }
+        // Fallback: if no items, show empty row
+        if (!items.length) {
+            items = [{ description: 'No items found', quantity: '', unitPrice: '', totalPrice: '' }];
+        }
+        // Subtotal, tax, total
+        const subtotal = typeof invoiceData?.subTotal === 'number'
+            ? invoiceData.subTotal
+            : parseFloat(invoiceData?.subTotal || invoiceData?.totalAmount || '0');
+        const tax = typeof invoiceData?.taxAmount === 'number'
+            ? invoiceData.taxAmount
+            : subtotal * 0.18;
+        const total = typeof invoiceData?.totalAmount === 'number'
+            ? invoiceData.totalAmount
+            : subtotal + tax;
+        // Print HTML
+        const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Invoice #${invoiceData.invoiceId}</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            @page { margin: 1cm; size: A4; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; color: #222; background: #fff; margin: 0; padding: 0; }
+            .header-row { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; }
+            .logo { height: 48px; width: 48px; object-fit: contain; }
+            .invoice-title { font-size: 2rem; font-weight: bold; color: #1e293b; letter-spacing: 1px; }
+            .info-grid { display: flex; justify-content: space-between; margin-bottom: 18px; }
+            .info-section { width: 48%; background: #f9fafb; border-radius: 8px; padding: 16px 18px; border: 1px solid #e5e7eb; }
+            .info-title { font-size: 15px; font-weight: 600; color: #2563eb; margin-bottom: 10px; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 7px; font-size: 14px; }
+            .info-label { color: #6b7280; font-weight: 500; }
+            .info-value { color: #1e293b; font-weight: 600; text-align: right; max-width: 200px; }
+            .section-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin: 24px 0 10px 0; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+            th { background: #f3f4f6; padding: 10px; text-align: left; font-weight: 600; color: #374151; font-size: 14px; border-bottom: 2px solid #e5e7eb; }
+            td { font-size: 14px; }
+            .footer { margin-top: 30px; text-align: right; color: #64748b; font-size: 13px; }
+          </style>
+        </head>
+        <body>
+          <div class="header-row">
+            <img src="${logoUrl}" class="logo" alt="MotoMate Logo" />
+            <span class="invoice-title">INVOICE</span>
+          </div>
+          <div class="info-grid">
+            <div class="info-section">
+              <div class="info-title">Customer Information</div>
+              <div class="info-row"><span class="info-label">Name</span><span class="info-value">${customer.name || ''}</span></div>
+              <div class="info-row"><span class="info-label">Email</span><span class="info-value">${customer.email || ''}</span></div>
+              <div class="info-row"><span class="info-label">Phone</span><span class="info-value">${customer.phone || ''}</span></div>
+              <div class="info-row"><span class="info-label">Address</span><span class="info-value">${customer.address || ''}</span></div>
+            </div>
+            <div class="info-section">
+              <div class="info-title">Vehicle Information</div>
+              <div class="info-row"><span class="info-label">Make & Model</span><span class="info-value">${vehicle.make || ''} ${vehicle.model || ''}</span></div>
+              <div class="info-row"><span class="info-label">Year</span><span class="info-value">${vehicle.year || ''}</span></div>
+              <div class="info-row"><span class="info-label">License Plate</span><span class="info-value">${vehicle.licensePlate || ''}</span></div>
+            </div>
+          </div>
+          <div class="section-title">Service Details</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Qty</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map((item: any) => `
+                <tr>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${item.description || ''}</td>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${item.quantity || ''}</td>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">Rs ${(item.unitPrice || 0).toFixed(2)}</td>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">Rs ${(item.totalPrice || 0).toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th colspan="3" style="text-align:right">Subtotal</th>
+                <td style="text-align:right">Rs ${subtotal.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <th colspan="3" style="text-align:right">Tax (18%)</th>
+                <td style="text-align:right">Rs ${tax.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <th colspan="3" style="text-align:right">Total Amount</th>
+                <td style="text-align:right">Rs ${total.toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+          <div class="section-title">Notes</div>
+          <div style="background:#f9fafb;padding:12px 18px;border-radius:8px;border:1px solid #e5e7eb;margin-bottom:18px;">${invoiceData.notes || 'No notes provided.'}</div>
+          <div class="section-title">Payment Information</div>
+          <div class="info-section" style="width:350px;margin-bottom:18px;">
+            <div class="info-row"><span class="info-label">Status</span><span class="info-value">${invoiceData.status || ''}</span></div>
+            <div class="info-row"><span class="info-label">Due Date</span><span class="info-value">${formatDate(invoiceData.dueDate)}</span></div>
+            <div class="info-row"><span class="info-label">Payment Method</span><span class="info-value">${invoiceData.paymentMethod || ''}</span></div>
+          </div>
+          ${mechanic.name ? `<div class="section-title">Service Performed By</div><div class="info-section" style="width:350px;"><div class="info-row"><span class="info-label">Name</span><span class="info-value">${mechanic.name}</span></div><div class="info-row"><span class="info-label">Contact</span><span class="info-value">${mechanic.phone || ''}</span></div></div>` : ''}
+          <div class="footer">Generated by MotoMate | ${new Date().toLocaleString()}</div>
+        </body>
+      </html>
+    `;
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            toast.error('Please allow popups to print the invoice');
+            return;
+        }
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 500);
+    };
+
     // Status badge component
     const StatusBadge = ({ status }: { status: string }) => {
         const getStatusStyles = (status: string) => {
@@ -302,7 +440,7 @@ export default function InvoiceDetailPage({
                                 <FileText className="mr-2 h-4 w-4" />
                                 View Order
                             </Button>
-                            <Button variant="outline" onClick={handlePrint}>
+                            <Button variant="outline" onClick={handlePrintInvoice}>
                                 <Printer className="mr-2 h-4 w-4" />
                                 Print Invoice
                             </Button>

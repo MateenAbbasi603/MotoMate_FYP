@@ -320,6 +320,7 @@ export default function AddVehicleForm() {
                     </FormItem>
                   )}
                 />
+                
               </div>
 
               <div className="bg-muted/30 p-4 rounded-lg border border-muted">

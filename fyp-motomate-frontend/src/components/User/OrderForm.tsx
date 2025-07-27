@@ -462,6 +462,7 @@ export default function OrderForm() {
         .map(subcategory => subcategory.serviceId);
 
       // Prepare the final request object with payment method
+      const { total } = calculateTotals();
       const orderData = {
         vehicleId: parseInt(values.vehicleId),
         inspectionTypeId: primaryInspection.serviceId,
@@ -472,6 +473,7 @@ export default function OrderForm() {
         timeSlot: values.timeSlot,
         notes: values.notes || "",
         paymentMethod: paymentMethod, // Add payment method to the request
+        totalAmount: total,
       };
 
       console.log("Creating order with data:", orderData);
@@ -569,26 +571,24 @@ export default function OrderForm() {
     form.setValue("additionalServiceIds", newIds);
   };
 
-  // Calculate total based on selected subcategories and services
-  const calculateTotal = () => {
-    let total = 0;
-
+  // Replace calculateTotal with calculateTotals
+  const calculateTotals = () => {
+    let subtotal = 0;
     // Add cost for all selected subcategories
     if (selectedSubcategories.length > 0) {
-      total += selectedSubcategories.reduce((sum, subcategory) => sum + subcategory.price, 0);
+      subtotal += selectedSubcategories.reduce((sum, subcategory) => sum + subcategory.price, 0);
     }
-
     // Add main service price
     if (includeService && selectedService) {
-      total += selectedService.price;
+      subtotal += selectedService.price;
     }
-
     // Add prices of all additional services
     if (selectedAdditionalServices.length > 0) {
-      total += selectedAdditionalServices.reduce((sum, service) => sum + service.price, 0);
+      subtotal += selectedAdditionalServices.reduce((sum, service) => sum + service.price, 0);
     }
-
-    return total.toFixed(2);
+    const tax = subtotal * 0.18;
+    const total = subtotal + tax;
+    return { subtotal, tax, total };
   };
 
   // Get available time slots for selection
@@ -1242,7 +1242,7 @@ export default function OrderForm() {
                     Order Summary
                   </h3>
                   <Badge variant="secondary" className="font-medium text-base px-3 py-1">
-                    PKR {calculateTotal()}
+                    PKR {calculateTotals().total.toFixed(2)}
                   </Badge>
                 </div>
                 <div className="p-4">
@@ -1294,9 +1294,17 @@ export default function OrderForm() {
                     )}
 
                     <Separator />
+                    <div className="flex justify-between text-sm pt-2">
+                      <span>Subtotal:</span>
+                      <span>PKR {calculateTotals().subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Tax (18%):</span>
+                      <span>PKR {calculateTotals().tax.toFixed(2)}</span>
+                    </div>
                     <div className="flex justify-between font-medium pt-2">
                       <span>Total:</span>
-                      <span className="text-primary text-lg">PKR {calculateTotal()}</span>
+                      <span className="text-primary text-lg">PKR {calculateTotals().total.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
